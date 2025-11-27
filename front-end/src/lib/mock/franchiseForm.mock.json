@@ -1,0 +1,266 @@
+[
+  {
+    "id": "FRM-1001",
+    "permit_type": "NEW",
+    "status": "Pending",
+    "submitted_at": "2025-10-01T09:12:00Z",
+    "last_updated": "2025-10-01T09:12:00Z",
+    "applicant": {
+      "full_name": "Juan Dela Cruz",
+      "home_address": "123 Mabini St, Bagong Barrio, Caloocan",
+      "contact_number": "09171234567",
+      "email": "juan.delacruz@example.com",
+      "citizenship": "Filipino",
+      "birth_date": "1985-04-12",
+      "id_type": "Passport (DFA)",
+      "id_number": "P1234567"
+    },
+    "vehicle": {
+      "make_brand": "Yamaha",
+      "model": "TrikeX",
+      "engine_number": "ENG-1001",
+      "chassis_number": "CHS-1001",
+      "plate_number": "TRI-1001",
+      "year_acquired": "2020",
+      "color": "White",
+      "vehicle_type": "Tricycle",
+      "lto_or_number": "OR-1001",
+      "lto_cr_number": "CR-1001",
+      "lto_expiration_date": "2026-01-01",
+      "mv_file_number": "MV-1001",
+      "district": "North"
+    },
+    "operation": {
+      "route_zone": "Bagong Barrio – Bagong Barrio Terminal – EDSA – Monumento Circle",
+      "toda_name": "Bagong Barrio TODA",
+      "barangay_of_operation": "Bagong Barrio"
+    },
+    "attachments": [
+      { "name": "franchise_application.pdf", "url": "/mock-files/franchise_form_1001.pdf" },
+      { "name": "company_profile.pdf", "url": "/mock-files/company_profile_3001.pdf" }
+    ],
+    "fees": {
+      "franchise_fee_checked": true,
+      "franchise_fee_or": "OR-1001",
+      "sticker_id_fee_checked": false,
+      "inspection_fee_checked": false
+    },
+    "declaration": {
+      "applicant_signature": "Juan Dela Cruz",
+      "date_submitted": "2025-10-01",
+      "barangay_captain_signature": "Carlos Reyes"
+    },
+    "internal_notes": "Mock submission for UI testing"
+  },
+  {
+    "id": "FRM-1002",
+    "permit_type": "RENEWAL",
+    "status": "Approved",
+    "submitted_at": "2025-09-15T11:20:00Z",
+    "last_updated": "2025-09-18T14:00:00Z",
+    "applicant": {
+      "full_name": "Maria Santos",
+      "home_address": "45 Rizal Ave, Santa Maria, Makati",
+      "contact_number": "09981234568",
+      "email": "maria.santos@example.com",
+      "citizenship": "Filipino",
+      "birth_date": "1978-10-02",
+      "id_type": "Driver’s License (issued by LTO)",
+      "id_number": "D8901234"
+    },
+    "vehicle": {
+      "make_brand": "Honda",
+      "model": "TriPro",
+      "engine_number": "ENG-2002",
+      "chassis_number": "CHS-2002",
+      "plate_number": "TRI-2002",
+      "year_acquired": "2018",
+      "color": "Blue",
+      "vehicle_type": "Tricycle",
+      "lto_or_number": "OR-2002",
+      "lto_cr_number": "CR-2002",
+      "lto_expiration_date": "2025-12-31",
+      "mv_file_number": "MV-2002",
+      "district": "South"
+    },
+    "operation": {
+      "route_zone": "Grace Park – Rizal Avenue – MCU – Monumento",
+      "toda_name": "Grace Park TODA",
+      "barangay_of_operation": "Grace Park East"
+    },
+    "attachments": [
+      { "name": "insurance_certificate.pdf", "url": "/mock-files/insurance_3002.pdf" }
+    ],
+    "fees": {
+      "franchise_fee_checked": false,
+      "sticker_id_fee_checked": true,
+      "sticker_id_fee_or": "OR-2002",
+      "inspection_fee_checked": false
+    },
+    "declaration": {
+      "applicant_signature": "Maria Santos",
+      "date_submitted": "2025-09-15",
+      "barangay_captain_signature": "Antonio dela Cruz"
+    },
+    "internal_notes": "Auto-created mock renewal"
+  },
+  {
+    "id": "FRM-1003",
+    "permit_type": "NEW",
+    "status": "Rejected",
+    "submitted_at": "2025-08-20T08:10:00Z",
+    "last_updated": "2025-08-22T09:30:00Z",
+    "applicant": {
+      "full_name": "Pedro Navarro",
+      "home_address": "7 Elizalde St, Malate, Manila",
+      "contact_number": "09221234569",
+      "email": "pedro.navarro@example.com",
+      "citizenship": "Filipino",
+      "birth_date": "1990-05-30",
+      "id_type": "UMID",
+      "id_number": "UMID-334455"
+    },
+    "vehicle": {
+      "make_brand": "Kawasaki",
+      "model": "Roadster",
+      "engine_number": "ENG-3003",
+      "chassis_number": "CHS-3003",
+      "plate_number": "TRI-3003",
+      "year_acquired": "2021",
+      "color": "Red",
+      "vehicle_type": "Tricycle",
+      "lto_or_number": "",
+      "lto_cr_number": "",
+      "lto_expiration_date": "",
+      "mv_file_number": "",
+      "district": "North"
+    },
+    "operation": {
+      "route_zone": "Camarin Road – Zabarte – SM Fairview",
+      "toda_name": "Camarin TODA",
+      "barangay_of_operation": "Camarin"
+    },
+    "attachments": [
+      { "name": "application_form.pdf", "url": "/mock-files/application_3003.pdf" }
+    ],
+    "fees": {
+      "franchise_fee_checked": false,
+      "sticker_id_fee_checked": false,
+      "inspection_fee_checked": false
+    },
+    "declaration": {
+      "applicant_signature": "Pedro Navarro",
+      "date_submitted": "2025-08-20",
+      "barangay_captain_signature": "Jorge Velasco"
+    },
+    "internal_notes": "Rejected due to missing sanitary certificate"
+  },
+  {
+    "id": "FRM-1004",
+    "permit_type": "NEW",
+    "status": "Pending",
+    "submitted_at": "2025-08-30T10:45:00Z",
+    "last_updated": "2025-08-30T10:45:00Z",
+    "applicant": {
+      "full_name": "Isabel Reyes",
+      "home_address": "250 Luna Blvd, Buenavista, Pasig",
+      "contact_number": "09181234570",
+      "email": "isabel.reyes@example.com",
+      "citizenship": "Filipino",
+      "birth_date": "1991-03-03",
+      "id_type": "Postal ID (PhilPost)",
+      "id_number": "POST-778899"
+    },
+    "vehicle": {
+      "make_brand": "Suzuki",
+      "model": "EcoTrike",
+      "engine_number": "ENG-4004",
+      "chassis_number": "CHS-4004",
+      "plate_number": "TRI-4004",
+      "year_acquired": "2022",
+      "color": "Green",
+      "vehicle_type": "Tricycle",
+      "lto_or_number": "OR-4004",
+      "lto_cr_number": "CR-4004",
+      "lto_expiration_date": "2027-03-01",
+      "mv_file_number": "MV-4004",
+      "district": "South"
+    },
+    "operation": {
+      "route_zone": "Phase 8 – Tala Hospital – Camarin Road",
+      "toda_name": "Phase 8 TODA",
+      "barangay_of_operation": "Tala"
+    },
+    "attachments": [
+      { "name": "proposal.pdf", "url": "/mock-files/proposal_3004.pdf" }
+    ],
+    "fees": {
+      "franchise_fee_checked": true,
+      "franchise_fee_or": "OR-4004",
+      "sticker_id_fee_checked": true,
+      "sticker_id_fee_or": "OR-4004-2",
+      "inspection_fee_checked": false
+    },
+    "declaration": {
+      "applicant_signature": "Isabel Reyes",
+      "date_submitted": "2025-08-30",
+      "barangay_captain_signature": "Luis Hernandez"
+    },
+    "internal_notes": "Awaiting environment clearance"
+  },
+  {
+    "id": "FRM-1005",
+    "permit_type": "NEW",
+    "status": "Approved",
+    "submitted_at": "2025-07-10T13:00:00Z",
+    "last_updated": "2025-07-12T09:00:00Z",
+    "applicant": {
+      "full_name": "Ryan Castillo",
+      "home_address": "250 Luna Blvd, Buenavista, Pasig",
+      "contact_number": "09191234571",
+      "email": "ryan.castillo@example.com",
+      "citizenship": "Filipino",
+      "birth_date": "1985-01-11",
+      "id_type": "PRC ID",
+      "id_number": "PRC-665544"
+    },
+    "vehicle": {
+      "make_brand": "Piaggio",
+      "model": "TrikeMax",
+      "engine_number": "ENG-5005",
+      "chassis_number": "CHS-5005",
+      "plate_number": "TRI-5005",
+      "year_acquired": "2019",
+      "color": "Yellow",
+      "vehicle_type": "Tricycle",
+      "lto_or_number": "OR-5005",
+      "lto_cr_number": "CR-5005",
+      "lto_expiration_date": "2026-05-10",
+      "mv_file_number": "MV-5005",
+      "district": "North"
+    },
+    "operation": {
+      "route_zone": "Bagumbong Road – Deparo – Camarin – Zabarte",
+      "toda_name": "Bagumbong TODA",
+      "barangay_of_operation": "Bagumbong"
+    },
+    "attachments": [
+      { "name": "route_plan.pdf", "url": "/mock-files/route_plan_3005.pdf" },
+      { "name": "insurance.pdf", "url": "/mock-files/insurance_3005.pdf" }
+    ],
+    "fees": {
+      "franchise_fee_checked": true,
+      "franchise_fee_or": "OR-5005",
+      "sticker_id_fee_checked": true,
+      "sticker_id_fee_or": "OR-5005-2",
+      "inspection_fee_checked": true,
+      "inspection_fee_or": "OR-5005-3"
+    },
+    "declaration": {
+      "applicant_signature": "Ryan Castillo",
+      "date_submitted": "2025-07-10",
+      "barangay_captain_signature": "Carlos Reyes"
+    },
+    "internal_notes": "Approved and archived"
+  }
+]

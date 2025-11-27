@@ -1,0 +1,218 @@
+[
+  {
+    "id": "BC-2025-0001",
+    "permit_number": "BC-2025-0001",
+    "permit_type": "NEW",
+    "status": "Pending",
+    "submitted_at": "2025-10-08T09:12:00Z",
+    "last_updated": "2025-10-08T09:12:00Z",
+    "assigned_officer": "Officer A. Reyes",
+    "review_status": "Not Reviewed",
+    "review_comments": "",
+    "applicant": {
+      "first_name": "John",
+      "middle_initial": "D",
+      "last_name": "Santos",
+      "contact_number": "09171234567",
+      "email": "john.santos@example.com",
+      "birth_date": "1990-05-15",
+      "gender": "Male",
+      "civil_status": "Single",
+      "nationality": "Filipino"
+    },
+    "address": {
+      "house_no": "123",
+      "street": "Mabini St",
+      "barangay": "San Isidro",
+      "city_municipality": "Quezon City",
+      "province": "Metro Manila",
+      "zip_code": "1100"
+    },
+    "purpose": "For local employment",
+    "duration": "2025-12-31",
+    "id_type": "Passport (DFA)",
+    "id_number": "P1234567",
+    "clearance_fee": 200.0,
+    "receipt_number": "OR-12345",
+    "attachments": [
+      { "name": "P1234567_passport.pdf", "url": "/mock-files/P1234567_passport.pdf" },
+      { "name": "proof_of_residence_utilitybill.jpg", "url": "/mock-files/proof_of_residence_utilitybill.jpg" }
+    ],
+    "internal_notes": "First-time applicant; expedite if supporting documents verified.",
+    "barangay_captain": "Carlos Reyes",
+    "barangay_secretary": "Maria Lopez"
+  },
+  {
+    "id": "BC-2025-0002",
+    "permit_number": "BC-2025-0002",
+    "permit_type": "RENEWAL",
+    "status": "Approved",
+    "submitted_at": "2025-09-12T14:05:00Z",
+    "last_updated": "2025-09-13T10:20:00Z",
+    "assigned_officer": "Officer L. Santos",
+    "review_status": "Approved",
+    "review_comments": "Verified business permit, approved. OR verified.",
+    "applicant": {
+      "first_name": "Maria",
+      "middle_initial": "L",
+      "last_name": "Cruz",
+      "contact_number": "09981234567",
+      "email": "maria.cruz@example.com",
+      "birth_date": "1985-03-20",
+      "gender": "Female",
+      "civil_status": "Married",
+      "nationality": "Filipino"
+    },
+    "address": {
+      "house_no": "45B",
+      "street": "Rizal Ave",
+      "barangay": "Santa Maria",
+      "city_municipality": "Makati",
+      "province": "Metro Manila",
+      "zip_code": "1200"
+    },
+    "purpose": "For renewal of business permit",
+    "duration": "2026-09-12",
+    "id_type": "Driver’s License (LTO)",
+    "id_number": "D8901234",
+    "clearance_fee": 150.0,
+    "receipt_number": "OR-67890",
+    "attachments": [
+      { "name": "driver_license.jpg", "url": "/mock-files/driver_license.jpg" },
+      { "name": "business_permit_previous.pdf", "url": "/mock-files/business_permit_previous.pdf" }
+    ],
+    "internal_notes": "No discrepancies. Processed fees posted to ledger.",
+    "barangay_captain": "Antonio dela Cruz",
+    "barangay_secretary": "Liza Santos"
+  },
+  {
+    "id": "BC-2025-0003",
+    "permit_number": "BC-2025-0003",
+    "permit_type": "NEW",
+    "status": "Pending",
+    "submitted_at": "2025-07-30T11:30:00Z",
+    "last_updated": "2025-07-30T11:30:00Z",
+    "assigned_officer": "Officer R. Bautista",
+    "review_status": "Not Reviewed",
+    "review_comments": "",
+    "applicant": {
+      "first_name": "Ahmed",
+      "middle_initial": "K",
+      "last_name": "Khan",
+      "contact_number": "09181234567",
+      "email": "ahmed.khan@example.com",
+      "birth_date": "1992-11-02",
+      "gender": "Male",
+      "civil_status": "Single",
+      "nationality": "Pakistani"
+    },
+    "address": {
+      "house_no": "10",
+      "street": "P. Burgos",
+      "barangay": "San Miguel",
+      "city_municipality": "Manila",
+      "province": "Metro Manila",
+      "zip_code": "1003"
+    },
+    "purpose": "For residency verification",
+    "duration": "2026-01-31",
+    "id_type": "Philippine National ID (PhilSys ID)",
+    "id_number": "PNID-334455",
+    "clearance_fee": 0.0,
+    "receipt_number": "",
+    "attachments": [
+      { "name": "philid_front.jpg", "url": "/mock-files/philid_front.jpg" },
+      { "name": "rental_agreement.pdf", "url": "/mock-files/rental_agreement.pdf" }
+    ],
+    "internal_notes": "Non-Filipino nationality; check immigration docs if needed.",
+    "barangay_captain": "Ramon Bautista",
+    "barangay_secretary": "Nina Ramirez"
+  },
+  {
+    "id": "BC-2025-0004",
+    "permit_number": "BC-2025-0004",
+    "permit_type": "NEW",
+    "status": "Rejected",
+    "submitted_at": "2025-06-15T08:45:00Z",
+    "last_updated": "2025-06-16T09:10:00Z",
+    "assigned_officer": "Officer J. Velasco",
+    "review_status": "Rejected",
+    "review_comments": "Missing supporting ID copy; applicant advised to resubmit with passport.",
+    "applicant": {
+      "first_name": "Anne-Marie",
+      "middle_initial": "",
+      "last_name": "O'Neill",
+      "contact_number": "09221234567",
+      "email": "anne.oneill@example.ie",
+      "birth_date": "1988-01-10",
+      "gender": "Female",
+      "civil_status": "Single",
+      "nationality": "Irish"
+    },
+    "address": {
+      "house_no": "7",
+      "street": "Elizalde St",
+      "barangay": "Malate",
+      "city_municipality": "Manila",
+      "province": "Metro Manila",
+      "zip_code": "1004"
+    },
+    "purpose": "For travel / local mobility clearance",
+    "duration": "2025-12-31",
+    "id_type": "Passport (DFA)",
+    "id_number": "IE9876543",
+    "clearance_fee": 100.0,
+    "receipt_number": "OR-44556",
+    "attachments": [
+      { "name": "passport_scan.pdf", "url": "/mock-files/passport_scan.pdf" },
+      { "name": "hotel_booking.pdf", "url": "/mock-files/hotel_booking.pdf" }
+    ],
+    "internal_notes": "Applicant submitted a low-quality scan; requested higher-res copy; pending resubmission.",
+    "barangay_captain": "Jorge Velasco",
+    "barangay_secretary": "Erika Tan"
+  },
+  {
+    "id": "BC-2025-0005",
+    "permit_number": "BC-2025-0005",
+    "permit_type": "NEW",
+    "status": "Approved",
+    "submitted_at": "2025-08-02T16:20:00Z",
+    "last_updated": "2025-08-04T10:00:00Z",
+    "assigned_officer": "Officer L. Hernandez",
+    "review_status": "Approved",
+    "review_comments": "All documents verified, fee received. Issued clearance.",
+    "applicant": {
+      "first_name": "Gabrielle",
+      "middle_initial": "M",
+      "last_name": "Reyes",
+      "contact_number": "09191234567",
+      "email": "gabrielle.reyes@example.com",
+      "birth_date": "1996-04-22",
+      "gender": "Female",
+      "civil_status": "Single",
+      "nationality": "Filipino"
+    },
+    "address": {
+      "house_no": "250",
+      "street": "Luna Blvd",
+      "barangay": "Buenavista",
+      "city_municipality": "Pasig",
+      "province": "Metro Manila",
+      "zip_code": "1600"
+    },
+    "purpose": "For new business permit application",
+    "duration": "2026-08-02",
+    "id_type": "Postal ID (PhilPost)",
+    "id_number": "POST-443322",
+    "clearance_fee": 300.0,
+    "receipt_number": "OR-99881",
+    "attachments": [
+      { "name": "postal_id.jpg", "url": "/mock-files/postal_id.jpg" },
+      { "name": "DTI_registration.pdf", "url": "/mock-files/DTI_registration.pdf" },
+      { "name": "lease_contract.pdf", "url": "/mock-files/lease_contract.pdf" }
+    ],
+    "internal_notes": "Approved and forwarded for barangay captain signature.",
+    "barangay_captain": "Luis Hernandez",
+    "barangay_secretary": "Celine Gomez"
+  }
+]
