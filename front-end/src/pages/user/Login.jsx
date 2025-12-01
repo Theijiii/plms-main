@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Footer from '../../components/user/Footer';
-import { loginUser } from "../../services/login";
-import { registerUser } from "../../services/register"; 
-import { sendOtp, verifyOtp } from "../../services/otpService";
+
+import { sendOtp, verifyOtp,registerUser,loginUser   } from "../../services/AuthService";
 
 
 export default function Login() {
@@ -130,7 +129,6 @@ const handleLoginSubmit = async (e) => {
     setError("An error occurred while logging in. Please try again.");
   }
 };
-
 
 
   const handleGoogleLogin = () => {
@@ -295,7 +293,6 @@ const handleRegisterSubmit = async (e) => {
     closeOtpModal();
     navigate("/user/dashboard");
   };
-
 const handleOtpSubmit = async (e) => {
   e.preventDefault();
   setOtpError("");
@@ -303,6 +300,7 @@ const handleOtpSubmit = async (e) => {
 
   const otpString = otp.join("");
 
+  // Validate OTP length
   if (otpString.length !== 6) {
     setOtpError("Please enter the complete 6-digit OTP.");
     return;
@@ -318,12 +316,8 @@ const handleOtpSubmit = async (e) => {
     return;
   }
 
-  if (otpContext === "login" && !loginData?.token) {
-    setOtpError("Login session expired. Please log in again.");
-    return;
-  }
-
   try {
+    // Send OTP to backend for verification
     const response = await verifyOtp(otpTargetEmail, otpString, otpContext);
 
     if (!response.success) {
@@ -333,6 +327,7 @@ const handleOtpSubmit = async (e) => {
 
     setOtpSuccess("OTP verified successfully!");
 
+    // Handle registration OTP
     if (otpContext === "register") {
       const registerResponse = await registerUser(pendingRegistration);
 
@@ -344,15 +339,31 @@ const handleOtpSubmit = async (e) => {
       } else {
         alert(registerResponse.message || "Registration failed");
       }
-    } else if (otpContext === "login") {
-      setOtpSuccess("OTP verified! Logging you in...");
-      finalizeLogin();
+      return;
+    }
+
+    // Handle login OTP
+    if (otpContext === "login") {
+      // Store admin/user data in sessionStorage based on backend response
+      if (response.role === "admin") {
+        sessionStorage.setItem("admin_email", response.email);
+        sessionStorage.setItem("admin_name", response.name);           // updated
+        sessionStorage.setItem("admin_department", response.department); // updated
+        sessionStorage.setItem("role", response.role);
+        window.location.href = "/admin/dashboard";
+      } else {
+        sessionStorage.setItem("user_email", response.email || otpTargetEmail);
+        sessionStorage.setItem("role", "user");
+        window.location.href = "/user/dashboard";
+      }
     }
   } catch (err) {
     console.error(err);
     setOtpError("Network error while verifying OTP");
   }
 };
+
+
 
  const handleResendOtp = async () => {
   if (countdown > 0 || !otpTargetEmail || !otpContext) return;

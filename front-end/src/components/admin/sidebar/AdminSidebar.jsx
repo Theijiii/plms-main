@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut, User } from 'lucide-react';
 import AdminSidebarItems from './AdminSidebarItems';
@@ -7,20 +7,57 @@ function AdminSidebar({ collapsed }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [expandedItem, setExpandedItem] = useState(new Set());
-  const [userMenuOpen, setUserMenuOpen] = useState(false); // toggle for user menu
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+  // Safely read session storage with fallback
+  const rawAdminName = sessionStorage.getItem("admin_name");
+  const rawAdminDepartment = sessionStorage.getItem("admin_department");
+
+  const adminName =
+    rawAdminName && rawAdminName !== "undefined" ? rawAdminName : "Admin";
+  const adminDepartment =
+    rawAdminDepartment && rawAdminDepartment !== "undefined"
+      ? rawAdminDepartment
+      : "all";
+
+  // Memoize filteredItems to prevent recreating array every render
+const filteredItems = useMemo(() => {
+  return AdminSidebarItems.filter(item => {
+    // Convert to array if it's not
+    const depts = Array.isArray(item.department) ? item.department : [item.department];
+
+    // Show if "all" is in departments OR current admin is super OR adminDepartment is included
+    return depts.includes("all") || adminDepartment === "super" || depts.includes(adminDepartment);
+  }).map(item => ({
+    ...item,
+    subItems: item.subItems?.filter(sub => {
+      const subDepts = Array.isArray(sub.department) ? sub.department : [sub.department];
+      return subDepts.includes("all") || adminDepartment === "super" || subDepts.includes(adminDepartment);
+    })
+  }));
+}, [adminDepartment]);
+
+
+  // Update expanded items based on active route
   useEffect(() => {
     const newExpanded = new Set();
-    AdminSidebarItems.forEach((item) => {
+    filteredItems.forEach(item => {
       if (item.subItems) {
         const isActiveSubItem = item.subItems.some(
-          (subItem) => location.pathname === subItem.path
+          sub => location.pathname === sub.path
         );
         if (isActiveSubItem) newExpanded.add(item.id);
       }
     });
-    setExpandedItem(newExpanded);
-  }, [location.pathname]);
+
+    // Only update if different to prevent infinite loop
+    setExpandedItem(prev => {
+      const isEqual =
+        prev.size === newExpanded.size &&
+        [...prev].every(x => newExpanded.has(x));
+      return isEqual ? prev : newExpanded;
+    });
+  }, [location.pathname, filteredItems]);
 
   const toggleExpanded = (item) => {
     const newExpanded = new Set(expandedItem);
@@ -28,10 +65,12 @@ function AdminSidebar({ collapsed }) {
       newExpanded.delete(item.id);
     } else {
       newExpanded.add(item.id);
+
+      // Navigate to first sub-item if none active
       if (
         item.subItems &&
         item.subItems.length > 0 &&
-        !item.subItems.some((sub) => sub.path === location.pathname)
+        !item.subItems.some(sub => sub.path === location.pathname)
       ) {
         navigate(item.subItems[0].path);
       }
@@ -40,20 +79,17 @@ function AdminSidebar({ collapsed }) {
   };
 
   return (
-    <div
-      className={`${
+    <div className={`${
         collapsed ? 'w-[80px]' : 'w-64'
-      } bg-white border-r border-slate-200/50 flex flex-col transition-width duration-200 dark:bg-slate-900 dark:border-slate-700`}
-    >
+      } bg-white border-r border-slate-200/50 flex flex-col transition-width duration-200 dark:bg-slate-900 dark:border-slate-700`}>
+
       {/* Logo */}
       <div className="h-[84px] flex items-center px-4 space-x-3 border-b-4 border-[#FDA811]">
         <NavLink to="/admin/dashboard" className="flex items-center space-x-3">
           <img
             src="/GSM_logo.png"
             alt="Logo"
-            className={`object-cover rounded-xl transition-all duration-200 ${
-              collapsed ? 'w-10 h-10' : 'w-13 h-13'
-            }`}
+            className={`object-cover rounded-xl transition-all duration-200 ${collapsed ? 'w-10 h-10' : 'w-13 h-13'}`}
           />
           {!collapsed && (
             <div>
@@ -75,16 +111,11 @@ function AdminSidebar({ collapsed }) {
           >
             <div className="flex items-center">
               <User className={`w-6 h-6 transition-colors duration-200 ${userMenuOpen ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`} />
-              <span className="ml-2 text-sm font-medium">Hi, Admin</span>
+              <span className="ml-2 text-sm font-medium">Hi, {adminName}</span>
             </div>
-            <ChevronDown
-              className={`w-4 h-4 transition-transform duration-200 ${
-                userMenuOpen ? 'rotate-180 text-white' : 'text-slate-500'
-              }`}
-            />
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${userMenuOpen ? 'rotate-180 text-white' : 'text-slate-500'}`} />
           </div>
 
-          {/* Logout button shown only when user section is clicked */}
           {userMenuOpen && (
             <button
               onClick={() => navigate('/login')}
@@ -97,16 +128,14 @@ function AdminSidebar({ collapsed }) {
         </div>
       )}
 
-      {/* Separator */}
       <hr className="border-t border-slate-300 dark:border-slate-700 mt-2" />
 
       {/* Navigation Links */}
       <nav className="flex-1 p-2 space-y-2 overflow-y-auto">
-        {AdminSidebarItems.map((item) => {
+        {filteredItems.map(item => {
           const isActive =
             item.path === location.pathname ||
-            (item.subItems &&
-              item.subItems.some((subItem) => subItem.path === location.pathname));
+            (item.subItems && item.subItems.some(sub => sub.path === location.pathname));
 
           return (
             <div key={item.id}>
@@ -121,27 +150,17 @@ function AdminSidebar({ collapsed }) {
                     onClick={() => toggleExpanded(item)}
                   >
                     <div className="flex items-center justify-center">
-                      <item.icon
-                        className={`transition-all duration-200 ${
-                          collapsed ? 'w-5 h-5' : 'w-6 h-6'
-                        }`}
-                      />
-                      {!collapsed && (
-                        <span className="ml-2 text-sm font-medium">{item.label}</span>
-                      )}
+                      <item.icon className={`transition-all duration-200 ${collapsed ? 'w-5 h-5' : 'w-6 h-6'}`} />
+                      {!collapsed && <span className="ml-2 text-sm font-medium">{item.label}</span>}
                     </div>
                     {!collapsed && item.subItems && (
-                      <ChevronDown
-                        className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${
-                          expandedItem.has(item.id) ? 'rotate-180' : ''
-                        }`}
-                      />
+                      <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${expandedItem.has(item.id) ? 'rotate-180' : ''}`} />
                     )}
                   </button>
 
-                  {!collapsed && item.subItems && expandedItem.has(item.id) && (
+                  {!collapsed && expandedItem.has(item.id) && (
                     <div className="ml-8 mt-2 space-y-1 border-l border-slate-300">
-                      {item.subItems.map((subitem) => (
+                      {item.subItems.map(subitem => (
                         <NavLink
                           key={subitem.id}
                           to={subitem.path}
@@ -167,18 +186,11 @@ function AdminSidebar({ collapsed }) {
                       isActive
                         ? 'bg-[#4CAF50] text-white font-semibold'
                         : 'text-slate-600 dark:text-slate-400 hover:bg-[#4CAF50] hover:text-white dark:hover:bg-[#4CAF50] dark:hover:text-white'
-                    }`
-                  }
+                    }`}
                 >
                   <div className="flex items-center justify-center">
-                    <item.icon
-                      className={`transition-all duration-200 ${
-                        collapsed ? 'w-5 h-5' : 'w-6 h-6'
-                      }`}
-                    />
-                    {!collapsed && (
-                      <span className="ml-2 text-sm font-medium">{item.label}</span>
-                    )}
+                    <item.icon className={`transition-all duration-200 ${collapsed ? 'w-5 h-5' : 'w-6 h-6'}`} />
+                    {!collapsed && <span className="ml-2 text-sm font-medium">{item.label}</span>}
                   </div>
                 </NavLink>
               )}
@@ -186,9 +198,7 @@ function AdminSidebar({ collapsed }) {
           );
         })}
       </nav>
-      
     </div>
-    
   );
 }
 
