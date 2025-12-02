@@ -1,48 +1,7 @@
 <?php
-// MySQL host
-$host = "localhost";
-
-// Single password for all databases
-$password = "mypassword";
-
-// Map each database to its own user
-$databases = [
-    'eplms_business_permit_system' => 'root',
-    'eplms_franchise_applications' => 'root',
-    // Add more databases as needed
-];
-
-// Get the target database from GET parameter or default
-$targetDb = $_GET['db'] ?? 'eplms_business_permit_system';
-$targetDb = $_GET['db'] ?? 'eplms_franchise_applications';
-
-// Check if the target database exists
-if (!array_key_exists($targetDb, $databases)) {
-    http_response_code(400);
-    echo json_encode(["success" => false, "error" => "Unknown database: $targetDb"]);
-    exit;
-}
-
-// Get the database user
-$dbUser = $databases[$targetDb];
-
-// Create MySQLi connection
-$conn = mysqli_connect($host, $dbUser, $password, $targetDb);
-
-// Check connection
-if (!$conn) {
-    http_response_code(500);
-    echo json_encode([
-        "success" => false,
-        "error" => "Database connection failed: " . mysqli_connect_error()
-    ]);
-    exit;
-}
-
-// Set charset to UTF-8
-mysqli_set_charset($conn, "utf8mb4");
-
-// Set headers for JSON responses and CORS
+// -----------------------------
+// HEADERS & CORS
+// -----------------------------
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
@@ -53,4 +12,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
+
+// -----------------------------
+// DATABASE CONFIG
+// -----------------------------
+$host = "localhost";
+$password = "mypassword"; // Shared MySQL password
+
+// Map of databases and their users
+$databases = [
+    "eplms_user_management" => "root",
+    "eplms_barangay_permit_db" => "root",
+    // Add more databases here
+];
+
+// -----------------------------
+// DETERMINE TARGET DATABASE
+// -----------------------------
+$targetDb = $_GET['db'] ?? "eplms_user_management";
+
+// Validate database
+if (!array_key_exists($targetDb, $databases)) {
+    http_response_code(400);
+    echo json_encode([
+        "success" => false,
+        "error" => "Unknown database: $targetDb"
+    ]);
+    exit;
+}
+
+$dbUser = $databases[$targetDb];
+
+// -----------------------------
+// CONNECT TO DATABASE
+// -----------------------------
+$conn = new mysqli($host, $dbUser, $password, $targetDb);
+
+// Check connection
+if ($conn->connect_error) {
+    http_response_code(500);
+    echo json_encode([
+        "success" => false,
+        "error" => "Database connection failed: " . $conn->connect_error
+    ]);
+    exit;
+}
+
+// Set charset
+$conn->set_charset("utf8mb4");
+
+// -----------------------------
+// CONNECTION SUCCESS
+// -----------------------------
+// $conn is now available for queries in any included file
 ?>

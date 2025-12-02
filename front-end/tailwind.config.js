@@ -24,9 +24,16 @@ module.exports = {
         secondary: '#4A90E2',
         accent: '#FDA811',
         background: '#FBFBFB',
+
+        textmain: '#4D4A4A',
+        border: '#E9E7E7',
+
+        // Status colors
+        success: '#4CAF50',
+        danger: '#E53935',
+        info: '#4A90E2',
       },
 
-      // 🖼️ Add your custom background here
       backgroundImage: {
         'user-bg': "url('/BG.jpg')",
       },

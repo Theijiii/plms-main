@@ -58,7 +58,7 @@ export default function UserDashboard() {
     background: "#FBFBFB",
     text: "#222",
     footer: "#e5e7eb",
-    font: "Montserrat, Segoe UI, Arial, Helvetica Neue, sans-serif",
+    font: "Montserrat",
   };
 
   // ⏰ Auto-close welcome modal after 5 seconds
@@ -181,7 +181,10 @@ export default function UserDashboard() {
 
       <section id="services" className="px-4 pb-16 flex-shrink-0">
         <h2 className="text-2xl md:text-4xl font-bold mb-8 text-center text-primary pt-16">
-          Our Services
+          Permit & Licensing Services
+        </h2>
+        <h2 className="text-md md:text-md font-medium mb-8 text-center text-primary">
+          A system established to manage, organize, and oversee all permit and licensing records, <br />ensuring proper documentation, regulatory compliance, and administrative accuracy.
         </h2>
 
         {/* 🔍 Search bar */}
@@ -209,7 +212,7 @@ export default function UserDashboard() {
                 setSelectedService(service);
                 setShowConfirm(true);
               }}
-              className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 flex flex-col items-center text-center hover:border-accent font-montserrat"
+              className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:border-blue-300 hover:bg-blue-100 shadow-lg shadow-blue-200/50 hover:shadow-blue-300/50 flex flex-col items-center text-center hover:border-accent font-montserrat"
             >
               <div className="mb-4">{service.icon}</div>
               <h3 className="font-montserrat font-bold text-lg mb-2 text-gray-800">

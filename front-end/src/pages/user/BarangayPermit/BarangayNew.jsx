@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Upload } from "lucide-react";
+import { Upload, Check, X, Eye, FileText } from "lucide-react";
 
 const COLORS = {
-  primary: '#4CAF50',
-  secondary: '#4A90E2',
+  primary: '#4A90E2',
+  secondary: '#000000',
   accent: '#FDA811',
+  success: '#4CAF50',
+  danger: '#E53935',
   background: '#FBFBFB',
-  font: 'Segoe UI, Arial, Helvetica Neue, sans-serif'
+  font: 'Montserrat, Arial, sans-serif'
 };
+
 
 const NATIONALITIES = [
   "Afghan", "Albanian", "Algerian", "American", "Andorran", "Angolan", "Antiguans", "Argentinean", "Armenian", "Australian", "Austrian", "Azerbaijani", "Bahamian", "Bahraini", "Bangladeshi", "Barbadian", "Barbudans", "Batswana", "Belarusian", "Belgian", "Belizean", "Beninese", "Bhutanese", "Bolivian", "Bosnian", "Brazilian", "British", "Bruneian", "Bulgarian", "Burkinabe", "Burmese", "Burundian", "Cambodian", "Cameroonian", "Canadian", "Cape Verdean", "Central African", "Chadian", "Chilean", "Chinese", "Colombian", "Comoran", "Congolese", "Costa Rican", "Croatian", "Cuban", "Cypriot", "Czech", "Danish", "Djibouti", "Dominican", "Dutch", "East Timorese", "Ecuadorean", "Egyptian", "Emirian", "Equatorial Guinean", "Eritrean", "Estonian", "Ethiopian", "Fijian", "Filipino", "Finnish", "French", "Gabonese", "Gambian", "Georgian", "German", "Ghanaian", "Greek", "Grenadian", "Guatemalan", "Guinea-Bissauan", "Guinean", "Guyanese", "Haitian", "Herzegovinian", "Honduran", "Hungarian", "I-Kiribati", "Icelander", "Indian", "Indonesian", "Iranian", "Iraqi", "Irish", "Israeli", "Italian", "Ivorian", "Jamaican", "Japanese", "Jordanian", "Kazakhstani", "Kenyan", "Kittian and Nevisian", "Kuwaiti", "Kyrgyz", "Laotian", "Latvian", "Lebanese", "Liberian", "Libyan", "Liechtensteiner", "Lithuanian", "Luxembourger", "Macedonian", "Malagasy", "Malawian", "Malaysian", "Maldivan", "Malian", "Maltese", "Marshallese", "Mauritanian", "Mauritian", "Mexican", "Micronesian", "Moldovan", "Monacan", "Mongolian", "Moroccan", "Mosotho", "Motswana", "Mozambican", "Namibian", "Nauruan", "Nepalese", "New Zealander", "Nicaraguan", "Nigerian", "Nigerien", "North Korean", "Northern Irish", "Norwegian", "Omani", "Pakistani", "Palauan", "Palestinian", "Panamanian", "Papua New Guinean", "Paraguayan", "Peruvian", "Polish", "Portuguese", "Qatari", "Romanian", "Russian", "Rwandan", "Saint Lucian", "Salvadoran", "Samoan", "San Marinese", "Sao Tomean", "Saudi", "Scottish", "Senegalese", "Serbian", "Seychellois", "Sierra Leonean", "Singaporean", "Slovakian", "Slovenian", "Solomon Islander", "Somali", "South African", "South Korean", "Spanish", "Sri Lankan", "Sudanese", "Surinamer", "Swazi", "Swedish", "Swiss", "Syrian", "Taiwanese", "Tajik", "Tanzanian", "Thai", "Togolese", "Tongan", "Trinidadian or Tobagonian", "Tunisian", "Turkish", "Tuvaluan", "Ugandan", "Ukrainian", "Uruguayan", "Uzbekistani", "Venezuelan", "Vietnamese", "Welsh", "Yemenite", "Zambian", "Zimbabwean"
@@ -21,67 +24,123 @@ export default function BarangayNew() {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [agreeDeclaration, setAgreeDeclaration] = useState(false);
+  const [showPreview, setShowPreview] = useState({});
+  const [userData, setUserData] = useState(null);
+  
+  // Initialize form data
   const [formData, setFormData] = useState({
-    // Step 1: Permit Information
+    // Permit Information
     permit_type: permitType,
     application_date: new Date().toISOString().split('T')[0],
-    // Step 2: Applicant Information
+    status: 'pending',
+    
+    // Applicant Information
     first_name: '',
-    middle_initial: '',
+    middle_name: '',
     last_name: '',
     suffix: '',
-    contact_number: '',
+    mobile_number: '',
     email: '',
-    birth_date: '',
+    birthdate: '',
     gender: '',
     civil_status: '',
     nationality: '',
-    // Step 3: Address Information
+    
+    // Address Information
     house_no: '',
     street: '',
     barangay: '',
     city_municipality: '',
     province: '',
     zip_code: '',
-    // Step 4: Clearance Details
+    
+    // Clearance Details
     purpose: '',
     duration: '',
     id_type: '',
     id_number: '',
-    // Step 5: Business Details & Requirements
-    business_name: '',
-    business_address: '',
-    nature_of_business: '',
-    business_registration_number: '',
-    // Requirements files
+    
+    // Additional fields
+    clearance_fee: 0.00,
+    receipt_number: '',
+    user_id: null,
+    applicant_signature: '',
+    
+    // File attachments
     valid_id_file: null,
     proof_of_residence_file: null,
     receipt_file: null,
     signature_file: null,
     photo_fingerprint_file: null,
-    // Step 6: Review
-    attachments: [],
+    
+    attachments: '',
   });
 
   const steps = [
     { id: 1, title: 'Applicant Information', description: 'Personal details' },
     { id: 2, title: 'Address Information', description: 'Where you live' },
     { id: 3, title: 'Clearance Details', description: 'Purpose, ID, Duration' },
-    { id: 4, title: 'Business & Requirements', description: 'Business info and documents' },
-    { id: 5, title: 'Review', description: 'View your permit before submitting' }
+    { id: 4, title: 'Uploads', description: 'Required documents' },
+    { id: 5, title: 'Review', description: 'Review your application' }
   ];
+
+  // Fetch user data when component mounts
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const response = await fetch('/back-end/api/auth/me.php', {
+          method: 'GET',
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.user) {
+            setUserData(data.user);
+            
+            // Pre-fill form with user data
+            setFormData(prev => ({
+              ...prev,
+              first_name: data.user.first_name || '',
+              middle_name: data.user.middle_name || '',
+              last_name: data.user.last_name || '',
+              email: data.user.email || '',
+              mobile_number: data.user.mobile_number || '',
+              birthdate: data.user.birthdate || '',
+              gender: data.user.gender || '',
+              civil_status: data.user.civil_status || '',
+              nationality: data.user.nationality || '',
+              house_no: data.user.house_no || '',
+              street: data.user.street || '',
+              barangay: data.user.barangay || '',
+              city_municipality: data.user.city_municipality || '',
+              province: data.user.province || '',
+              zip_code: data.user.zip_code || '',
+              user_id: data.user.id || null
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, files } = e.target;
     
     if (type === 'file') {
+      const file = files[0];
       setFormData(prev => ({
         ...prev,
-        [name]: files[0] || null
+        [name]: file || null,
+        ...(name === 'signature_file' && { applicant_signature: file?.name || '' })
       }));
-    } else if (name === "contact_number") {
+    } else if (name === "mobile_number") {
       const onlyNums = value.replace(/[^0-9]/g, "");
       setFormData(prev => ({
         ...prev,
@@ -95,7 +154,26 @@ export default function BarangayNew() {
     }
   };
 
-  // validation errors per field
+  const previewFile = (file) => {
+    if (!file) return null;
+    
+    const url = URL.createObjectURL(file);
+    const fileType = file.type.split('/')[0];
+    
+    setShowPreview({
+      url: url,
+      type: fileType,
+      name: file.name
+    });
+  };
+
+  const closePreview = () => {
+    if (showPreview.url) {
+      URL.revokeObjectURL(showPreview.url);
+    }
+    setShowPreview({});
+  };
+
   const [errors, setErrors] = useState({});
 
   const validateStep = (step) => {
@@ -103,8 +181,8 @@ export default function BarangayNew() {
     if (step === 1) {
       if (!formData.first_name || formData.first_name.trim() === '') newErrors.first_name = 'First name is required';
       if (!formData.last_name || formData.last_name.trim() === '') newErrors.last_name = 'Last name is required';
-      if (!formData.contact_number || formData.contact_number.trim() === '') newErrors.contact_number = 'Contact number is required';
-      if (!formData.birth_date) newErrors.birth_date = 'Birth date is required';
+      if (!formData.mobile_number || formData.mobile_number.trim() === '') newErrors.mobile_number = 'Mobile number is required';
+      if (!formData.birthdate) newErrors.birthdate = 'Birth date is required';
       if (!formData.gender) newErrors.gender = 'Gender is required';
       if (!formData.civil_status) newErrors.civil_status = 'Civil status is required';
       if (!formData.nationality || formData.nationality.trim() === '') newErrors.nationality = 'Nationality is required';
@@ -121,18 +199,21 @@ export default function BarangayNew() {
       if (!formData.id_type || formData.id_type.trim() === '') newErrors.id_type = 'ID type is required';
       if (!formData.id_number || formData.id_number.trim() === '') newErrors.id_number = 'ID number is required';
     }
+    if (step === 4) {
+      if (!formData.valid_id_file) newErrors.valid_id_file = 'Valid ID is required';
+      if (!formData.signature_file) newErrors.signature_file = 'Applicant Signature is required';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // pure check (no side-effects) used for disabling buttons
   const isStepValid = (step) => {
     if (step === 1) {
       if (!formData.first_name || formData.first_name.trim() === '') return false;
       if (!formData.last_name || formData.last_name.trim() === '') return false;
-      if (!formData.contact_number || formData.contact_number.trim() === '') return false;
-      if (!formData.birth_date) return false;
+      if (!formData.mobile_number || formData.mobile_number.trim() === '') return false;
+      if (!formData.birthdate) return false;
       if (!formData.gender) return false;
       if (!formData.civil_status) return false;
       if (!formData.nationality || formData.nationality.trim() === '') return false;
@@ -152,6 +233,11 @@ export default function BarangayNew() {
       if (!formData.id_number || formData.id_number.trim() === '') return false;
       return true;
     }
+    if (step === 4) {
+      if (!formData.valid_id_file) return false;
+      if (!formData.signature_file) return false;
+      return true;
+    }
     return true;
   };
 
@@ -165,20 +251,21 @@ export default function BarangayNew() {
     }
   };
 
-  const handleFinalStep = (e) => {
-    e.preventDefault();
-    const ok = validateStep(currentStep);
-    if (ok) {
-      setShowConfirm(true);
-    }
-  };
-
   const handleFormSubmit = (e) => {
     e.preventDefault();
-    if (currentStep < steps.length) {
+    if (currentStep < steps.length - 1) {
+      // For steps 1-4, just go to next step
       nextStep();
+    } else if (currentStep === steps.length - 1) {
+      // For step 4, go to review (step 5)
+      const ok = validateStep(currentStep);
+      if (ok) {
+        setCurrentStep(currentStep + 1);
+        setErrors({});
+      }
     } else {
-      handleFinalStep(e);
+      // On Step 5 (Review), show confirmation modal
+      setShowConfirmModal(true);
     }
   };
 
@@ -188,46 +275,81 @@ export default function BarangayNew() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
+    if (!agreeDeclaration) {
+      setSubmitStatus({ type: 'error', message: 'You must agree to the declaration before submitting.' });
+      return;
+    }
+
     setIsSubmitting(true);
     
     const step1Ok = validateStep(1);
     const step2Ok = validateStep(2);
     const step3Ok = validateStep(3);
-    if (!(step1Ok && step2Ok && step3Ok)) {
+    const step4Ok = validateStep(4);
+    
+    if (!(step1Ok && step2Ok && step3Ok && step4Ok)) {
       setIsSubmitting(false);
       if (!step1Ok) setCurrentStep(1);
       else if (!step2Ok) setCurrentStep(2);
-      else setCurrentStep(3);
+      else if (!step3Ok) setCurrentStep(3);
+      else setCurrentStep(4);
+      setShowConfirmModal(false);
       return;
     }
 
-    const formDataObj = new FormData();
-    Object.keys(formData).forEach(key => {
-      if (key === 'attachments') {
-        formData.attachments.forEach(file => {
-          formDataObj.append('attachments', file);
-        });
-      } else if (formData[key] instanceof File) {
-        formDataObj.append(key, formData[key]);
-      } else {
-        formDataObj.append(key, formData[key]);
-      }
-    });
-
     try {
+      // Prepare submission data
+      const submissionData = {
+        user_id: formData.user_id,
+        application_date: formData.application_date,
+        first_name: formData.first_name,
+        middle_name: formData.middle_name,
+        last_name: formData.last_name,
+        suffix: formData.suffix,
+        birthdate: formData.birthdate,
+        mobile_number: formData.mobile_number,
+        email: formData.email,
+        gender: formData.gender,
+        civil_status: formData.civil_status,
+        nationality: formData.nationality,
+        house_no: formData.house_no,
+        street: formData.street,
+        barangay: formData.barangay,
+        city_municipality: formData.city_municipality,
+        province: formData.province,
+        zip_code: formData.zip_code,
+        purpose: formData.purpose,
+        duration: formData.duration,
+        id_type: formData.id_type,
+        id_number: formData.id_number,
+        clearance_fee: formData.clearance_fee,
+        receipt_number: formData.receipt_number,
+        applicant_signature: formData.applicant_signature,
+        status: formData.status,
+        attachments: JSON.stringify({
+          valid_id: formData.valid_id_file?.name || '',
+          proof_of_residence: formData.proof_of_residence_file?.name || '',
+          receipt: formData.receipt_file?.name || '',
+          signature: formData.signature_file?.name || '',
+          photo_fingerprint: formData.photo_fingerprint_file?.name || ''
+        })
+      };
+
       const response = await fetch('/back-end/api/barangay_permit.php', {
         method: 'POST',
-        body: formDataObj,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData),
         credentials: 'include'
       });
 
-      console.log('Response status:', response.status);
       const data = await response.json();
 
       if (data.success) {
         setSubmitStatus({ type: 'success', message: data.message });
+        setShowConfirmModal(false);
         setTimeout(() => {
           navigate('/user/dashboard');
         }, 2000);
@@ -247,190 +369,237 @@ export default function BarangayNew() {
       case 1:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4">Applicant Information</h3>
+            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Applicant Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First Name *" className={`p-3 border border-black rounded-lg ${errors.first_name ? 'border-red-500' : ''}`} />
-              {errors.first_name && <p className="text-red-600 text-sm">{errors.first_name}</p>}
-              <input type="text" name="middle_initial" value={formData.middle_initial} onChange={handleChange} placeholder="Middle Initial" className="p-3 border border-black rounded-lg" />
-              <input type="text" name="last_name" value={formData.last_name} onChange={handleChange} placeholder="Last Name *" className={`p-3 border border-black rounded-lg ${errors.last_name ? 'border-red-500' : ''}`} />
-              {errors.last_name && <p className="text-red-600 text-sm">{errors.last_name}</p>}
-              <input type="text" name="suffix" value={formData.suffix} onChange={handleChange} placeholder="Suffix" className="p-3 border border-black rounded-lg" />
-              <input type="text" name="contact_number" value={formData.contact_number} onChange={handleChange} placeholder="Contact Number *" className={`p-3 border border-black rounded-lg ${errors.contact_number ? 'border-red-500' : ''}`} />
-              {errors.contact_number && <p className="text-red-600 text-sm">{errors.contact_number}</p>}
-              <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Email" className="p-3 border border-black rounded-lg" />
-              <input type="date" name="birth_date" value={formData.birth_date} onChange={handleChange} placeholder="Birth Date *" className={`p-3 border border-black rounded-lg ${errors.birth_date ? 'border-red-500' : ''}`} />
-              {errors.birth_date && <p className="text-red-600 text-sm">{errors.birth_date}</p>}
-              <select name="gender" value={formData.gender} onChange={handleChange} className={`p-3 border border-black rounded-lg ${errors.gender ? 'border-red-500' : ''}`} >
-                <option value="">Gender *</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-              {errors.gender && <p className="text-red-600 text-sm">{errors.gender}</p>}
-              <select name="civil_status" value={formData.civil_status} onChange={handleChange} className={`p-3 border border-black rounded-lg ${errors.civil_status ? 'border-red-500' : ''}`} >
-                <option value="">Civil Status *</option>
-                <option value="Single">Single</option>
-                <option value="Married">Married</option>
-                <option value="Widowed">Widowed</option>
-                <option value="Separated">Separated</option>
-              </select>
-              {errors.civil_status && <p className="text-red-600 text-sm">{errors.civil_status}</p>}
-              <select name="nationality" value={formData.nationality} onChange={handleChange} className={`p-3 border border-black rounded-lg ${errors.nationality ? 'border-red-500' : ''}`} >
-                <option value="">Nationality *</option>
-                {NATIONALITIES.map(nat => (
-                  <option key={nat} value={nat}>{nat}</option>
-                ))}
-              </select>
-              {errors.nationality && <p className="text-red-600 text-sm">{errors.nationality}</p>}
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>First Name *</label>
+                <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First Name" className={`w-full p-3 border border-black rounded-lg ${errors.first_name ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                {errors.first_name && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.first_name}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Middle Name</label>
+                <input type="text" name="middle_name" value={formData.middle_name} onChange={handleChange} placeholder="Middle Name" className="w-full p-3 border border-black rounded-lg" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Last Name *</label>
+                <input type="text" name="last_name" value={formData.last_name} onChange={handleChange} placeholder="Last Name" className={`w-full p-3 border border-black rounded-lg ${errors.last_name ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                {errors.last_name && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.last_name}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Suffix</label>
+                <input type="text" name="suffix" value={formData.suffix} onChange={handleChange} placeholder="Suffix" className="w-full p-3 border border-black rounded-lg" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Mobile Number *</label>
+                <input type="text" name="mobile_number" value={formData.mobile_number} onChange={handleChange} placeholder="Mobile Number" className={`w-full p-3 border border-black rounded-lg ${errors.mobile_number ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                {errors.mobile_number && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.mobile_number}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Email</label>
+                <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Email" className="w-full p-3 border border-black rounded-lg" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Birth Date *</label>
+                <input type="date" name="birthdate" value={formData.birthdate} onChange={handleChange} className={`w-full p-3 border border-black rounded-lg ${errors.birthdate ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                {errors.birthdate && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.birthdate}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Gender *</label>
+                <select name="gender" value={formData.gender} onChange={handleChange} className={`w-full p-3 border border-black rounded-lg ${errors.gender ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} >
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+                {errors.gender && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.gender}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Civil Status *</label>
+                <select name="civil_status" value={formData.civil_status} onChange={handleChange} className={`w-full p-3 border border-black rounded-lg ${errors.civil_status ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} >
+                  <option value="">Select civil status</option>
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Widowed">Widowed</option>
+                  <option value="Separated">Separated</option>
+                </select>
+                {errors.civil_status && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.civil_status}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Nationality *</label>
+                <select name="nationality" value={formData.nationality} onChange={handleChange} className={`w-full p-3 border border-black rounded-lg ${errors.nationality ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} >
+                  <option value="">Select nationality</option>
+                  {NATIONALITIES.map(nat => (
+                    <option key={nat} value={nat}>{nat}</option>
+                  ))}
+                </select>
+                {errors.nationality && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.nationality}</p>}
+              </div>
             </div>
           </div>
         );
       case 2:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4">Address Information</h3>
+            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Address Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input type="text" name="house_no" value={formData.house_no} onChange={handleChange} placeholder="House/Building No. *" className={`p-3 border border-black rounded-lg ${errors.house_no ? 'border-red-500' : ''}`} />
-              {errors.house_no && <p className="text-red-600 text-sm">{errors.house_no}</p>}
-              <input type="text" name="street" value={formData.street} onChange={handleChange} placeholder="Street *" className={`p-3 border border-black rounded-lg ${errors.street ? 'border-red-500' : ''}`} />
-              {errors.street && <p className="text-red-600 text-sm">{errors.street}</p>}
-              <input type="text" name="barangay" value={formData.barangay} onChange={handleChange} placeholder="Barangay *" className={`p-3 border border-black rounded-lg ${errors.barangay ? 'border-red-500' : ''}`} />
-              {errors.barangay && <p className="text-red-600 text-sm">{errors.barangay}</p>}
-              <input type="text" name="city_municipality" value={formData.city_municipality} onChange={handleChange} placeholder="City/Municipality *" className={`p-3 border border-black rounded-lg ${errors.city_municipality ? 'border-red-500' : ''}`} />
-              {errors.city_municipality && <p className="text-red-600 text-sm">{errors.city_municipality}</p>}
-              <input type="text" name="province" value={formData.province} onChange={handleChange} placeholder="Province *" className={`p-3 border border-black rounded-lg ${errors.province ? 'border-red-500' : ''}`} />
-              {errors.province && <p className="text-red-600 text-sm">{errors.province}</p>}
-              <input type="text" name="zip_code" value={formData.zip_code} onChange={handleChange} placeholder="ZIP Code" className="p-3 border border-black rounded-lg" />
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>House/Building No. *</label>
+                <input type="text" name="house_no" value={formData.house_no} onChange={handleChange} placeholder="House/Building No." className={`w-full p-3 border border-black rounded-lg ${errors.house_no ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                {errors.house_no && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.house_no}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Street *</label>
+                <input type="text" name="street" value={formData.street} onChange={handleChange} placeholder="Street" className={`w-full p-3 border border-black rounded-lg ${errors.street ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                {errors.street && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.street}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Barangay *</label>
+                <input type="text" name="barangay" value={formData.barangay} onChange={handleChange} placeholder="Barangay" className={`w-full p-3 border border-black rounded-lg ${errors.barangay ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                {errors.barangay && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.barangay}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>City/Municipality *</label>
+                <input type="text" name="city_municipality" value={formData.city_municipality} onChange={handleChange} placeholder="City/Municipality" className={`w-full p-3 border border-black rounded-lg ${errors.city_municipality ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                {errors.city_municipality && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.city_municipality}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Province *</label>
+                <input type="text" name="province" value={formData.province} onChange={handleChange} placeholder="Province" className={`w-full p-3 border border-black rounded-lg ${errors.province ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                {errors.province && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.province}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>ZIP Code</label>
+                <input type="text" name="zip_code" value={formData.zip_code} onChange={handleChange} placeholder="ZIP Code" className="w-full p-3 border border-black rounded-lg" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
             </div>
           </div>
         );
       case 3:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4">Clearance Details</h3>
+            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Clearance Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <select name="purpose" value={formData.purpose} onChange={handleChange} className={`p-3 border border-black rounded-lg ${errors.purpose ? 'border-red-500' : ''}`} >
-                <option value="">Purpose of Clearance *</option>
-                <optgroup label="Personal Purposes">
-                  <option value="For personal identification">For personal identification</option>
-                  <option value="For residency verification">For residency verification</option>
-                  <option value="For school requirement">For school requirement</option>
-                  <option value="For scholarship application">For scholarship application</option>
-                  <option value="For government assistance">For government assistance (e.g., DSWD, QC social services)</option>
-                  <option value="For medical assistance application">For medical assistance application</option>
-                  <option value="For financial assistance or aid">For financial assistance or aid</option>
-                  <option value="For barangay ID application">For barangay ID application</option>
-                  <option value="For court requirement / affidavit / legal matter">For court requirement / affidavit / legal matter</option>
-                  <option value="For police clearance / NBI clearance requirement">For police clearance / NBI clearance requirement</option>
-                </optgroup>
-                <optgroup label="Employment-Related Purposes">
-                  <option value="For local employment">For local employment</option>
-                  <option value="For job application (private company)">For job application (private company)</option>
-                  <option value="For government employment">For government employment</option>
-                  <option value="For on-the-job training (OJT)">For on-the-job training (OJT)</option>
-                  <option value="For job order / contractual employment">For job order / contractual employment</option>
-                  <option value="For agency employment requirement">For agency employment requirement</option>
-                  <option value="For renewal of work contract">For renewal of work contract</option>
-                  <option value="For employment abroad (POEA / OFW)">For employment abroad (POEA / OFW)</option>
-                </optgroup>
-                <optgroup label="Business-Related Purposes">
-                  <option value="For new business permit application">For new business permit application</option>
-                  <option value="For renewal of business permit">For renewal of business permit</option>
-                  <option value="For DTI / SEC business registration">For DTI / SEC business registration</option>
-                  <option value="For business tax application">For business tax application</option>
-                  <option value="For stall rental or space lease">For stall rental or space lease</option>
-                  <option value="For business name registration">For business name registration</option>
-                  <option value="For operation of new establishment">For operation of new establishment</option>
-                  <option value="For business closure / cancellation">For business closure / cancellation</option>
-                  <option value="For relocation / change of business address">For relocation / change of business address</option>
-                </optgroup>
-                <optgroup label="Residency / Property Purposes">
-                  <option value="For proof of residency">For proof of residency</option>
-                  <option value="For transfer of residence">For transfer of residence</option>
-                  <option value="For lot / land ownership verification">For lot / land ownership verification</option>
-                  <option value="For construction permit requirement">For construction permit requirement</option>
-                  <option value="For fencing / excavation / building permit application">For fencing / excavation / building permit application</option>
-                  <option value="For utility connection">For utility connection (e.g., Meralco, Manila Water, Maynilad)</option>
-                  <option value="For barangay boundary certification">For barangay boundary certification</option>
-                </optgroup>
-                <optgroup label="Other Official / Legal Purposes">
-                  <option value="For marriage license application">For marriage license application</option>
-                  <option value="For travel / local mobility clearance">For travel / local mobility clearance</option>
-                  <option value="For firearm license application">For firearm license application</option>
-                  <option value="For barangay mediation / complaint settlement record">For barangay mediation / complaint settlement record</option>
-                  <option value="For notarization requirement">For notarization requirement</option>
-                  <option value="For business closure or transfer">For business closure or transfer</option>
-                  <option value="For franchise or transport operation permit">For franchise or transport operation permit</option>
-                  <option value="For cooperative registration">For cooperative registration</option>
-                  <option value="For loan application">For loan application (bank or lending company)</option>
-                  <option value="For SSS / Pag-IBIG / PhilHealth registration">For SSS / Pag-IBIG / PhilHealth registration</option>
-                </optgroup>
-              </select>
-              {errors.purpose && <p className="text-red-600 text-sm">{errors.purpose}</p>}
-              <input
-                type="date"
-                name="duration"
-                value={formData.duration}
-                onChange={handleChange}
-                placeholder="Duration / Period of Validity *"
-                className={`p-3 border border-black rounded-lg ${errors.duration ? 'border-red-500' : ''}`}
-                min="1900-01-01"
-                max="2100-12-31"
-                required
-              />
-              <select name="id_type" value={formData.id_type} onChange={handleChange} className={`p-3 border border-black rounded-lg ${errors.id_type ? 'border-red-500' : ''}`} >
-                <option value="">Valid ID Type *</option>
-                <optgroup label="Primary Valid Government-Issued IDs">
-                  <option value="Philippine National ID (PhilSys ID)">Philippine National ID (PhilSys ID)</option>
-                  <option value="Driver's License (LTO)">Driver's License (issued by LTO)</option>
-                  <option value="Passport (DFA)">Passport (DFA)</option>
-                  <option value="UMID">UMID (Unified Multi-Purpose ID) – SSS, GSIS, PhilHealth, Pag-IBIG</option>
-                  <option value="Voter's ID or COMELEC Voter's Certificate">Voter's ID or COMELEC Voter's Certificate</option>
-                  <option value="Postal ID (PhilPost)">Postal ID (PhilPost)</option>
-                  <option value="PRC ID">PRC ID (Professional Regulation Commission)</option>
-                  <option value="Senior Citizen ID">Senior Citizen ID</option>
-                  <option value="PWD ID">PWD ID (Persons with Disability ID)</option>
-                  <option value="Barangay ID">Barangay ID (if already issued in your barangay)</option>
-                </optgroup>
-                <optgroup label="Secondary / Supporting IDs">
-                  <option value="School ID">School ID (for students, usually with current enrollment certificate)</option>
-                  <option value="Company / Employee ID">Company / Employee ID</option>
-                  <option value="Police Clearance or NBI Clearance">Police Clearance or NBI Clearance</option>
-                  <option value="Tax Identification Number (TIN) ID">Tax Identification Number (TIN) ID</option>
-                  <option value="PhilHealth ID">PhilHealth ID</option>
-                  <option value="Pag-IBIG ID">Pag-IBIG ID</option>
-                  <option value="GSIS eCard">GSIS eCard</option>
-                  <option value="Solo Parent ID">Solo Parent ID</option>
-                  <option value="Indigenous People's (IP) ID">Indigenous People's (IP) ID</option>
-                  <option value="Firearms License ID">Firearms License ID</option>
-                </optgroup>
-              </select>
-              {errors.id_type && <p className="text-red-600 text-sm">{errors.id_type}</p>}
-              <input type="text" name="id_number" value={formData.id_number} onChange={handleChange} placeholder="Valid ID Number *" className={`p-3 border border-black rounded-lg ${errors.id_number ? 'border-red-500' : ''}`} />
-              {errors.id_number && <p className="text-red-600 text-sm">{errors.id_number}</p>}
+              <div className="md:col-span-2">
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Purpose of Clearance *</label>
+                <select name="purpose" value={formData.purpose} onChange={handleChange} className={`w-full p-3 border border-black rounded-lg ${errors.purpose ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} >
+                  <option value="">Select purpose</option>
+                  <optgroup label="Personal Purposes">
+                    <option value="For personal identification">For personal identification</option>
+                    <option value="For residency verification">For residency verification</option>
+                    <option value="For school requirement">For school requirement</option>
+                    <option value="For scholarship application">For scholarship application</option>
+                    <option value="For government assistance">For government assistance</option>
+                    <option value="For medical assistance application">For medical assistance application</option>
+                    <option value="For financial assistance or aid">For financial assistance or aid</option>
+                    <option value="For barangay ID application">For barangay ID application</option>
+                    <option value="For court requirement / affidavit / legal matter">For court requirement / affidavit / legal matter</option>
+                    <option value="For police clearance / NBI clearance requirement">For police clearance / NBI clearance requirement</option>
+                  </optgroup>
+                  <optgroup label="Employment-Related Purposes">
+                    <option value="For local employment">For local employment</option>
+                    <option value="For job application (private company)">For job application (private company)</option>
+                    <option value="For government employment">For government employment</option>
+                    <option value="For on-the-job training (OJT)">For on-the-job training (OJT)</option>
+                    <option value="For job order / contractual employment">For job order / contractual employment</option>
+                    <option value="For agency employment requirement">For agency employment requirement</option>
+                    <option value="For renewal of work contract">For renewal of work contract</option>
+                    <option value="For employment abroad (POEA / OFW)">For employment abroad (POEA / OFW)</option>
+                  </optgroup>
+                  <optgroup label="Business-Related Purposes">
+                    <option value="For new business permit application">For new business permit application</option>
+                    <option value="For renewal of business permit">For renewal of business permit</option>
+                    <option value="For DTI / SEC business registration">For DTI / SEC business registration</option>
+                    <option value="For business tax application">For business tax application</option>
+                    <option value="For stall rental or space lease">For stall rental or space lease</option>
+                    <option value="For business name registration">For business name registration</option>
+                    <option value="For operation of new establishment">For operation of new establishment</option>
+                    <option value="For business closure / cancellation">For business closure / cancellation</option>
+                    <option value="For relocation / change of business address">For relocation / change of business address</option>
+                  </optgroup>
+                  <optgroup label="Residency / Property Purposes">
+                    <option value="For proof of residency">For proof of residency</option>
+                    <option value="For transfer of residence">For transfer of residence</option>
+                    <option value="For lot / land ownership verification">For lot / land ownership verification</option>
+                    <option value="For construction permit requirement">For construction permit requirement</option>
+                    <option value="For fencing / excavation / building permit application">For fencing / excavation / building permit application</option>
+                    <option value="For utility connection">For utility connection</option>
+                    <option value="For barangay boundary certification">For barangay boundary certification</option>
+                  </optgroup>
+                  <optgroup label="Other Official / Legal Purposes">
+                    <option value="For marriage license application">For marriage license application</option>
+                    <option value="For travel / local mobility clearance">For travel / local mobility clearance</option>
+                    <option value="For firearm license application">For firearm license application</option>
+                    <option value="For barangay mediation / complaint settlement record">For barangay mediation / complaint settlement record</option>
+                    <option value="For notarization requirement">For notarization requirement</option>
+                    <option value="For business closure or transfer">For business closure or transfer</option>
+                    <option value="For franchise or transport operation permit">For franchise or transport operation permit</option>
+                    <option value="For cooperative registration">For cooperative registration</option>
+                    <option value="For loan application">For loan application</option>
+                    <option value="For SSS / Pag-IBIG / PhilHealth registration">For SSS / Pag-IBIG / PhilHealth registration</option>
+                  </optgroup>
+                </select>
+                {errors.purpose && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.purpose}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Duration / Period of Validity *</label>
+                <input
+                  type="date"
+                  name="duration"
+                  value={formData.duration}
+                  onChange={handleChange}
+                  className={`w-full p-3 border border-black rounded-lg ${errors.duration ? 'border-red-500' : ''}`}
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  min="1900-01-01"
+                  max="2100-12-31"
+                />
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Valid ID Type *</label>
+                <select name="id_type" value={formData.id_type} onChange={handleChange} className={`w-full p-3 border border-black rounded-lg ${errors.id_type ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} >
+                  <option value="">Select ID type</option>
+                  <optgroup label="Primary Valid Government-Issued IDs">
+                    <option value="Philippine National ID (PhilSys ID)">Philippine National ID (PhilSys ID)</option>
+                    <option value="Driver's License (LTO)">Driver's License (LTO)</option>
+                    <option value="Passport (DFA)">Passport (DFA)</option>
+                    <option value="UMID">UMID</option>
+                    <option value="Voter's ID or COMELEC Voter's Certificate">Voter's ID or COMELEC Voter's Certificate</option>
+                    <option value="Postal ID (PhilPost)">Postal ID (PhilPost)</option>
+                    <option value="PRC ID">PRC ID</option>
+                    <option value="Senior Citizen ID">Senior Citizen ID</option>
+                    <option value="PWD ID">PWD ID</option>
+                    <option value="Barangay ID">Barangay ID</option>
+                  </optgroup>
+                  <optgroup label="Secondary / Supporting IDs">
+                    <option value="School ID">School ID</option>
+                    <option value="Company / Employee ID">Company / Employee ID</option>
+                    <option value="Police Clearance or NBI Clearance">Police Clearance or NBI Clearance</option>
+                    <option value="Tax Identification Number (TIN) ID">Tax Identification Number (TIN) ID</option>
+                    <option value="PhilHealth ID">PhilHealth ID</option>
+                    <option value="Pag-IBIG ID">Pag-IBIG ID</option>
+                    <option value="GSIS eCard">GSIS eCard</option>
+                    <option value="Solo Parent ID">Solo Parent ID</option>
+                    <option value="Indigenous People's (IP) ID">Indigenous People's (IP) ID</option>
+                    <option value="Firearms License ID">Firearms License ID</option>
+                  </optgroup>
+                </select>
+                {errors.id_type && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.id_type}</p>}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Valid ID Number *</label>
+                <input type="text" name="id_number" value={formData.id_number} onChange={handleChange} placeholder="ID Number" className={`w-full p-3 border border-black rounded-lg ${errors.id_number ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                {errors.id_number && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.id_number}</p>}
+              </div>
             </div>
           </div>
         );
       case 4:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4">Business Details & Requirements</h3>
+            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Required Documents</h3>
             
-            {/* Business Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <input type="text" name="business_name" value={formData.business_name} onChange={handleChange} placeholder="Business Name" className="p-3 border border-black rounded-lg" />
-              <input type="text" name="business_address" value={formData.business_address} onChange={handleChange} placeholder="Business Address" className="p-3 border border-black rounded-lg" />
-              <input type="text" name="nature_of_business" value={formData.nature_of_business} onChange={handleChange} placeholder="Nature of Business or Trade" className="p-3 border border-black rounded-lg" />
-              <input type="text" name="business_registration_number" value={formData.business_registration_number} onChange={handleChange} placeholder="DTI/SEC/Business Registration Number" className="p-3 border border-black rounded-lg" />
-            </div>
-
-            {/* Requirements Upload */}
             <div className="space-y-4">
-              <h4 className="text-lg font-semibold">Required Documents</h4>
-              
-              {/* Valid ID */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1 text-gray-700">
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary }}>
                   Valid ID (Government-issued, school, company ID) *
                 </label>
                 <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
@@ -439,15 +608,16 @@ export default function BarangayNew() {
                     type="file"
                     name="valid_id_file"
                     onChange={handleChange}
-                    className="w-full text-sm text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    style={{ fontFamily: COLORS.font }}
                   />
                 </div>
+                {errors.valid_id_file && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.valid_id_file}</p>}
               </div>
 
-              {/* Proof of Residence */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1 text-gray-700">
-                  Proof of Residence (Utility bill, barangay certificate) *
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary }}>
+                  Proof of Residence (Utility bill, barangay certificate)
                 </label>
                 <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
                   <Upload className="w-5 h-5 text-gray-500" />
@@ -455,15 +625,15 @@ export default function BarangayNew() {
                     type="file"
                     name="proof_of_residence_file"
                     onChange={handleChange}
-                    className="w-full text-sm text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    style={{ fontFamily: COLORS.font }}
                   />
                 </div>
               </div>
 
-              {/* Official Receipt */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1 text-gray-700">
-                  Official Receipt or Proof of Payment *
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary }}>
+                  Official Receipt or Proof of Payment
                 </label>
                 <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
                   <Upload className="w-5 h-5 text-gray-500" />
@@ -471,14 +641,14 @@ export default function BarangayNew() {
                     type="file"
                     name="receipt_file"
                     onChange={handleChange}
-                    className="w-full text-sm text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    style={{ fontFamily: COLORS.font }}
                   />
                 </div>
               </div>
 
-              {/* Applicant's Signature */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1 text-gray-700">
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary }}>
                   Applicant's Signature *
                 </label>
                 <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
@@ -487,14 +657,15 @@ export default function BarangayNew() {
                     type="file"
                     name="signature_file"
                     onChange={handleChange}
-                    className="w-full text-sm text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    style={{ fontFamily: COLORS.font }}
                   />
                 </div>
+                {errors.signature_file && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.signature_file}</p>}
               </div>
 
-              {/* Photo and Fingerprint */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1 text-gray-700">
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary }}>
                   Photo and Fingerprint (if required)
                 </label>
                 <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
@@ -503,7 +674,8 @@ export default function BarangayNew() {
                     type="file"
                     name="photo_fingerprint_file"
                     onChange={handleChange}
-                    className="w-full text-sm text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    style={{ fontFamily: COLORS.font }}
                   />
                 </div>
               </div>
@@ -513,50 +685,252 @@ export default function BarangayNew() {
       case 5:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4">Review Your Application</h3>
-            <div className="bg-white rounded-lg shadow p-4 border border-black">
-              <h4 className="font-bold mb-2">Applicant Information</h4>
-              <p><strong>First Name:</strong> {formData.first_name}</p>
-              <p><strong>Middle Initial:</strong> {formData.middle_initial}</p>
-              <p><strong>Last Name:</strong> {formData.last_name}</p>
-              <p><strong>Suffix:</strong> {formData.suffix}</p>
-              <p><strong>Contact Number:</strong> {formData.contact_number}</p>
-              <p><strong>Email:</strong> {formData.email}</p>
-              <p><strong>Birth Date:</strong> {formData.birth_date}</p>
-              <p><strong>Gender:</strong> {formData.gender}</p>
-              <p><strong>Civil Status:</strong> {formData.civil_status}</p>
-              <p><strong>Nationality:</strong> {formData.nationality}</p>
-              
-              <h4 className="font-bold mt-4 mb-2">Address Information</h4>
-              <p><strong>House/Building No.:</strong> {formData.house_no}</p>
-              <p><strong>Street:</strong> {formData.street}</p>
-              <p><strong>Barangay:</strong> {formData.barangay}</p>
-              <p><strong>City/Municipality:</strong> {formData.city_municipality}</p>
-              <p><strong>Province:</strong> {formData.province}</p>
-              <p><strong>ZIP Code:</strong> {formData.zip_code}</p>
-              
-              <h4 className="font-bold mt-4 mb-2">Clearance Details</h4>
-              <p><strong>Purpose:</strong> {formData.purpose}</p>
-              <p><strong>ID Type:</strong> {formData.id_type}</p>
-              <p><strong>ID Number:</strong> {formData.id_number}</p>
-              
-              <h4 className="font-bold mt-4 mb-2">Business Details</h4>
-              <p><strong>Business Name:</strong> {formData.business_name || 'N/A'}</p>
-              <p><strong>Business Address:</strong> {formData.business_address || 'N/A'}</p>
-              <p><strong>Nature of Business:</strong> {formData.nature_of_business || 'N/A'}</p>
-              <p><strong>Registration Number:</strong> {formData.business_registration_number || 'N/A'}</p>
-              
-              <h4 className="font-bold mt-4 mb-2">Uploaded Documents</h4>
-              <ul>
-                {formData.valid_id_file && <li>Valid ID: {formData.valid_id_file.name}</li>}
-                {formData.proof_of_residence_file && <li>Proof of Residence: {formData.proof_of_residence_file.name}</li>}
-                {formData.receipt_file && <li>Receipt: {formData.receipt_file.name}</li>}
-                {formData.signature_file && <li>Signature: {formData.signature_file.name}</li>}
-                {formData.photo_fingerprint_file && <li>Photo & Fingerprint: {formData.photo_fingerprint_file.name}</li>}
-                {!formData.valid_id_file && !formData.proof_of_residence_file && !formData.receipt_file && !formData.signature_file && !formData.photo_fingerprint_file && (
-                  <li>No files uploaded</li>
-                )}
-              </ul>
+            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Review Your Application</h3>
+            <div className="bg-white rounded-lg shadow p-6 border border-black">
+              <div className="space-y-6">
+                <div>
+                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Applicant Information</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm" style={{ fontFamily: COLORS.font }}>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">First Name:</span>
+                      <span className="flex-1">{formData.first_name}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Middle Name:</span>
+                      <span className="flex-1">{formData.middle_name || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Last Name:</span>
+                      <span className="flex-1">{formData.last_name}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Suffix:</span>
+                      <span className="flex-1">{formData.suffix || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Mobile Number:</span>
+                      <span className="flex-1">{formData.mobile_number}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Email:</span>
+                      <span className="flex-1">{formData.email || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Birth Date:</span>
+                      <span className="flex-1">{formData.birthdate}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Gender:</span>
+                      <span className="flex-1">{formData.gender}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Civil Status:</span>
+                      <span className="flex-1">{formData.civil_status}</span>
+                    </div>
+                    <div className="flex items-center md:col-span-2">
+                      <span className="font-medium w-32">Nationality:</span>
+                      <span className="flex-1">{formData.nationality}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Address Information</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm" style={{ fontFamily: COLORS.font }}>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">House/Building No.:</span>
+                      <span className="flex-1">{formData.house_no}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Street:</span>
+                      <span className="flex-1">{formData.street}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Barangay:</span>
+                      <span className="flex-1">{formData.barangay}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">City/Municipality:</span>
+                      <span className="flex-1">{formData.city_municipality}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Province:</span>
+                      <span className="flex-1">{formData.province}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">ZIP Code:</span>
+                      <span className="flex-1">{formData.zip_code || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Clearance Details</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm" style={{ fontFamily: COLORS.font }}>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Purpose:</span>
+                      <span className="flex-1">{formData.purpose}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">Duration:</span>
+                      <span className="flex-1">{formData.duration || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">ID Type:</span>
+                      <span className="flex-1">{formData.id_type}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="font-medium w-32">ID Number:</span>
+                      <span className="flex-1">{formData.id_number}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Uploaded Documents</h5>
+                  <div className="space-y-4">
+                    {/* Valid ID */}
+                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                      <div className="flex items-center">
+                        {formData.valid_id_file ? (
+                          <Check className="w-5 h-5 text-green-600 mr-3" />
+                        ) : (
+                          <X className="w-5 h-5 text-red-600 mr-3" />
+                        )}
+                        <div>
+                          <span className="font-medium">Valid ID:</span>
+                          <p className="text-sm text-gray-600">
+                            {formData.valid_id_file ? formData.valid_id_file.name : 'Not uploaded'}
+                          </p>
+                        </div>
+                      </div>
+                      {formData.valid_id_file && (
+                        <button
+                          type="button"
+                          onClick={() => previewFile(formData.valid_id_file)}
+                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                          style={{ color: COLORS.secondary }}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Preview
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Proof of Residence */}
+                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                      <div className="flex items-center">
+                        {formData.proof_of_residence_file ? (
+                          <Check className="w-5 h-5 text-green-600 mr-3" />
+                        ) : (
+                          <X className="w-5 h-5 text-gray-400 mr-3" />
+                        )}
+                        <div>
+                          <span className="font-medium">Proof of Residence:</span>
+                          <p className="text-sm text-gray-600">
+                            {formData.proof_of_residence_file ? formData.proof_of_residence_file.name : 'Optional'}
+                          </p>
+                        </div>
+                      </div>
+                      {formData.proof_of_residence_file && (
+                        <button
+                          type="button"
+                          onClick={() => previewFile(formData.proof_of_residence_file)}
+                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                          style={{ color: COLORS.secondary }}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Preview
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Official Receipt */}
+                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                      <div className="flex items-center">
+                        {formData.receipt_file ? (
+                          <Check className="w-5 h-5 text-green-600 mr-3" />
+                        ) : (
+                          <X className="w-5 h-5 text-gray-400 mr-3" />
+                        )}
+                        <div>
+                          <span className="font-medium">Official Receipt:</span>
+                          <p className="text-sm text-gray-600">
+                            {formData.receipt_file ? formData.receipt_file.name : 'Optional'}
+                          </p>
+                        </div>
+                      </div>
+                      {formData.receipt_file && (
+                        <button
+                          type="button"
+                          onClick={() => previewFile(formData.receipt_file)}
+                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                          style={{ color: COLORS.secondary }}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Preview
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Signature */}
+                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                      <div className="flex items-center">
+                        {formData.signature_file ? (
+                          <Check className="w-5 h-5 text-green-600 mr-3" />
+                        ) : (
+                          <X className="w-5 h-5 text-red-600 mr-3" />
+                        )}
+                        <div>
+                          <span className="font-medium">Signature:</span>
+                          <p className="text-sm text-gray-600">
+                            {formData.signature_file ? formData.signature_file.name : 'Not uploaded'}
+                          </p>
+                        </div>
+                      </div>
+                      {formData.signature_file && (
+                        <button
+                          type="button"
+                          onClick={() => previewFile(formData.signature_file)}
+                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                          style={{ color: COLORS.secondary }}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Preview
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Photo & Fingerprint */}
+                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                      <div className="flex items-center">
+                        {formData.photo_fingerprint_file ? (
+                          <Check className="w-5 h-5 text-green-600 mr-3" />
+                        ) : (
+                          <X className="w-5 h-5 text-gray-400 mr-3" />
+                        )}
+                        <div>
+                          <span className="font-medium">Photo & Fingerprint:</span>
+                          <p className="text-sm text-gray-600">
+                            {formData.photo_fingerprint_file ? formData.photo_fingerprint_file.name : 'Optional'}
+                          </p>
+                        </div>
+                      </div>
+                      {formData.photo_fingerprint_file && (
+                        <button
+                          type="button"
+                          onClick={() => previewFile(formData.photo_fingerprint_file)}
+                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                          style={{ color: COLORS.secondary }}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Preview
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -566,23 +940,23 @@ export default function BarangayNew() {
   };
 
   return (
-    <div className="mx-1 mt-1 p-6 rounded-lg min-h-screen font-sans" style={{ background: COLORS.background, color: COLORS.secondary, fontFamily: COLORS.font }}>
+    <div className="mx-1 mt-1 p-6 rounded-lg min-h-screen" style={{ background: COLORS.background, color: COLORS.secondary, fontFamily: COLORS.font }}>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl md:text-4xl font-bold" style={{ color: COLORS.primary }}>Barangay Clearance Application</h1>
+          <h1 className="text-2xl md:text-4xl font-bold" style={{ color: COLORS.primary }}>BARANGAY CLEARANCE APPLICATION</h1>
           <p className="mt-2" style={{ color: COLORS.secondary }}>
-            Application Date: <span className="font-semibold" style={{ color: COLORS.primary }}>{formData.application_date}</span>
+            Apply for a barangay clearance for various personal, employment, or business purposes.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => navigate('/user/dashboard')}
-            style={{ background: COLORS.secondary, color: '#fff' }}
-            className="px-4 py-2 rounded-lg transition-colors hover:bg-[#FDA811]"
-          >
-            Back to Dashboard
-          </button>
-        </div>
+        <button
+          onClick={() => navigate('/user/barangay/type')}
+          onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+          onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+          style={{ background: COLORS.success }}
+          className="px-4 py-2 rounded-lg font-medium text-white hover:bg-[#FDA811] transition-colors duration-300"
+        >
+          Back to Dashboard
+        </button>
       </div>
 
       {/* Progress Steps */}
@@ -590,17 +964,38 @@ export default function BarangayNew() {
         <div className="flex items-center justify-between">
           {steps.map((step, index) => (
             <div key={step.id} className="flex items-center">
-              <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2`} style={{ background: currentStep >= step.id ? COLORS.primary : 'transparent', borderColor: currentStep >= step.id ? COLORS.primary : COLORS.secondary, color: currentStep >= step.id ? '#fff' : COLORS.secondary }}>
+              <div 
+                className={`flex items-center justify-center rounded-full border-2 font-semibold transition-all duration-300 ${
+                  currentStep >= step.id ? 'text-white' : 'text-gray-500'
+                }`}
+                style={{
+                  background: currentStep >= step.id ? COLORS.success : 'transparent',
+                  borderColor: currentStep >= step.id ? COLORS.success : '#9CA3AF',
+                  width: '45px',
+                  height: '30px',
+                  borderRadius: '20px',
+                  fontFamily: COLORS.font
+                }}
+              >
                 {step.id}
               </div>
               <div className="ml-3 hidden md:block">
-                <p className={`text-sm font-medium`} style={{ color: currentStep >= step.id ? COLORS.primary : COLORS.secondary }}>
+                <p 
+                  className="text-sm font-medium" 
+                  style={{ 
+                    color: currentStep >= step.id ? COLORS.success : COLORS.secondary,
+                    fontFamily: COLORS.font
+                  }}
+                >
                   {step.title}
                 </p>
-                <p className="text-xs" style={{ color: COLORS.secondary }}>{step.description}</p>
+                <p className="text-xs" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>{step.description}</p>
               </div>
               {index < steps.length - 1 && (
-                <div className={`hidden md:block w-16 h-0.5 mx-4`} style={{ background: currentStep > step.id ? COLORS.primary : COLORS.secondary }} />
+                <div 
+                  className="hidden md:block w-16 h-0.5 mx-4" 
+                  style={{ background: currentStep > step.id ? COLORS.success : '#9CA3AF' }} 
+                />
               )}
             </div>
           ))}
@@ -610,7 +1005,7 @@ export default function BarangayNew() {
       {submitStatus && (
         <div className={`p-4 mb-6 rounded ${
           submitStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-        }`}>
+        }`} style={{ fontFamily: COLORS.font }}>
           {submitStatus.message}
         </div>
       )}
@@ -620,60 +1015,175 @@ export default function BarangayNew() {
 
         <div className="flex justify-between pt-6">
           {currentStep > 1 && (
-            <button
-              type="button"
-              onClick={prevStep}
-              style={{ background: COLORS.secondary, color: '#fff' }}
-              className="px-6 py-3 rounded-lg font-semibold hover:bg-[#FDA811] transition-colors"
-            >
-              Previous
-            </button>
+      <button
+       type="button"
+       onClick={prevStep}
+       onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+       onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+       style={{ background: COLORS.success }}
+       className="px-6 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
+       >
+       Previous
+     </button>
+
           )}
 
           {currentStep < steps.length ? (
             <button
-              type="button"
-              onClick={nextStep}
+              type="submit"
               disabled={!isStepValid(currentStep)}
-              style={{ background: !isStepValid(currentStep) ? COLORS.secondary : COLORS.primary, color: '#fff' }}
-              className={`px-6 py-3 rounded-lg font-semibold ${!isStepValid(currentStep) ? 'cursor-not-allowed' : 'hover:bg-[#FDA811] transition-colors'}`}
-            >
-              Next
+              style={{ background: !isStepValid(currentStep) ? '#9CA3AF' : COLORS.success }}
+              onMouseEnter={e => {
+                if (isStepValid(currentStep)) e.currentTarget.style.background = COLORS.accent;
+                  }}
+              onMouseLeave={e => {
+                if (isStepValid(currentStep)) e.currentTarget.style.background = COLORS.success;
+                 }}
+              className={`px-6 py-3 rounded-lg font-semibold text-white ${
+                !isStepValid(currentStep) ? 'cursor-not-allowed' : 'transition-colors duration-300'
+                }`}
+              >
+              {currentStep === steps.length - 1 ? 'Review Application' : 'Next'}
             </button>
+
           ) : (
             <button
               type="submit"
-              disabled={isSubmitting || !(isStepValid(1) && isStepValid(2) && isStepValid(3))}
-              style={{ background: (isSubmitting || !(isStepValid(1) && isStepValid(2) && isStepValid(3))) ? COLORS.secondary : COLORS.accent, color: '#fff' }}
-              className={`px-6 py-3 rounded-lg font-semibold ${(isSubmitting || !(isStepValid(1) && isStepValid(2) && isStepValid(3))) ? 'cursor-not-allowed' : 'hover:bg-[#FDA811] transition-colors'}`}
-            >
-              {isSubmitting ? 'Submitting...' : 'Submit Application'}
+              disabled={isSubmitting}
+              onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+              onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+              style={{ background: COLORS.success }}
+              className="px-6 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
+       >
+              Submit Application
             </button>
           )}
         </div>
       </form>
 
-      {showConfirm && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-          <div className="p-8 rounded-lg shadow-lg w-full max-w-md" style={{ background: COLORS.background }}>
-            <h2 className="text-xl font-bold mb-4" style={{ color: COLORS.primary }}>Confirm Submission</h2>
-            <p className="mb-6" style={{ color: COLORS.secondary }}>Are you sure you want to submit your Barangay Clearance application?</p>
+      {/* File Preview Modal */}
+      {showPreview.url && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold" style={{ color: COLORS.primary }}>
+                Preview: {showPreview.name}
+              </h3>
+              <button
+                onClick={closePreview}
+                className="text-gray-500 hover:text-gray-700 transition-colors duration-300"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
+              {showPreview.type === 'image' ? (
+                <img 
+                  src={showPreview.url} 
+                  alt="Preview" 
+                  className="max-w-full h-auto mx-auto"
+                />
+              ) : showPreview.type === 'application' && showPreview.name?.includes('.pdf') ? (
+                <iframe 
+                  src={showPreview.url} 
+                  className="w-full h-[500px]"
+                  title="PDF Preview"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8">
+                  <FileText className="w-24 h-24 text-gray-400 mb-4" />
+                  <p className="text-gray-600 mb-2">File: {showPreview.name}</p>
+                  <p className="text-gray-500">Preview not available for this file type</p>
+                  <a 
+                    href={showPreview.url} 
+                    download={showPreview.name}
+                    className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors duration-300"
+                  >
+                    Download File
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal - Updated with blur background */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
+          <div 
+            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
+            style={{ 
+              background: 'rgba(255, 255, 255, 0.95)',
+              fontFamily: COLORS.font,
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <h2 className="text-xl font-bold mb-6" style={{ color: COLORS.primary }}>Confirm Submission</h2>
+            
+            <div className="mb-6">
+              <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                Are you sure you want to submit your barangay clearance application? Please review your information before submitting.
+              </p>
+            </div>
+
+            <div className="p-4 bg-gray-50 rounded-lg border mb-6">
+              <p className="text-sm font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Declaration:</p>
+              <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                I hereby declare that all information provided is true and correct to the best of my knowledge. I understand that any false information may result in the rejection of my application.
+              </p>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="declaration-checkbox"
+                  checked={agreeDeclaration}
+                  onChange={(e) => setAgreeDeclaration(e.target.checked)}
+                  className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                />
+                <label htmlFor="declaration-checkbox" className="ml-2 text-sm" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  I agree to the above declaration *
+                </label>
+              </div>
+            </div>
+
             <div className="flex justify-end gap-4">
               <button
-                className="px-6 py-2 rounded-lg font-semibold transition-colors"
-                style={{ background: COLORS.secondary, color: '#fff' }}
-                onClick={() => setShowConfirm(false)}
-              >
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setAgreeDeclaration(false);
+                }}
+                  disabled={isSubmitting}
+                  style={{ background: COLORS.danger }}
+                  onMouseEnter={e => {
+                if (!isSubmitting) e.currentTarget.style.background = COLORS.danger;
+                }}
+                  onMouseLeave={e => {
+                if (!isSubmitting) e.currentTarget.style.background = COLORS.success;
+                }}
+                  className={`px-6 py-2 rounded-lg font-semibold text-white ${
+                  isSubmitting ? 'cursor-not-allowed' : 'transition-colors duration-300'
+                }`}
+                >
                 Cancel
               </button>
+
               <button
-                className="px-6 py-2 rounded-lg font-semibold transition-colors"
-                style={{ background: COLORS.accent, color: '#fff' }}
-                onClick={handleSubmit}
-                disabled={isSubmitting}
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !agreeDeclaration}
+                  style={{ background: (isSubmitting || !agreeDeclaration) ? '#9CA3AF' : COLORS.success }}
+                  onMouseEnter={e => {
+                if (!(isSubmitting || !agreeDeclaration)) e.currentTarget.style.background = COLORS.accent;
+                  }}
+                  onMouseLeave={e => {
+                if (!(isSubmitting || !agreeDeclaration)) e.currentTarget.style.background = COLORS.success;
+                  }}
+                  className={`px-6 py-2 rounded-lg font-semibold text-white ${
+                  (isSubmitting || !agreeDeclaration) ? 'cursor-not-allowed' : 'transition-colors duration-300'
+                }`}
               >
-                {isSubmitting ? 'Submitting...' : 'Confirm'}
+                {isSubmitting ? 'Submitting...' : 'Confirm & Submit'}
               </button>
+
             </div>
           </div>
         </div>

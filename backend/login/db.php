@@ -5,9 +5,9 @@ header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 
 $host = "localhost";
-$db = "user-management";
+$db = "eplms_user_management";
 $user = "root";
-$pass = "mypassword"; // or your MySQL password
+$pass = "mypassword"; 
 
 $conn = new mysqli($host, $user, $pass, $db);
 

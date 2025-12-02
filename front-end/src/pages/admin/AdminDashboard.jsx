@@ -13,7 +13,6 @@ import {
   Legend,
 } from "chart.js";
 
-// Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Title, Tooltip, Legend);
 
 export default function AdminDashboard() {
@@ -101,7 +100,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen p-8 bg-white dark:bg-slate-900 text-black dark:text-white transition-colors duration-300 font-sans">
       {/* Header Card */}
       <div className="relative shadow-lg rounded-2xl border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row items-center justify-between mb-8 overflow-hidden min-h-[250px] p-12 bg-white dark:bg-slate-800 transition-colors duration-300">
-        <div className="absolute inset-0 bg-[url('/bgaddash.jpg')] bg-cover bg-center opacity-30"></div>
+        <div className="absolute inset-0 bg-[url('/front-end/src/assets/admin-dash-bg.jpg')] bg-cover bg-center opacity-30"></div>
         <div className="relative">
           <h2 className="text-3xl font-extrabold text-[#4CAF50] tracking-wide font-[Montserrat]">
             Permit & Licensing Management System

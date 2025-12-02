@@ -1,5 +1,5 @@
-const API_URL = "http://localhost/eplms-main/backend/users.php";
-const OTP_API = "http://localhost/eplms-main/backend/otp-admin.php";
+const API_URL = "http://localhost/eplms-main/backend/login/users.php";
+const OTP_API = "http://localhost/eplms-main/backend/login/otp-admin.php";
 
 // --------------------- USERS ---------------------
 
