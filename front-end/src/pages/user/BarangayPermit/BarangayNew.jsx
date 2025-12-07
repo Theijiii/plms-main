@@ -12,7 +12,6 @@ const COLORS = {
   font: 'Montserrat, Arial, sans-serif'
 };
 
-
 const NATIONALITIES = [
   "Afghan", "Albanian", "Algerian", "American", "Andorran", "Angolan", "Antiguans", "Argentinean", "Armenian", "Australian", "Austrian", "Azerbaijani", "Bahamian", "Bahraini", "Bangladeshi", "Barbadian", "Barbudans", "Batswana", "Belarusian", "Belgian", "Belizean", "Beninese", "Bhutanese", "Bolivian", "Bosnian", "Brazilian", "British", "Bruneian", "Bulgarian", "Burkinabe", "Burmese", "Burundian", "Cambodian", "Cameroonian", "Canadian", "Cape Verdean", "Central African", "Chadian", "Chilean", "Chinese", "Colombian", "Comoran", "Congolese", "Costa Rican", "Croatian", "Cuban", "Cypriot", "Czech", "Danish", "Djibouti", "Dominican", "Dutch", "East Timorese", "Ecuadorean", "Egyptian", "Emirian", "Equatorial Guinean", "Eritrean", "Estonian", "Ethiopian", "Fijian", "Filipino", "Finnish", "French", "Gabonese", "Gambian", "Georgian", "German", "Ghanaian", "Greek", "Grenadian", "Guatemalan", "Guinea-Bissauan", "Guinean", "Guyanese", "Haitian", "Herzegovinian", "Honduran", "Hungarian", "I-Kiribati", "Icelander", "Indian", "Indonesian", "Iranian", "Iraqi", "Irish", "Israeli", "Italian", "Ivorian", "Jamaican", "Japanese", "Jordanian", "Kazakhstani", "Kenyan", "Kittian and Nevisian", "Kuwaiti", "Kyrgyz", "Laotian", "Latvian", "Lebanese", "Liberian", "Libyan", "Liechtensteiner", "Lithuanian", "Luxembourger", "Macedonian", "Malagasy", "Malawian", "Malaysian", "Maldivan", "Malian", "Maltese", "Marshallese", "Mauritanian", "Mauritian", "Mexican", "Micronesian", "Moldovan", "Monacan", "Mongolian", "Moroccan", "Mosotho", "Motswana", "Mozambican", "Namibian", "Nauruan", "Nepalese", "New Zealander", "Nicaraguan", "Nigerian", "Nigerien", "North Korean", "Northern Irish", "Norwegian", "Omani", "Pakistani", "Palauan", "Palestinian", "Panamanian", "Papua New Guinean", "Paraguayan", "Peruvian", "Polish", "Portuguese", "Qatari", "Romanian", "Russian", "Rwandan", "Saint Lucian", "Salvadoran", "Samoan", "San Marinese", "Sao Tomean", "Saudi", "Scottish", "Senegalese", "Serbian", "Seychellois", "Sierra Leonean", "Singaporean", "Slovakian", "Slovenian", "Solomon Islander", "Somali", "South African", "South Korean", "Spanish", "Sri Lankan", "Sudanese", "Surinamer", "Swazi", "Swedish", "Swiss", "Syrian", "Taiwanese", "Tajik", "Tanzanian", "Thai", "Togolese", "Tongan", "Trinidadian or Tobagonian", "Tunisian", "Turkish", "Tuvaluan", "Ugandan", "Ukrainian", "Uruguayan", "Uzbekistani", "Venezuelan", "Vietnamese", "Welsh", "Yemenite", "Zambian", "Zimbabwean"
 ];
@@ -23,8 +22,11 @@ export default function BarangayNew() {
   const permitType = location.state?.permitType || 'NEW';
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
   const [agreeDeclaration, setAgreeDeclaration] = useState(false);
   const [showPreview, setShowPreview] = useState({});
   const [userData, setUserData] = useState(null);
@@ -275,41 +277,58 @@ export default function BarangayNew() {
     }
   };
 
+  const showSuccessMessage = (message) => {
+    setModalTitle('Success!');
+    setModalMessage(message);
+    setShowSuccessModal(true);
+  };
+
+  const showErrorMessage = (message) => {
+    setModalTitle('Error');
+    setModalMessage(message);
+    setShowErrorModal(true);
+  };
+
   const handleSubmit = async () => {
     if (!agreeDeclaration) {
-      setSubmitStatus({ type: 'error', message: 'You must agree to the declaration before submitting.' });
+      showErrorMessage("You must agree to the declaration before submitting.");
       return;
     }
 
     setIsSubmitting(true);
-    
+
+    // Validate steps
     const step1Ok = validateStep(1);
     const step2Ok = validateStep(2);
     const step3Ok = validateStep(3);
     const step4Ok = validateStep(4);
-    
+
     if (!(step1Ok && step2Ok && step3Ok && step4Ok)) {
       setIsSubmitting(false);
       if (!step1Ok) setCurrentStep(1);
       else if (!step2Ok) setCurrentStep(2);
       else if (!step3Ok) setCurrentStep(3);
       else setCurrentStep(4);
+
       setShowConfirmModal(false);
       return;
     }
 
     try {
-      // Prepare submission data
-      const submissionData = {
-        user_id: formData.user_id,
+      // Prepare FormData for backend
+      const formDataToSend = new FormData();
+
+      // Append all text fields
+      Object.entries({
+        user_id: formData.user_id || "",
         application_date: formData.application_date,
         first_name: formData.first_name,
-        middle_name: formData.middle_name,
+        middle_name: formData.middle_name || "",
         last_name: formData.last_name,
-        suffix: formData.suffix,
+        suffix: formData.suffix || "",
         birthdate: formData.birthdate,
         mobile_number: formData.mobile_number,
-        email: formData.email,
+        email: formData.email || "",
         gender: formData.gender,
         civil_status: formData.civil_status,
         nationality: formData.nationality,
@@ -318,47 +337,108 @@ export default function BarangayNew() {
         barangay: formData.barangay,
         city_municipality: formData.city_municipality,
         province: formData.province,
-        zip_code: formData.zip_code,
+        zip_code: formData.zip_code || "",
         purpose: formData.purpose,
-        duration: formData.duration,
+        duration: formData.duration || "",
         id_type: formData.id_type,
         id_number: formData.id_number,
-        clearance_fee: formData.clearance_fee,
-        receipt_number: formData.receipt_number,
-        applicant_signature: formData.applicant_signature,
-        status: formData.status,
-        attachments: JSON.stringify({
-          valid_id: formData.valid_id_file?.name || '',
-          proof_of_residence: formData.proof_of_residence_file?.name || '',
-          receipt: formData.receipt_file?.name || '',
-          signature: formData.signature_file?.name || '',
-          photo_fingerprint: formData.photo_fingerprint_file?.name || ''
-        })
-      };
-
-      const response = await fetch('/back-end/api/barangay_permit.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(submissionData),
-        credentials: 'include'
+        clearance_fee: formData.clearance_fee || "0.00",
+        receipt_number: formData.receipt_number || "",
+        status: formData.status || "pending",
+      }).forEach(([key, value]) => {
+        formDataToSend.append(key, value);
       });
 
-      const data = await response.json();
+      // Attach file uploads
+      const fileFields = [
+        "valid_id_file",
+        "proof_of_residence_file",
+        "receipt_file",
+        "signature_file",
+        "photo_fingerprint_file",
+      ];
 
-      if (data.success) {
-        setSubmitStatus({ type: 'success', message: data.message });
-        setShowConfirmModal(false);
-        setTimeout(() => {
-          navigate('/user/dashboard');
-        }, 2000);
-      } else {
-        setSubmitStatus({ type: 'error', message: data.message || 'Failed to submit application' });
+      fileFields.forEach((field) => {
+        if (formData[field] instanceof File) {
+          formDataToSend.append(field, formData[field]);
+        }
+      });
+
+      console.log("Submitting barangay permit application...");
+
+      const response = await fetch("http://localhost/eplms-main/backend/barangay_permit/barangay_permit.php", {
+        method: "POST",
+        body: formDataToSend,
+      });
+
+      const responseClone = response.clone();
+      let data;
+
+      try {
+        data = await response.json();
+      } catch {
+        const rawText = await responseClone.text();
+        console.error("Raw server response:", rawText);
+        throw new Error("Server did not return valid JSON");
       }
+
+      // Success
+      if (data.success) {
+        setShowConfirmModal(false);
+        showSuccessMessage(data.message || "Application submitted successfully!");
+        
+        // Reset form after successful submission
+        setTimeout(() => {
+          setFormData({
+            permit_type: permitType,
+            application_date: new Date().toISOString().split('T')[0],
+            status: 'pending',
+            first_name: '',
+            middle_name: '',
+            last_name: '',
+            suffix: '',
+            mobile_number: '',
+            email: '',
+            birthdate: '',
+            gender: '',
+            civil_status: '',
+            nationality: '',
+            house_no: '',
+            street: '',
+            barangay: '',
+            city_municipality: '',
+            province: '',
+            zip_code: '',
+            purpose: '',
+            duration: '',
+            id_type: '',
+            id_number: '',
+            clearance_fee: 0.00,
+            receipt_number: '',
+            user_id: userData?.id || null,
+            applicant_signature: '',
+            valid_id_file: null,
+            proof_of_residence_file: null,
+            receipt_file: null,
+            signature_file: null,
+            photo_fingerprint_file: null,
+            attachments: '',
+          });
+          setCurrentStep(1);
+          setAgreeDeclaration(false);
+        }, 2000);
+
+        // Navigate after showing success message
+        setTimeout(() => {
+          navigate("/user/dashboard");
+        }, 3000);
+      } else {
+        showErrorMessage(data.message || "Failed to submit application.");
+      }
+
     } catch (error) {
-      console.error('Submission error:', error);
-      setSubmitStatus({ type: 'error', message: 'Network error: ' + error.message });
+      console.error("Submission error:", error);
+      showErrorMessage("Network error: " + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -1002,30 +1082,21 @@ export default function BarangayNew() {
         </div>
       </div>
 
-      {submitStatus && (
-        <div className={`p-4 mb-6 rounded ${
-          submitStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-        }`} style={{ fontFamily: COLORS.font }}>
-          {submitStatus.message}
-        </div>
-      )}
-
       <form onSubmit={handleFormSubmit} className="space-y-8">
         {renderStepContent()}
 
         <div className="flex justify-between pt-6">
           {currentStep > 1 && (
-      <button
-       type="button"
-       onClick={prevStep}
-       onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-       onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-       style={{ background: COLORS.success }}
-       className="px-6 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
-       >
-       Previous
-     </button>
-
+            <button
+              type="button"
+              onClick={prevStep}
+              onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+              onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+              style={{ background: COLORS.success }}
+              className="px-6 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
+            >
+              Previous
+            </button>
           )}
 
           {currentStep < steps.length ? (
@@ -1035,17 +1106,16 @@ export default function BarangayNew() {
               style={{ background: !isStepValid(currentStep) ? '#9CA3AF' : COLORS.success }}
               onMouseEnter={e => {
                 if (isStepValid(currentStep)) e.currentTarget.style.background = COLORS.accent;
-                  }}
+              }}
               onMouseLeave={e => {
                 if (isStepValid(currentStep)) e.currentTarget.style.background = COLORS.success;
-                 }}
+              }}
               className={`px-6 py-3 rounded-lg font-semibold text-white ${
                 !isStepValid(currentStep) ? 'cursor-not-allowed' : 'transition-colors duration-300'
-                }`}
-              >
+              }`}
+            >
               {currentStep === steps.length - 1 ? 'Review Application' : 'Next'}
             </button>
-
           ) : (
             <button
               type="submit"
@@ -1054,7 +1124,7 @@ export default function BarangayNew() {
               onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
               style={{ background: COLORS.success }}
               className="px-6 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
-       >
+            >
               Submit Application
             </button>
           )}
@@ -1063,12 +1133,18 @@ export default function BarangayNew() {
 
       {/* File Preview Modal */}
       {showPreview.url && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
+          <div 
+            className="rounded-lg shadow-lg w-full max-w-4xl border border-gray-200 overflow-hidden"
+            style={{ 
+              background: 'rgba(255, 255, 255, 0.95)',
+              fontFamily: COLORS.font,
+              backdropFilter: 'blur(10px)',
+              maxHeight: '90vh'
+            }}
+          >
             <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold" style={{ color: COLORS.primary }}>
-                Preview: {showPreview.name}
-              </h3>
+              <h2 className="text-xl font-bold" style={{ color: COLORS.primary }}>Preview Document</h2>
               <button
                 onClick={closePreview}
                 className="text-gray-500 hover:text-gray-700 transition-colors duration-300"
@@ -1076,39 +1152,60 @@ export default function BarangayNew() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
-              {showPreview.type === 'image' ? (
-                <img 
-                  src={showPreview.url} 
-                  alt="Preview" 
-                  className="max-w-full h-auto mx-auto"
-                />
-              ) : showPreview.type === 'application' && showPreview.name?.includes('.pdf') ? (
-                <iframe 
-                  src={showPreview.url} 
-                  className="w-full h-[500px]"
-                  title="PDF Preview"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center p-8">
-                  <FileText className="w-24 h-24 text-gray-400 mb-4" />
-                  <p className="text-gray-600 mb-2">File: {showPreview.name}</p>
-                  <p className="text-gray-500">Preview not available for this file type</p>
-                  <a 
-                    href={showPreview.url} 
-                    download={showPreview.name}
-                    className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors duration-300"
-                  >
-                    Download File
-                  </a>
-                </div>
-              )}
+            
+            <div className="p-6 overflow-auto" style={{ maxHeight: 'calc(90vh - 80px)' }}>
+              <p className="text-sm mb-4" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                File: <span className="font-medium">{showPreview.name}</span>
+              </p>
+              
+              <div className="bg-white rounded-lg border p-4">
+                {showPreview.type === 'image' ? (
+                  <div className="flex justify-center">
+                    <img 
+                      src={showPreview.url} 
+                      alt="Preview" 
+                      className="max-w-full h-auto max-h-[500px]"
+                    />
+                  </div>
+                ) : showPreview.type === 'application' && showPreview.name?.includes('.pdf') ? (
+                  <iframe 
+                    src={showPreview.url} 
+                    className="w-full h-[500px] rounded"
+                    title="PDF Preview"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-8">
+                    <FileText className="w-24 h-24 text-gray-400 mb-4" />
+                    <p className="text-gray-600 mb-2">File: {showPreview.name}</p>
+                    <p className="text-gray-500 mb-6">Preview not available for this file type</p>
+                    <a 
+                      href={showPreview.url} 
+                      download={showPreview.name}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors duration-300"
+                    >
+                      Download File
+                    </a>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={closePreview}
+                  style={{ background: COLORS.success }}
+                  onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                  onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+                  className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
+                >
+                  Close Preview
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Confirmation Modal - Updated with blur background */}
+      {/* Confirmation Modal */}
       {showConfirmModal && (
         <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
           <div 
@@ -1152,38 +1249,141 @@ export default function BarangayNew() {
                   setShowConfirmModal(false);
                   setAgreeDeclaration(false);
                 }}
-                  disabled={isSubmitting}
-                  style={{ background: COLORS.danger }}
-                  onMouseEnter={e => {
-                if (!isSubmitting) e.currentTarget.style.background = COLORS.danger;
+                disabled={isSubmitting}
+                style={{ background: COLORS.danger }}
+                onMouseEnter={e => {
+                  if (!isSubmitting) e.currentTarget.style.background = COLORS.accent;
                 }}
-                  onMouseLeave={e => {
-                if (!isSubmitting) e.currentTarget.style.background = COLORS.success;
+                onMouseLeave={e => {
+                  if (!isSubmitting) e.currentTarget.style.background = COLORS.danger;
                 }}
-                  className={`px-6 py-2 rounded-lg font-semibold text-white ${
+                className={`px-6 py-2 rounded-lg font-semibold text-white ${
                   isSubmitting ? 'cursor-not-allowed' : 'transition-colors duration-300'
                 }`}
-                >
+              >
                 Cancel
               </button>
 
               <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || !agreeDeclaration}
-                  style={{ background: (isSubmitting || !agreeDeclaration) ? '#9CA3AF' : COLORS.success }}
-                  onMouseEnter={e => {
-                if (!(isSubmitting || !agreeDeclaration)) e.currentTarget.style.background = COLORS.accent;
-                  }}
-                  onMouseLeave={e => {
-                if (!(isSubmitting || !agreeDeclaration)) e.currentTarget.style.background = COLORS.success;
-                  }}
-                  className={`px-6 py-2 rounded-lg font-semibold text-white ${
+                onClick={handleSubmit}
+                disabled={isSubmitting || !agreeDeclaration}
+                style={{ background: (isSubmitting || !agreeDeclaration) ? '#9CA3AF' : COLORS.success }}
+                onMouseEnter={e => {
+                  if (!(isSubmitting || !agreeDeclaration)) e.currentTarget.style.background = COLORS.accent;
+                }}
+                onMouseLeave={e => {
+                  if (!(isSubmitting || !agreeDeclaration)) e.currentTarget.style.background = COLORS.success;
+                }}
+                className={`px-6 py-2 rounded-lg font-semibold text-white ${
                   (isSubmitting || !agreeDeclaration) ? 'cursor-not-allowed' : 'transition-colors duration-300'
                 }`}
               >
                 {isSubmitting ? 'Submitting...' : 'Confirm & Submit'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
+          <div 
+            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
+            style={{ 
+              background: 'rgba(255, 255, 255, 0.95)',
+              fontFamily: COLORS.font,
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <div className="flex items-center justify-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                <Check className="w-8 h-8 text-green-600" />
+              </div>
+            </div>
+            
+            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.primary }}>{modalTitle}</h2>
+            
+            <div className="mb-6">
+              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                {modalMessage}
+              </p>
+              <p className="text-xs text-center text-gray-500" style={{ fontFamily: COLORS.font }}>
+                You will be redirected to your dashboard in a few seconds...
+              </p>
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  navigate("/user/dashboard");
+                }}
+                style={{ background: COLORS.success }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
+              >
+                Go to Dashboard Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Modal */}
+      {showErrorModal && (
+        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
+          <div 
+            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
+            style={{ 
+              background: 'rgba(255, 255, 255, 0.95)',
+              fontFamily: COLORS.font,
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <div className="flex items-center justify-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+                <X className="w-8 h-8 text-red-600" />
+              </div>
+            </div>
+            
+            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.danger }}>{modalTitle}</h2>
+            
+            <div className="mb-6">
+              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                {modalMessage}
+              </p>
+              <p className="text-xs text-center text-gray-500" style={{ fontFamily: COLORS.font }}>
+                Please check your information and try again.
+              </p>
+            </div>
+
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => setShowErrorModal(false)}
+                style={{ background: COLORS.danger }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                onMouseLeave={e => e.currentTarget.style.background = COLORS.danger}
+                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
+              >
+                Close
+              </button>
+              
+              {!showConfirmModal && (
+                <button
+                  onClick={() => {
+                    setShowErrorModal(false);
+                    setShowConfirmModal(true);
+                  }}
+                  style={{ background: COLORS.success }}
+                  onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                  onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+                  className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
+                >
+                  Try Again
+                </button>
+              )}
             </div>
           </div>
         </div>

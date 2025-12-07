@@ -29,7 +29,10 @@ $databases = [
 // -----------------------------
 // DETERMINE TARGET DATABASE
 // -----------------------------
-$targetDb = $_GET['db'] ?? "eplms_user_management";
+// Allow $targetDb to be set before including this file, otherwise use GET parameter
+if (!isset($targetDb)) {
+    $targetDb = $_GET['db'] ?? "eplms_user_management";
+}
 
 // Validate database
 if (!array_key_exists($targetDb, $databases)) {
