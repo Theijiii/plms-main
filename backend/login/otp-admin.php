@@ -26,9 +26,7 @@ header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
 // Handle preflight
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    exit(0);
-}
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
 // --------------------- HELPER: SEND OTP ---------------------
 function sendOtpEmail($otp, $toEmail, $purpose = 'login') {
@@ -45,10 +43,12 @@ function sendOtpEmail($otp, $toEmail, $purpose = 'login') {
         $mail->setFrom('eplmsgoserveph@gmail.com', 'GoServePH');
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
+
         $subject = ($purpose === 'register') ? 'Registration OTP Verification' : 'OTP Verification';
         $bodyPurpose = ($purpose === 'register') ? 'registration' : 'login';
         $mail->Subject = $subject;
         $mail->Body = "<h2>OTP Verification</h2><p>Your $bodyPurpose code: <strong>$otp</strong></p><p>Expires in 10 minutes.</p>";
+
         $mail->send();
         return true;
     } catch (Exception $e) {
@@ -81,18 +81,13 @@ if ($action === 'send') {
         exit;
     }
 
-    // Generate OTP and store in session with timestamp
     $otp = rand(100000, 999999);
 
-    // Admin login special: map admin email to department
     if ($purpose === 'login' && isset($adminDepartments[$email])) {
         $_SESSION["otp_admin_{$email}"] = $otp;
         $_SESSION["otp_admin_time_{$email}"] = time();
-
-        // deliver code directly to the department email (the admin logging in)
         $sent = sendOtpEmail($otp, $email, 'login');
 
-        // Optionally notify the super admin for monitoring, but do not block on failure
         if ($sent && $email !== 'orilla.maaltheabalcos@gmail.com') {
             sendOtpEmail($otp, 'orilla.maaltheabalcos@gmail.com', 'login');
         }
@@ -105,10 +100,8 @@ if ($action === 'send') {
         exit;
     }
 
-    // Regular user (login or register) - send OTP directly to user's email
     $_SESSION["otp_user_{$email}"] = $otp;
     $_SESSION["otp_user_time_{$email}"] = time();
-
     $sent = sendOtpEmail($otp, $email, $purpose);
 
     echo json_encode([
@@ -118,75 +111,70 @@ if ($action === 'send') {
     exit;
 }
 
-// --------------------- VERIFY OTP (unified) ---------------------
+// --------------------- VERIFY OTP ---------------------
 if ($action === 'verify') {
-    // Admin OTP present?
-    if (isset($_SESSION["otp_admin_{$email}"])) {
-        if (time() - $_SESSION["otp_admin_time_{$email}"] > 600) {
-            unset($_SESSION["otp_admin_{$email}"], $_SESSION["otp_admin_time_{$email}"]);
-            echo json_encode(['success'=>false,'message'=>'OTP expired']);
-            exit;
-        }
+    $isAdmin = isset($_SESSION["otp_admin_{$email}"]);
+    $isUser = isset($_SESSION["otp_user_{$email}"]);
 
-        if ($otpInput == $_SESSION["otp_admin_{$email}"]) {
-            unset($_SESSION["otp_admin_{$email}"], $_SESSION["otp_admin_time_{$email}"]);
-            $_SESSION['admin_logged_in'] = true;
-            $_SESSION['admin_email'] = $email;
-            $_SESSION['admin_department'] = $adminDepartments[$email] ?? null;
-
-            // Fetch admin name (if exists)
-            $profileRes = $conn->query("SELECT first_name, last_name FROM user_profiles WHERE user_id=(SELECT id FROM users WHERE email='$email')");
-            $profile = $profileRes ? $profileRes->fetch_assoc() : null;
-            $adminName = $profile ? trim(($profile['first_name'] . ' ' . $profile['last_name'])) : '';
-
-            $_SESSION['admin_name'] = $adminName;
-
-            echo json_encode([
-                'success'=>true,
-                'message'=>'Admin login successful',
-                'role' => 'admin',
-                'email' => $email,
-                'name'=>$_SESSION['admin_name'],
-                'department'=>$_SESSION['admin_department']
-            ]);
-            exit;
-        } else {
-            echo json_encode(['success'=>false,'message'=>'Invalid OTP']);
-            exit;
-        }
+    if (!$isAdmin && !$isUser) {
+        echo json_encode(['success'=>false,'message'=>'Request a new OTP']);
+        exit;
     }
 
-    // User OTP present?
-    if (isset($_SESSION["otp_user_{$email}"])) {
-        if (time() - $_SESSION["otp_user_time_{$email}"] > 600) {
-            unset($_SESSION["otp_user_{$email}"], $_SESSION["otp_user_time_{$email}"]);
-            echo json_encode(['success'=>false,'message'=>'OTP expired']);
-            exit;
-        }
-
-        if ($otpInput == $_SESSION["otp_user_{$email}"]) {
-            unset($_SESSION["otp_user_{$email}"], $_SESSION["otp_user_time_{$email}"]);
-            // For registration purpose, frontend will call registerUser after verification.
-            // For login purpose, return success with role user so frontend can complete session steps.
-            echo json_encode([
-                'success'=>true,
-                'message'=>'OTP verified successfully',
-                'role' => 'user',
-                'email' => $email
-            ]);
-            exit;
-        } else {
-            echo json_encode(['success'=>false,'message'=>'Invalid OTP']);
-            exit;
-        }
+    $otpTime = $isAdmin ? $_SESSION["otp_admin_time_{$email}"] : $_SESSION["otp_user_time_{$email}"];
+    if (time() - $otpTime > 600) { // 10 mins
+        unset($_SESSION["otp_admin_{$email}"], $_SESSION["otp_admin_time_{$email}"]);
+        unset($_SESSION["otp_user_{$email}"], $_SESSION["otp_user_time_{$email}"]);
+        echo json_encode(['success'=>false,'message'=>'OTP expired']);
+        exit;
     }
 
-    // No OTP session found
-    echo json_encode(['success'=>false,'message'=>'Request a new OTP']);
+    $otpSession = $isAdmin ? $_SESSION["otp_admin_{$email}"] : $_SESSION["otp_user_{$email}"];
+    if ($otpInput != $otpSession) {
+        echo json_encode(['success'=>false,'message'=>'Invalid OTP']);
+        exit;
+    }
+
+    // OTP valid → remove from session
+    unset($_SESSION["otp_admin_{$email}"], $_SESSION["otp_admin_time_{$email}"]);
+    unset($_SESSION["otp_user_{$email}"], $_SESSION["otp_user_time_{$email}"]);
+
+    // Fetch user/admin ID
+    $userRes = $conn->query("SELECT id FROM users WHERE email='$email'");
+    $user = $userRes ? $userRes->fetch_assoc() : null;
+    if (!$user) {
+        echo json_encode(['success'=>false,'message'=>'User not found']);
+        exit;
+    }
+
+    // Generate session token
+    $token = bin2hex(random_bytes(32));
+    $expiresAt = date('Y-m-d H:i:s', strtotime('+2 hours'));
+    $stmt = $conn->prepare("INSERT INTO login_sessions (user_id, session_token, expires_at) VALUES (?, ?, ?)");
+    $stmt->bind_param("iss", $user['id'], $token, $expiresAt);
+    $stmt->execute();
+    $stmt->close();
+
+    // Fetch profile for name
+    $profileRes = $conn->query("SELECT first_name, last_name FROM user_profiles WHERE user_id='{$user['id']}'");
+    $profile = $profileRes ? $profileRes->fetch_assoc() : null;
+    $name = $profile ? trim(($profile['first_name'] ?? '') . ' ' . ($profile['last_name'] ?? '')) : '';
+
+    $role = $isAdmin ? 'admin' : 'user';
+    if ($isAdmin) $_SESSION['admin_department'] = $adminDepartments[$email] ?? null;
+
+    echo json_encode([
+        'success'=>true,
+        'message'=>'OTP verified successfully',
+        'role' => $role,
+        'email' => $email,
+        'name' => $name,
+        'token' => $token,
+        'department' => $isAdmin ? $_SESSION['admin_department'] : null
+    ]);
     exit;
 }
 
 // --------------------- INVALID ACTION ---------------------
 echo json_encode(['success'=>false,'message'=>'Invalid action']);
 exit;
-?>

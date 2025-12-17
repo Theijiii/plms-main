@@ -140,6 +140,7 @@ $sql = "INSERT INTO barangay_permit SET
     receipt_number = ?,
     applicant_signature = ?,
     status = ?,
+    comments = ?,
     created_at = NOW(),
     updated_at = NOW()";
 
@@ -150,7 +151,7 @@ if (!$stmt) {
     exit;
 }
 $stmt->bind_param(
-    "isssssssssssssssssssssssdss", // 28 parameters: i, s x24, d, s x2
+    "isssssssssssssssssssssssdsss", // 28 parameters: i, s x24, d, s x2
     $formData['user_id'],             // i
     $formData['application_date'],    // s
     $formData['first_name'],          // s
@@ -177,7 +178,9 @@ $stmt->bind_param(
     $formData['clearance_fee'],       // d
     $formData['receipt_number'],      // s
     $formData['applicant_signature'], // s
-    $formData['status']               // s
+    $formData['status'],
+    $formData['comments']    
+          // s
 );
 
 if ($stmt->execute()) {

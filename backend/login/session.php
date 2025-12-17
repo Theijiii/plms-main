@@ -11,10 +11,11 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
     exit;
 }
 
-if (isset($_SESSION['user_id'])) {
+if (isset($_SESSION['user_id']) || isset($_SESSION['user_logged_in'])) {
     echo json_encode([
         'success' => true,
-        'email' => $_SESSION['email'] ?? '',
+        'user_id' => $_SESSION['user_id'] ?? '',
+        'email' => $_SESSION['user_email'] ?? $_SESSION['email'] ?? '',
         'role' => 'user'
     ]);
     exit;

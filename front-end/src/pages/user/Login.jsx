@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Footer from '../../components/user/Footer';
-
-import { sendOtp, verifyOtp,registerUser,loginUser   } from "../../services/AuthService";
+import { sendOtp, verifyOtp, registerUser, loginUser, getUserProfile } from "../../services/AuthService";
 
 
 export default function Login() {
@@ -281,18 +280,22 @@ const handleRegisterSubmit = async (e) => {
       if (lastInput) lastInput.focus();
     }
   };
-  const finalizeLogin = () => {
-    if (!loginData?.token) {
-      setOtpError("Login session expired. Please login again.");
-      return;
-    }
+const finalizeLogin = () => {
+  if (!loginData?.token) {
+    setOtpError("Login session expired. Please login again.");
+    return;
+  }
 
-    const { token, username: loginEmail } = loginData;
-    localStorage.setItem("goserveph_token", token);
-    localStorage.setItem("goserveph_email", loginEmail);
-    closeOtpModal();
-    navigate("/user/dashboard");
-  };
+  const { token, username: loginEmail } = loginData;
+
+  // Store under the key your header expects
+  localStorage.setItem("auth_token", token); // <-- must match UserHeader
+  localStorage.setItem("email", loginEmail);
+
+  closeOtpModal();
+  navigate("/user/dashboard");
+};
+
 const handleOtpSubmit = async (e) => {
   e.preventDefault();
   setOtpError("");
@@ -332,10 +335,25 @@ const handleOtpSubmit = async (e) => {
       const registerResponse = await registerUser(pendingRegistration);
 
       if (registerResponse.success) {
-        alert("Registration successful!");
+        // Store user information after successful registration
+        if (registerResponse.user_id) {
+          sessionStorage.setItem("user_id", registerResponse.user_id);
+          sessionStorage.setItem("user_email", pendingRegistration.email);
+          sessionStorage.setItem("role", "user");
+          localStorage.setItem("goserveph_role", "user");
+          localStorage.setItem("goserveph_email", pendingRegistration.email);
+          localStorage.setItem("goserveph_user_id", registerResponse.user_id);
+        }
+        
+        alert("Registration successful! You are now logged in.");
         setPendingRegistration(null);
         closeOtpModal();
         handleCloseRegisterModal();
+        
+        // Redirect to dashboard after registration
+        setTimeout(() => {
+          window.location.href = "/user/dashboard";
+        }, 500);
       } else {
         alert(registerResponse.message || "Registration failed");
       }
@@ -344,16 +362,41 @@ const handleOtpSubmit = async (e) => {
 
     // Handle login OTP
     if (otpContext === "login") {
-      // Store admin/user data in sessionStorage based on backend response
+      // Store admin/user data in sessionStorage and localStorage based on backend response
       if (response.role === "admin") {
-        sessionStorage.setItem("admin_email", response.email);
-        sessionStorage.setItem("admin_name", response.name);           // updated
-        sessionStorage.setItem("admin_department", response.department); // updated
+        // Store admin information
+        sessionStorage.setItem("admin_id", response.user_id || "");
+        sessionStorage.setItem("admin_email", response.email || otpTargetEmail);
+        sessionStorage.setItem("admin_name", response.name || "");
+        sessionStorage.setItem("admin_department", response.department || "");
         sessionStorage.setItem("role", response.role);
+        localStorage.setItem("goserveph_role", response.role);
+        localStorage.setItem("goserveph_email", response.email || otpTargetEmail);
+        if (response.user_id) {
+          localStorage.setItem("goserveph_user_id", response.user_id);
+        }
         window.location.href = "/admin/dashboard";
       } else {
+        // Store user information
+        sessionStorage.setItem("user_id", response.user_id || "");
         sessionStorage.setItem("user_email", response.email || otpTargetEmail);
-        sessionStorage.setItem("role", "user");
+        sessionStorage.setItem("role", response.role);
+        localStorage.setItem("goserveph_role", response.role);
+        localStorage.setItem("goserveph_email", response.email || otpTargetEmail);
+        localStorage.setItem("goserveph_user_id", response.user_id || "");
+        
+        // Optionally fetch and store full profile
+        try {
+          const profileResponse = await getUserProfile();
+          if (profileResponse.success && profileResponse.data) {
+            const profile = profileResponse.data;
+            sessionStorage.setItem("user_name", `${profile.first_name || ''} ${profile.last_name || ''}`.trim());
+            localStorage.setItem("goserveph_user_name", `${profile.first_name || ''} ${profile.last_name || ''}`.trim());
+          }
+        } catch (err) {
+          console.log("Could not fetch profile, continuing with login");
+        }
+        
         window.location.href = "/user/dashboard";
       }
     }

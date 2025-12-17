@@ -48,11 +48,9 @@ try {
         throw new Exception("Permit ID is required");
     }
 
-    // Get status and optional fields
+    // Get status and comments
     $status = isset($data['status']) ? trim($data['status']) : null;
-    $reviewComments = isset($data['review_comments']) ? trim($data['review_comments']) : null;
-    $complianceRemarks = isset($data['compliance_remarks']) ? trim($data['compliance_remarks']) : null;
-    $assignedOfficer = isset($data['assigned_officer']) ? trim($data['assigned_officer']) : null;
+    $comments = isset($data['comments']) ? trim($data['comments']) : null;
 
     // Validate status
     $validStatuses = ['pending', 'approved', 'rejected'];
@@ -60,15 +58,9 @@ try {
         throw new Exception("Invalid status. Must be one of: " . implode(', ', $validStatuses));
     }
 
-    // Check which columns exist in the table
-    $checkColumns = $conn->query("SHOW COLUMNS FROM barangay_permit LIKE 'review_comments'");
-    $hasReviewComments = $checkColumns && $checkColumns->num_rows > 0;
-    
-    $checkColumns = $conn->query("SHOW COLUMNS FROM barangay_permit LIKE 'compliance_remarks'");
-    $hasComplianceRemarks = $checkColumns && $checkColumns->num_rows > 0;
-    
-    $checkColumns = $conn->query("SHOW COLUMNS FROM barangay_permit LIKE 'assigned_officer'");
-    $hasAssignedOfficer = $checkColumns && $checkColumns->num_rows > 0;
+    // Check if comments column exists in the table
+    $checkColumns = $conn->query("SHOW COLUMNS FROM barangay_permit LIKE 'comments'");
+    $hasComments = $checkColumns && $checkColumns->num_rows > 0;
 
     // Build update query
     $updates = [];
@@ -81,21 +73,36 @@ try {
         $types .= 's';
     }
 
-    if ($reviewComments !== null && $hasReviewComments) {
-        $updates[] = "review_comments = ?";
-        $params[] = $reviewComments;
-        $types .= 's';
-    }
-
-    if ($complianceRemarks !== null && $hasComplianceRemarks) {
-        $updates[] = "compliance_remarks = ?";
-        $params[] = $complianceRemarks;
-        $types .= 's';
-    }
-
-    if ($assignedOfficer !== null && $hasAssignedOfficer) {
-        $updates[] = "assigned_officer = ?";
-        $params[] = $assignedOfficer;
+    // Handle comments - append instead of overwrite
+    if ($comments !== null && $hasComments) {
+        // First, get existing comments
+        $getQuery = "SELECT comments FROM barangay_permit WHERE permit_id = ?";
+        $getStmt = $conn->prepare($getQuery);
+        $getStmt->bind_param("i", $permitId);
+        $getStmt->execute();
+        $getStmt->bind_result($existingComments);
+        $getStmt->fetch();
+        $getStmt->close();
+        
+        // Prepare new comments with timestamp
+        $timestamp = date('Y-m-d H:i:s');
+        $user = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : 'Admin';
+        
+        if (!empty($comments)) {
+            if (!empty($existingComments)) {
+                // Append new comment with separator
+                $newComments = $existingComments . "\n\n--- " . $timestamp . " (" . $user . ") ---\n" . $comments;
+            } else {
+                // First comment
+                $newComments = "--- " . $timestamp . " (" . $user . ") ---\n" . $comments;
+            }
+        } else {
+            // No new comment, keep existing
+            $newComments = $existingComments;
+        }
+        
+        $updates[] = "comments = ?";
+        $params[] = $newComments;
         $types .= 's';
     }
 
@@ -129,21 +136,37 @@ try {
         throw new Exception("No permit found with ID: " . $permitId);
     }
 
-    // Close statement and connection
+    // Close statement
     $stmt->close();
+    
+    // Get updated comments to return
+    $getQuery = "SELECT comments FROM barangay_permit WHERE permit_id = ?";
+    $getStmt = $conn->prepare($getQuery);
+    $getStmt->bind_param("i", $permitId);
+    $getStmt->execute();
+    $getStmt->bind_result($finalComments);
+    $getStmt->fetch();
+    $getStmt->close();
+
+    // Close connection
     $conn->close();
 
     // Return success response
     echo json_encode([
         "success" => true,
-        "message" => "Permit status updated successfully",
+        "message" => "Permit updated successfully",
         "permit_id" => $permitId,
         "updated_fields" => array_keys(array_filter([
             'status' => $status,
-            'review_comments' => $reviewComments,
-            'compliance_remarks' => $complianceRemarks,
-            'assigned_officer' => $assignedOfficer
-        ])),
+            'comments' => $comments
+        ], function($value) {
+            return $value !== null;
+        })),
+        "comments_info" => [
+            "total_comments" => empty($finalComments) ? 0 : substr_count($finalComments, '---'),
+            "has_comments" => !empty($finalComments),
+            "latest_comment" => !empty($finalComments) ? $comments : null
+        ],
         "timestamp" => date('c')
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
@@ -165,4 +188,3 @@ try {
     }
 }
 ?>
-

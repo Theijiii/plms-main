@@ -67,7 +67,12 @@ if ($action === 'register') {
     $conn->query("INSERT INTO user_addresses (user_id, house_number, street, barangay, city_municipality, province, region, zip_code)
                   VALUES ('$userId', '$houseNumber', '$street', '$barangay', '$city', '$province', '$region', '$zip')");
 
-    echo json_encode(['success' => true, 'message' => 'Registration successful']);
+    // Set session variables after successful registration
+    $_SESSION['user_id'] = $userId;
+    $_SESSION['user_email'] = $email;
+    $_SESSION['user_logged_in'] = true;
+
+    echo json_encode(['success' => true, 'message' => 'Registration successful', 'user_id' => $userId]);
     exit;
 }
 

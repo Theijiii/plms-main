@@ -58,7 +58,8 @@ try {
                 mobile_number,
                 created_at,
                 updated_at,
-                status
+                status,
+                comments
             FROM barangay_permit 
             ORDER BY created_at DESC";
     

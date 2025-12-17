@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { logTx } from '../../../lib/txLogger';
 
-const API_BASE = "http://localhost/eplms-main/backend/barangay_permit"; // Replace with your actual API base URL
+const API_BASE = "http://localhost/eplms-main/backend/barangay_permit";
 
 export default function BarangayPermit() {
   const [selectedPermit, setSelectedPermit] = useState(null);
@@ -12,8 +12,6 @@ export default function BarangayPermit() {
   const [error, setError] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showFilePreview, setShowFilePreview] = useState(false);
-
-  // Add activeTab state for filtering
   const [activeTab, setActiveTab] = useState("all");
 
   const getUIStatus = (dbStatus) => {
@@ -34,79 +32,75 @@ export default function BarangayPermit() {
       default: return 'pending';
     }
   };
-const parseAttachments = (attachmentsData) => {
-  if (!attachmentsData) return [];
-  
-  try {
-    let attachments;
+
+  const parseAttachments = (attachmentsData) => {
+    if (!attachmentsData) return [];
     
-    // Check if it's already an object
-    if (typeof attachmentsData === 'object' && attachmentsData !== null) {
-      attachments = attachmentsData;
-    } 
-    // Check if it's a JSON string
-    else if (typeof attachmentsData === 'string' && attachmentsData.trim() !== '') {
-      attachments = JSON.parse(attachmentsData);
-    } 
-    // Invalid format
-    else {
-      console.warn('Invalid attachments format:', attachmentsData);
-      return [];
-    }
-    
-    const fileList = [];
-    
-    // Convert object to array
-    Object.entries(attachments).forEach(([key, value]) => {
-      if (value && typeof value === 'string' && value.trim() !== '') {
-        fileList.push({
-          id: key,
-          name: value,
-          type: getFileType(value),
-          url: `${API_BASE}/uploads/${value}`
-        });
-      } else if (value && typeof value === 'object') {
-        // Handle case where value might be an object with file details
-        const fileName = value.name || value.filename || key;
-        if (fileName && fileName.trim() !== '') {
+    try {
+      let attachments;
+      
+      if (typeof attachmentsData === 'object' && attachmentsData !== null) {
+        attachments = attachmentsData;
+      } else if (typeof attachmentsData === 'string' && attachmentsData.trim() !== '') {
+        attachments = JSON.parse(attachmentsData);
+      } else {
+        console.warn('Invalid attachments format:', attachmentsData);
+        return [];
+      }
+      
+      const fileList = [];
+      
+      Object.entries(attachments).forEach(([key, value]) => {
+        if (value && typeof value === 'string' && value.trim() !== '') {
           fileList.push({
             id: key,
-            name: fileName,
-            type: getFileType(fileName),
-            url: `${API_BASE}/uploads/${fileName}`
+            name: value,
+            type: getFileType(value),
+            url: `${API_BASE}/uploads/${value}`
           });
+        } else if (value && typeof value === 'object') {
+          const fileName = value.name || value.filename || key;
+          if (fileName && fileName.trim() !== '') {
+            fileList.push({
+              id: key,
+              name: fileName,
+              type: getFileType(fileName),
+              url: `${API_BASE}/uploads/${fileName}`
+            });
+          }
         }
-      }
-    });
+      });
+      
+      return fileList;
+    } catch (e) {
+      console.error('Error parsing attachments:', e, 'Data:', attachmentsData);
+      return [];
+    }
+  };
+
+  const getFileType = (filename) => {
+    if (!filename || typeof filename !== 'string') return 'application/octet-stream';
     
-    return fileList;
-  } catch (e) {
-    console.error('Error parsing attachments:', e, 'Data:', attachmentsData);
-    return [];
-  }
-};const getFileType = (filename) => {
-  if (!filename || typeof filename !== 'string') return 'application/octet-stream';
-  
-  const ext = filename.split('.').pop().toLowerCase();
-  switch (ext) {
-    case 'pdf': return 'application/pdf';
-    case 'jpg':
-    case 'jpeg': return 'image/jpeg';
-    case 'png': return 'image/png';
-    case 'gif': return 'image/gif';
-    case 'bmp': return 'image/bmp';
-    case 'webp': return 'image/webp';
-    case 'doc': return 'application/msword';
-    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    case 'txt': return 'text/plain';
-    case 'csv': return 'text/csv';
-    case 'xls':
-    case 'xlsx': return 'application/vnd.ms-excel';
-    case 'zip': return 'application/zip';
-    case 'rar': return 'application/x-rar-compressed';
-    default: return 'application/octet-stream';
-  }
-};
+    const ext = filename.split('.').pop().toLowerCase();
+    switch (ext) {
+      case 'pdf': return 'application/pdf';
+      case 'jpg':
+      case 'jpeg': return 'image/jpeg';
+      case 'png': return 'image/png';
+      case 'gif': return 'image/gif';
+      case 'bmp': return 'image/bmp';
+      case 'webp': return 'image/webp';
+      case 'doc': return 'application/msword';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'txt': return 'text/plain';
+      case 'csv': return 'text/csv';
+      case 'xls':
+      case 'xlsx': return 'application/vnd.ms-excel';
+      case 'zip': return 'application/zip';
+      case 'rar': return 'application/x-rar-compressed';
+      default: return 'application/octet-stream';
+    }
+  };
 
   const getStatusColor = (status) => {
     const uiStatus = getUIStatus(status);
@@ -144,7 +138,6 @@ const parseAttachments = (attachmentsData) => {
       
       const result = await response.json();
       
-      // Handle the response structure from admin_fetch.php
       if (result.success && result.data) {
         setPermits(result.data);
       } else {
@@ -155,6 +148,28 @@ const parseAttachments = (attachmentsData) => {
       console.error('Error fetching permits:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch single permit with detailed information including comments
+  const fetchSinglePermit = async (permitId) => {
+    try {
+      const response = await fetch(`${API_BASE}/fetch_single.php?permit_id=${permitId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        return result.data;
+      } else {
+        throw new Error(result.message || 'Failed to fetch permit details');
+      }
+    } catch (err) {
+      console.error('Error fetching single permit:', err);
+      return null;
     }
   };
 
@@ -171,7 +186,7 @@ const parseAttachments = (attachmentsData) => {
         body: JSON.stringify({
           permit_id: permitId,
           status: dbStatus,
-          review_comments: comments
+          comments: comments  // FIXED: Changed from review_comments to comments
         })
       });
 
@@ -189,8 +204,20 @@ const parseAttachments = (attachmentsData) => {
       // Refresh the permits list
       await fetchPermits();
       
-      // Close modal after successful update
-      closeModal();
+      // Fetch the updated permit with comments
+      const updatedPermit = await fetchSinglePermit(permitId);
+      
+      if (updatedPermit) {
+        // Update the selected permit in state
+        const uiStatus = getUIStatus(updatedPermit.status);
+        setSelectedPermit({
+          ...updatedPermit,
+          uiStatus: uiStatus
+        });
+      }
+
+      // Clear the comment input
+      setActionComment('');
 
       // Log transaction
       try { 
@@ -211,18 +238,102 @@ const parseAttachments = (attachmentsData) => {
     }
   };
 
+  // Save comment only (without changing status)
+  const saveCommentOnly = async () => {
+    if (!selectedPermit || !actionComment.trim()) return;
+    
+    try {
+      const response = await fetch(`${API_BASE}/update_status.php`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          permit_id: selectedPermit.permit_id,
+          comments: actionComment  // Only send comments, no status change
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to save comment');
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to save comment');
+      }
+
+      // Fetch the updated permit with comments
+      const updatedPermit = await fetchSinglePermit(selectedPermit.permit_id);
+      
+      if (updatedPermit) {
+        // Update the selected permit in state with new comments
+        setSelectedPermit({
+          ...updatedPermit,
+          uiStatus: getUIStatus(updatedPermit.status)
+        });
+      }
+
+      // Clear the comment input
+      setActionComment('');
+
+      // Log transaction for comment only
+      try { 
+        logTx({ 
+          service: 'barangay', 
+          permitId: selectedPermit.permit_id, 
+          action: 'add_comment',
+          comment: actionComment 
+        }); 
+      } catch(e) {
+        console.error('Error logging transaction:', e);
+      }
+
+    } catch (err) {
+      console.error('Error saving comment:', err);
+      setError(err.message || 'Failed to save comment');
+    }
+  };
+
   useEffect(() => {
     fetchPermits();
   }, []);
 
-  const openModal = (permit) => {
-    const uiStatus = getUIStatus(permit.status);
-    setSelectedPermit({
-      ...permit,
-      uiStatus: uiStatus
-    });
-    setActionComment('');
-    setShowModal(true);
+  const openModal = async (permit) => {
+    try {
+      // First fetch detailed permit information including comments
+      const detailedPermit = await fetchSinglePermit(permit.permit_id);
+      
+      if (detailedPermit) {
+        const uiStatus = getUIStatus(detailedPermit.status);
+        setSelectedPermit({
+          ...detailedPermit,
+          uiStatus: uiStatus
+        });
+      } else {
+        // Fallback to the basic permit data if detailed fetch fails
+        const uiStatus = getUIStatus(permit.status);
+        setSelectedPermit({
+          ...permit,
+          uiStatus: uiStatus
+        });
+      }
+      
+      setActionComment('');
+      setShowModal(true);
+    } catch (err) {
+      console.error('Error opening modal:', err);
+      // Fallback to basic data
+      const uiStatus = getUIStatus(permit.status);
+      setSelectedPermit({
+        ...permit,
+        uiStatus: uiStatus
+      });
+      setActionComment('');
+      setShowModal(true);
+    }
   };
 
   const closeModal = () => {
@@ -256,6 +367,56 @@ const parseAttachments = (attachmentsData) => {
   const closeFilePreview = () => {
     setSelectedFile(null);
     setShowFilePreview(false);
+  };
+
+   // Function to format and display comments with timestamps - IMPROVED VERSION
+  const formatComments = (commentsText) => {
+    if (!commentsText || typeof commentsText !== 'string') return [];
+    
+    try {
+      // Clean the text and split by the separator pattern
+      const cleanedText = commentsText.trim();
+      
+      // Split by the pattern "--- " (timestamp pattern)
+      const commentBlocks = cleanedText.split(/---\s+/);
+      
+      const formattedComments = [];
+      
+      for (let i = 1; i < commentBlocks.length; i++) { // Start from 1 to skip empty first item
+        const block = commentBlocks[i].trim();
+        if (!block) continue;
+        
+        // Find where the timestamp ends and comment begins
+        const timestampEnd = block.indexOf(' ---\n');
+        
+        if (timestampEnd !== -1) {
+          const timestamp = block.substring(0, timestampEnd).trim();
+          const comment = block.substring(timestampEnd + 5).trim(); // +5 for " ---\n"
+          
+          if (comment) {
+            formattedComments.push({
+              timestamp,
+              comment
+            });
+          }
+        } else {
+          // If no proper format, treat the whole block as comment
+          formattedComments.push({
+            timestamp: 'No timestamp',
+            comment: block
+          });
+        }
+      }
+      
+      // Return in reverse order (newest first)
+      return formattedComments.reverse();
+    } catch (e) {
+      console.error('Error formatting comments:', e, 'Comments text:', commentsText);
+      return [{
+        timestamp: 'Error parsing',
+        comment: commentsText
+      }];
+    }
   };
 
   // Calculate counts
@@ -663,75 +824,110 @@ const parseAttachments = (attachmentsData) => {
                   </div>
                 </div>
               )}
+// In the modal section, replace the Review Comments section with this:
 
-              {/* Single Notes Section */}
+              {/* Review Comments Section - FIXED: Properly displaying comments */}
               <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  {selectedPermit.status === "approved" || selectedPermit.status === "rejected" ? "Review Notes" : "Add Review Notes"}
+                  Review Comments
+                  {selectedPermit.comments && (
+                    <span className="text-sm font-normal text-gray-500 ml-2">
+                      ({formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''})
+                    </span>
+                  )}
                 </h3>
                 
-                {selectedPermit.status === "approved" || selectedPermit.status === "rejected" ? (
-                  // View Only for Approved/Rejected
-                  <div className="p-4 bg-gray-50 dark:bg-slate-700 rounded-lg">
-                    <p className="text-gray-900 dark:text-white">
-                      {selectedPermit.review_comments || 'No review notes provided.'}
-                    </p>
+                {/* Display all comments */}
+                {selectedPermit.comments && selectedPermit.comments.trim() ? (
+                  <div className="space-y-4 mb-4">
+                    {formatComments(selectedPermit.comments).map((comment, index) => (
+                      <div key={index} className="p-4 bg-gray-50 dark:bg-slate-700 rounded-lg">
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2 font-medium">
+                          {comment.timestamp}
+                        </div>
+                        <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
+                          {comment.comment}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 ) : (
-                  // Editable for Pending/For Compliance
-                  <div>
-                    <textarea 
-                      value={actionComment} 
-                      onChange={(e) => setActionComment(e.target.value)} 
-                      className="w-full border border-gray-300 rounded-lg px-4 py-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent"
-                      rows={4} 
-                      placeholder="Enter your review notes here..." 
-                    />
+                  <div className="p-4 bg-gray-50 dark:bg-slate-700 rounded-lg mb-4">
+                    <p className="text-gray-500 dark:text-gray-400 italic">
+                      No comments yet. Add your first comment below.
+                    </p>
                   </div>
                 )}
+
+                {/* Textarea for adding new comments */}
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Add New Comment
+                  </label>
+                  <textarea 
+                    value={actionComment} 
+                    onChange={(e) => setActionComment(e.target.value)} 
+                    className="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-4 py-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent"
+                    rows={4} 
+                    placeholder="Enter your review notes here..." 
+                  />
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    Comments will be saved with timestamp and can be added regardless of status.
+                  </p>
+                </div>
               </div>
 
-              {/* Action Buttons - ONLY show when status is "For Compliance" (pending) */}
-              {selectedPermit.status === "pending" || !selectedPermit.status ? (
-                <div className="flex gap-3 justify-end pt-6 border-t border-gray-200 dark:border-slate-700">
-                  {/* Compliance Button - Orange with blue info hover */}
+
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 justify-end pt-6 border-t border-gray-200 dark:border-slate-700">
+                {/* Save Comment Button - Show when there's a comment */}
+                {actionComment.trim() && (
                   <button 
-                    onClick={handleForCompliance}
-                    className="px-6 py-3 bg-[#FDA811] text-white rounded-lg hover:bg-[#4A90E2] transition-colors font-medium"
+                    onClick={saveCommentOnly}
+                    className="px-6 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors font-medium"
                   >
-                    Mark for Compliance
+                    Save Comment Only
                   </button>
-                  
-                  {/* Reject Button - Green with red danger hover */}
-                  <button 
-                    onClick={handleReject}
-                    className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#E53935] transition-colors font-medium"
-                  >
-                    Reject Application
-                  </button>
-                  
-                  {/* Approve Button - Green with darker green hover */}
-                  <button 
-                    onClick={handleApprove}
-                    className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-all font-medium shadow-sm"
-                  >
-                    Approve Permit
-                  </button>
-                </div>
-              ) : (
-                // Close Button for View Only (Approved/Rejected) - Green with orange hover
-                <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-slate-700">
+                )}
+                
+                {/* Status Update Buttons - Show for pending, hide for approved/rejected */}
+                {(selectedPermit.status === "pending" || !selectedPermit.status) ? (
+                  <>
+                    <button 
+                      onClick={handleForCompliance}
+                      className="px-6 py-3 bg-[#FDA811] text-white rounded-lg hover:bg-[#4A90E2] transition-colors font-medium"
+                    >
+                      Mark for Compliance
+                    </button>
+                    
+                    <button 
+                      onClick={handleReject}
+                      className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#E53935] transition-colors font-medium"
+                    >
+                      Reject Application
+                    </button>
+                    
+                    <button 
+                      onClick={handleApprove}
+                      className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-all font-medium shadow-sm"
+                    >
+                      Approve Permit
+                    </button>
+                  </>
+                ) : (
                   <button 
                     onClick={closeModal}
                     className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors font-medium"
                   >
                     Close
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
+        
       )}
 
       {/* File Preview Modal */}
