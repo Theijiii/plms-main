@@ -1,5 +1,10 @@
 <?php
-session_start();
+// Start session with proper settings
+session_start([
+    'cookie_lifetime' => 86400, // 24 hours
+    'read_and_close'  => false,
+]);
+
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/vendor/autoload.php';
 use PHPMailer\PHPMailer\PHPMailer;
@@ -74,6 +79,14 @@ $email = $input['email'] ?? '';
 $purpose = $input['purpose'] ?? 'login';
 $otpInput = $input['otp'] ?? '';
 
+// Debug: Log session info
+error_log("=== OTP DEBUG ===");
+error_log("Session ID: " . session_id());
+error_log("Session Data: " . json_encode($_SESSION));
+error_log("Action: $action, Email: $email, Purpose: $purpose, OTP Input: $otpInput");
+error_log("Request Method: " . $_SERVER['REQUEST_METHOD']);
+error_log("=== END DEBUG ===");
+
 // --------------------- SEND OTP ---------------------
 if ($action === 'send') {
     if (!$email) {
@@ -82,62 +95,66 @@ if ($action === 'send') {
     }
 
     $otp = rand(100000, 999999);
-
-    if ($purpose === 'login' && isset($adminDepartments[$email])) {
-        $_SESSION["otp_admin_{$email}"] = $otp;
-        $_SESSION["otp_admin_time_{$email}"] = time();
-        $sent = sendOtpEmail($otp, $email, 'login');
-
-        if ($sent && $email !== 'orilla.maaltheabalcos@gmail.com') {
-            sendOtpEmail($otp, 'orilla.maaltheabalcos@gmail.com', 'login');
-        }
-
-        echo json_encode([
-            'success' => $sent,
-            'message' => $sent ? 'OTP sent to department email' : 'Failed to send OTP',
-            'department' => $adminDepartments[$email]
-        ]);
-        exit;
-    }
-
-    $_SESSION["otp_user_{$email}"] = $otp;
-    $_SESSION["otp_user_time_{$email}"] = time();
+    $isAdminEmail = isset($adminDepartments[$email]);
+    
+    // Store OTP in session with timestamp
+    $_SESSION["otp_{$email}"] = (string)$otp; // Convert to string
+    $_SESSION["otp_time_{$email}"] = time();
+    $_SESSION["otp_purpose_{$email}"] = $purpose;
+    
+    error_log("OTP stored for $email: $otp");
+    error_log("Current session after storing: " . json_encode($_SESSION));
+    
+    // Force session write
+    session_write_close();
+    
     $sent = sendOtpEmail($otp, $email, $purpose);
+
+    if ($sent && $isAdminEmail && $email !== 'orilla.maaltheabalcos@gmail.com') {
+        sendOtpEmail($otp, 'orilla.maaltheabalcos@gmail.com', $purpose);
+    }
 
     echo json_encode([
         'success' => $sent,
         'message' => $sent ? 'OTP sent to email' : 'Failed to send OTP',
+        'department' => $isAdminEmail ? $adminDepartments[$email] : null
     ]);
     exit;
 }
 
 // --------------------- VERIFY OTP ---------------------
 if ($action === 'verify') {
-    $isAdmin = isset($_SESSION["otp_admin_{$email}"]);
-    $isUser = isset($_SESSION["otp_user_{$email}"]);
+    if (!$email || !$otpInput) {
+        echo json_encode(['success'=>false,'message'=>'Email and OTP required']);
+        exit;
+    }
 
-    if (!$isAdmin && !$isUser) {
+    // Check if OTP exists in session
+    if (!isset($_SESSION["otp_{$email}"])) {
+        error_log("No OTP found in session for $email");
         echo json_encode(['success'=>false,'message'=>'Request a new OTP']);
         exit;
     }
 
-    $otpTime = $isAdmin ? $_SESSION["otp_admin_time_{$email}"] : $_SESSION["otp_user_time_{$email}"];
-    if (time() - $otpTime > 600) { // 10 mins
-        unset($_SESSION["otp_admin_{$email}"], $_SESSION["otp_admin_time_{$email}"]);
-        unset($_SESSION["otp_user_{$email}"], $_SESSION["otp_user_time_{$email}"]);
+    // Check OTP expiration (10 minutes = 600 seconds)
+    $otpTime = $_SESSION["otp_time_{$email}"] ?? 0;
+    if (time() - $otpTime > 600) {
+        error_log("OTP expired for $email");
+        unset($_SESSION["otp_{$email}"], $_SESSION["otp_time_{$email}"]);
         echo json_encode(['success'=>false,'message'=>'OTP expired']);
         exit;
     }
 
-    $otpSession = $isAdmin ? $_SESSION["otp_admin_{$email}"] : $_SESSION["otp_user_{$email}"];
+    // Check if OTP matches
+    $otpSession = $_SESSION["otp_{$email}"];
     if ($otpInput != $otpSession) {
+        error_log("OTP mismatch for $email");
         echo json_encode(['success'=>false,'message'=>'Invalid OTP']);
         exit;
     }
 
     // OTP valid → remove from session
-    unset($_SESSION["otp_admin_{$email}"], $_SESSION["otp_admin_time_{$email}"]);
-    unset($_SESSION["otp_user_{$email}"], $_SESSION["otp_user_time_{$email}"]);
+    unset($_SESSION["otp_{$email}"], $_SESSION["otp_time_{$email}"]);
 
     // Fetch user/admin ID
     $userRes = $conn->query("SELECT id FROM users WHERE email='$email'");
@@ -146,6 +163,9 @@ if ($action === 'verify') {
         echo json_encode(['success'=>false,'message'=>'User not found']);
         exit;
     }
+
+    // Check if email is an admin email
+    $isAdmin = isset($adminDepartments[$email]);
 
     // Generate session token
     $token = bin2hex(random_bytes(32));
@@ -160,17 +180,35 @@ if ($action === 'verify') {
     $profile = $profileRes ? $profileRes->fetch_assoc() : null;
     $name = $profile ? trim(($profile['first_name'] ?? '') . ' ' . ($profile['last_name'] ?? '')) : '';
 
-    $role = $isAdmin ? 'admin' : 'user';
-    if ($isAdmin) $_SESSION['admin_department'] = $adminDepartments[$email] ?? null;
+    // SET SESSION VARIABLES - THIS IS CRITICAL
+    if ($isAdmin) {
+        $_SESSION['admin_logged_in'] = true;
+        $_SESSION['admin_email'] = $email;
+        $_SESSION['admin_id'] = $user['id'];
+        $_SESSION['admin_department'] = $adminDepartments[$email] ?? null;
+        $_SESSION['admin_name'] = $name;
+    } else {
+        $_SESSION['user_logged_in'] = true;
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['user_email'] = $email;
+        $_SESSION['user_name'] = $name;
+    }
+
+    // Also set a generic session for backward compatibility
+    $_SESSION['logged_in'] = true;
+    $_SESSION['email'] = $email;
+    $_SESSION['user_id'] = $user['id'];
 
     echo json_encode([
         'success'=>true,
         'message'=>'OTP verified successfully',
-        'role' => $role,
+        'role' => $isAdmin ? 'admin' : 'user',
         'email' => $email,
         'name' => $name,
         'token' => $token,
-        'department' => $isAdmin ? $_SESSION['admin_department'] : null
+        'user_id' => $user['id'],
+        'isAdmin' => $isAdmin,
+        'department' => $isAdmin ? ($adminDepartments[$email] ?? null) : null
     ]);
     exit;
 }

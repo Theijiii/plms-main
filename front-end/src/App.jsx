@@ -1,7 +1,8 @@
-
 import { Routes, Route, Navigate } from "react-router-dom"
+import { useState, useEffect } from "react"; // Add this line
 import UserLayout from "./layouts/UserLayout"
 import AdminLayout from "./layouts/AdminLayout"
+import ProtectedRoute from "./components/ProtectedRoute";
 import UserDashboard from "./pages/user/UserDashboard"
 import Login from "./pages/user/Login"
 import Register from "./pages/user/Register"
@@ -64,16 +65,25 @@ import Tracker from "./pages/admin/PermitTracker/Tracker";
 import TestForm from "./components/TestForm";
 import TestBarangayForm from "./components/TestBarangayForm";
 
-  function App() {
+function App() {
   return (
     <Routes>
-      {/* Login route for both user and admin */}
+      {/* Public routes (no authentication required) */}
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/testbarangayform" element={<TestBarangayForm />} />
+      <Route path="/testform" element={<TestForm />} />
 
-      {/* User routes */}
-      <Route path="/user" element={<UserLayout />}>
+      {/* Protected User routes */}
+      <Route 
+        path="/user" 
+        element={
+          <ProtectedRoute requiredRole="user">
+            <UserLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<UserDashboard />} />
         <Route path="dashboard" element={<UserDashboard />} />
 
@@ -125,10 +135,15 @@ import TestBarangayForm from "./components/TestBarangayForm";
         <Route path="security" element={<UserSecuritySettings />} />
       </Route>
 
-      {/* Test form route (top-level, outside user/admin) */}
-
-      {/* Admin routes */}
-      <Route path="/admin" element={<AdminLayout />}>
+      {/* Protected Admin routes */}
+      <Route 
+        path="/admin" 
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <AdminLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<AdminDashboard />} />
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="businesspermit" element={<BusinessPermit />} />
@@ -144,9 +159,6 @@ import TestBarangayForm from "./components/TestBarangayForm";
         <Route path="requestclearance" element={<RequestClearance />} />
         <Route path="permittracker" element={<Tracker />} />
       </Route>
-
-      <Route path="/testbarangayform" element={<TestBarangayForm />} />
-      <Route path="/testform" element={<TestForm />} />
     </Routes>
   );
 }

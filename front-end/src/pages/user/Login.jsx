@@ -314,45 +314,45 @@ const handleOtpSubmit = async (e) => {
     return;
   }
 
-  if (otpContext === "register" && !pendingRegistration?.email) {
-    setOtpError("No pending registration. Please try again.");
-    return;
-  }
-
   try {
     // Send OTP to backend for verification
     const response = await verifyOtp(otpTargetEmail, otpString, otpContext);
-
+    
+    // DEBUG: Log what the API returns
+    console.log("🔐 [OTP API Response]:", response);
+    console.log("🔐 [Response keys]:", Object.keys(response));
+    
     if (!response.success) {
       setOtpError(response.message || "Invalid OTP");
       return;
     }
 
     setOtpSuccess("OTP verified successfully!");
-
     // Handle registration OTP
     if (otpContext === "register") {
       const registerResponse = await registerUser(pendingRegistration);
 
       if (registerResponse.success) {
-        // Store user information after successful registration
-        if (registerResponse.user_id) {
-          sessionStorage.setItem("user_id", registerResponse.user_id);
-          sessionStorage.setItem("user_email", pendingRegistration.email);
-          sessionStorage.setItem("role", "user");
-          localStorage.setItem("goserveph_role", "user");
-          localStorage.setItem("goserveph_email", pendingRegistration.email);
-          localStorage.setItem("goserveph_user_id", registerResponse.user_id);
-        }
+        // Store ALL authentication data
+        localStorage.setItem("auth_token", registerResponse.token || response.token);
+        localStorage.setItem("email", pendingRegistration.email);
+        localStorage.setItem("goserveph_role", "user");
+        localStorage.setItem("goserveph_user_id", registerResponse.user_id || response.user_id);
+        localStorage.setItem("goserveph_email", pendingRegistration.email);
+        
+        // Also store in sessionStorage for compatibility
+        sessionStorage.setItem("user_id", registerResponse.user_id || response.user_id);
+        sessionStorage.setItem("user_email", pendingRegistration.email);
+        sessionStorage.setItem("role", "user");
         
         alert("Registration successful! You are now logged in.");
         setPendingRegistration(null);
         closeOtpModal();
         handleCloseRegisterModal();
         
-        // Redirect to dashboard after registration
+        // Use navigate instead of window.location.href
         setTimeout(() => {
-          window.location.href = "/user/dashboard";
+          navigate("/user/dashboard");
         }, 500);
       } else {
         alert(registerResponse.message || "Registration failed");
@@ -361,52 +361,53 @@ const handleOtpSubmit = async (e) => {
     }
 
     // Handle login OTP
-    if (otpContext === "login") {
-      // Store admin/user data in sessionStorage and localStorage based on backend response
-      if (response.role === "admin") {
-        // Store admin information
-        sessionStorage.setItem("admin_id", response.user_id || "");
-        sessionStorage.setItem("admin_email", response.email || otpTargetEmail);
-        sessionStorage.setItem("admin_name", response.name || "");
-        sessionStorage.setItem("admin_department", response.department || "");
-        sessionStorage.setItem("role", response.role);
-        localStorage.setItem("goserveph_role", response.role);
-        localStorage.setItem("goserveph_email", response.email || otpTargetEmail);
-        if (response.user_id) {
-          localStorage.setItem("goserveph_user_id", response.user_id);
-        }
-        window.location.href = "/admin/dashboard";
-      } else {
-        // Store user information
-        sessionStorage.setItem("user_id", response.user_id || "");
-        sessionStorage.setItem("user_email", response.email || otpTargetEmail);
-        sessionStorage.setItem("role", response.role);
-        localStorage.setItem("goserveph_role", response.role);
-        localStorage.setItem("goserveph_email", response.email || otpTargetEmail);
-        localStorage.setItem("goserveph_user_id", response.user_id || "");
-        
-        // Optionally fetch and store full profile
-        try {
-          const profileResponse = await getUserProfile();
-          if (profileResponse.success && profileResponse.data) {
-            const profile = profileResponse.data;
-            sessionStorage.setItem("user_name", `${profile.first_name || ''} ${profile.last_name || ''}`.trim());
-            localStorage.setItem("goserveph_user_name", `${profile.first_name || ''} ${profile.last_name || ''}`.trim());
-          }
-        } catch (err) {
-          console.log("Could not fetch profile, continuing with login");
-        }
-        
-        window.location.href = "/user/dashboard";
+  if (otpContext === "login") {
+      // DEBUG: Check what data we have
+      console.log("🔐 [Login Data]:", loginData);
+      console.log("🔐 [Response Data]:", response);
+      
+      // Extract role from response - check different possible keys
+      const userRole = response.role || response.user_role || "user";
+      const token = response.token || loginData?.token;
+      const userId = response.user_id || response.id || "";
+      const userName = response.name || response.full_name || "";
+      
+      // CRITICAL: Store ALL required data in localStorage
+      localStorage.setItem("auth_token", token);
+      localStorage.setItem("email", otpTargetEmail);
+      localStorage.setItem("goserveph_role", userRole);  // This must be set!
+      localStorage.setItem("goserveph_user_id", userId);
+      localStorage.setItem("goserveph_email", otpTargetEmail);
+      
+      if (userName) {
+        localStorage.setItem("goserveph_user_name", userName);
       }
+      
+      console.log("✅ Login successful! Stored data:", {
+        token: !!token,
+        role: userRole,
+        email: otpTargetEmail,
+        user_id: userId,
+        name: userName
+      });
+      
+      // Close OTP modal first
+      closeOtpModal();
+      
+      // Redirect with small delay
+      setTimeout(() => {
+        if (userRole === "admin") {
+          navigate("/admin/dashboard");
+        } else {
+          navigate("/user/dashboard");
+        }
+      }, 300);
     }
   } catch (err) {
     console.error(err);
     setOtpError("Network error while verifying OTP");
   }
 };
-
-
 
  const handleResendOtp = async () => {
   if (countdown > 0 || !otpTargetEmail || !otpContext) return;

@@ -27,31 +27,63 @@ export default function UserHeader() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [lastScrollY]);
 
-  // ================= FETCH USER =================
+  // ================= FETCH USER (FIXED VERSION) =================
   useEffect(() => {
     async function fetchUser() {
       try {
+        // Get token from localStorage (set by ProtectedRoute)
+        const token = localStorage.getItem("auth_token");
+        
+        if (!token) {
+          console.warn("No auth token found in localStorage");
+          setUserName("Guest");
+          return; // Don't navigate - ProtectedRoute will handle this
+        }
+
         const res = await fetch("http://localhost/eplms-main/backend/login/get_profile.php?action=get", {
           method: "GET",
-          credentials: "include", // important for PHP session
+          credentials: "include",
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
         });
+        
         const data = await res.json();
+        
         if (data.success && data.data) {
           const { first_name, last_name } = data.data;
           setUserName(`${first_name} ${last_name}`);
+          // Optionally store in localStorage
+          localStorage.setItem("user_name", `${first_name} ${last_name}`);
         } else {
-          setUserName("Guest");
-          navigate("/login"); // redirect if not logged in
+          // API failed but user might still be authenticated
+          const email = localStorage.getItem("email");
+          if (email) {
+            setUserName(email.split("@")[0]); // Use email username as fallback
+          } else {
+            setUserName("User");
+          }
+          console.warn("Profile fetch failed, using fallback:", data.message);
         }
       } catch (err) {
         console.error("Failed to fetch user profile:", err);
-        setUserName("Guest");
-        navigate("/login");
+        // Use cached data if available
+        const cachedName = localStorage.getItem("user_name");
+        const email = localStorage.getItem("email");
+        
+        if (cachedName) {
+          setUserName(cachedName);
+        } else if (email) {
+          setUserName(email.split("@")[0]);
+        } else {
+          setUserName("User");
+        }
+        // DO NOT NAVIGATE HERE - ProtectedRoute handles authentication
       }
     }
 
     fetchUser();
-  }, [navigate]);
+  }, []); // Removed navigate from dependencies
 
   // ================= LOGOUT =================
   const handleLogout = async () => {
@@ -63,6 +95,13 @@ export default function UserHeader() {
     } catch (err) {
       console.error("Logout failed:", err);
     } finally {
+      // Clear all auth data
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("goserveph_role");
+      localStorage.removeItem("email");
+      localStorage.removeItem("user_id");
+      localStorage.removeItem("user_name");
+      // Redirect to login
       navigate("/login");
     }
   };
@@ -113,7 +152,10 @@ export default function UserHeader() {
 
             {open && (
               <div className="absolute right-0 mt-2 w-36 bg-white shadow-lg rounded-lg border">
-                <button onClick={handleLogout} className="flex items-center w-full px-4 py-2 hover:bg-gray-100">
+                <button 
+                  onClick={handleLogout} 
+                  className="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-red-600"
+                >
                   <LogOut size={12} className="mr-2" /> Log Out
                 </button>
               </div>
