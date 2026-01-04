@@ -1,7 +1,11 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 
-const ProtectedRoute = ({ children, requiredRole = null }) => {
+const ProtectedRoute = ({ 
+  children, 
+  requiredRole = null,
+  allowedDepartments = [] // New: specify which departments can access
+}) => {
   const location = useLocation();
   const [isChecking, setIsChecking] = useState(true);
   const [shouldRedirect, setShouldRedirect] = useState(false);
@@ -12,12 +16,15 @@ const ProtectedRoute = ({ children, requiredRole = null }) => {
       // Get auth data from localStorage
       const token = localStorage.getItem("auth_token");
       const userRole = localStorage.getItem("goserveph_role");
+      const userDepartment = localStorage.getItem("goserveph_department");
       
       console.log("🔐 [ProtectedRoute] Checking auth:", {
         path: location.pathname,
         hasToken: !!token,
         userRole,
-        requiredRole
+        userDepartment,
+        requiredRole,
+        allowedDepartments
       });
       
       // If no token, redirect to login
@@ -45,7 +52,22 @@ const ProtectedRoute = ({ children, requiredRole = null }) => {
         return;
       }
       
-      console.log("🔐 ACCESS GRANTED for:", userRole);
+      // Check department access if required (for admins only)
+      if (userRole === "admin" && allowedDepartments.length > 0) {
+        console.log(`🔐 Checking department access: ${userDepartment} in ${JSON.stringify(allowedDepartments)}`);
+        
+        if (!userDepartment || !allowedDepartments.includes(userDepartment)) {
+          console.log(`🔐 DEPARTMENT ACCESS DENIED: ${userDepartment} not in allowed departments`);
+          
+          // Redirect to admin dashboard if department not allowed
+          setRedirectTo("/admin/dashboard");
+          setShouldRedirect(true);
+          setIsChecking(false);
+          return;
+        }
+      }
+      
+      console.log("🔐 ACCESS GRANTED for:", { role: userRole, department: userDepartment });
       setIsChecking(false);
     };
 
@@ -55,7 +77,7 @@ const ProtectedRoute = ({ children, requiredRole = null }) => {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [location.pathname, requiredRole]);
+  }, [location.pathname, requiredRole, allowedDepartments]);
 
   // Show loading while checking
   if (isChecking) {

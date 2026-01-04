@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Upload, Check, X, Eye, FileText, User } from "lucide-react";
-import AutofillProfile from "../../../components/AutofillProfile";
+import { Upload, Check, X, Eye, FileText } from "lucide-react";
 
 const COLORS = {
   primary: '#4A90E2',
@@ -31,11 +30,6 @@ export default function BarangayNew() {
   const [agreeDeclaration, setAgreeDeclaration] = useState(false);
   const [showPreview, setShowPreview] = useState({});
   const [userData, setUserData] = useState(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const [profileLoaded, setProfileLoaded] = useState(false);
-  const [showAutofillModal, setShowAutofillModal] = useState(false);
-  const [isAutofillLoading, setIsAutofillLoading] = useState(false);
-  const [autofillError, setAutofillError] = useState('');
   
   // Initialize form data
   const [formData, setFormData] = useState({
@@ -94,103 +88,48 @@ export default function BarangayNew() {
     { id: 5, title: 'Review', description: 'Review your application' }
   ];
 
-  // Function to handle autofill from profile
-  const handleAutofill = (profileData) => {
-    if (!profileData) return;
-    
-    let formattedBirthdate = '';
-    if (profileData.birthdate) {
-      const date = new Date(profileData.birthdate);
-      formattedBirthdate = date.toISOString().split('T')[0];
-    }
-    
-    setFormData(prev => ({
-      ...prev,
-      first_name: profileData.first_name || '',
-      middle_name: profileData.middle_name || '',
-      last_name: profileData.last_name || '',
-      email: profileData.email || '',
-      mobile_number: profileData.mobile_number || '',
-      birthdate: formattedBirthdate,
-      gender: profileData.gender || '',
-      civil_status: profileData.civil_status || '',
-      nationality: profileData.nationality || 'Filipino',
-      house_no: profileData.house_number || profileData.house_no || '',
-      street: profileData.street || '',
-      barangay: profileData.barangay || '',
-      city_municipality: profileData.city_municipality || '',
-      province: profileData.province || '',
-      zip_code: profileData.zip_code || '',
-      user_id: profileData.user_id || profileData.id || null,
-    }));
-    
-    setUserData(profileData);
-    setProfileLoaded(true);
-    setAutofillError('');
-  };
-
-  // Function to manually trigger autofill
-  const triggerAutofill = async () => {
-    setIsAutofillLoading(true);
-    setAutofillError('');
-    
-    try {
-      const response = await fetch('http://localhost/eplms-main/backend/login/get_profile.php?action=get', {
-        method: 'GET',
-        credentials: 'include', // Important for PHP session cookies
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-          handleAutofill(result.data);
-          setShowAutofillModal(false);
-        } else {
-          setAutofillError('Unable to load profile. Please login first.');
-        }
-      } else {
-        setAutofillError('Please login first to autofill your profile');
-      }
-    } catch (err) {
-      console.error('Error fetching user profile:', err);
-      setAutofillError('Unable to load profile data. Please fill the form manually.');
-    } finally {
-      setIsAutofillLoading(false);
-    }
-  };
-
-  // Function to fetch user profile data on component mount
-  const fetchUserProfile = async () => {
-    try {
-      setIsLoadingProfile(true);
-      
-      const response = await fetch('http://localhost/eplms-main/backend/login/get_profile.php?action=get', {
-        method: 'GET',
-        credentials: 'include', // Important for PHP session cookies
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-          handleAutofill(result.data);
-        }
-      } else {
-        // User is not logged in, that's okay for this form
-        console.log('User not authenticated - form can still be filled manually');
-      }
-    } catch (err) {
-      console.error('Error fetching user profile on mount:', err);
-      // Don't show error to user on mount
-    } finally {
-      setIsLoadingProfile(false);
-    }
-  };
-
-  // Auto-fetch profile on component mount
+  // Fetch user data when component mounts
   useEffect(() => {
-    fetchUserProfile();
+    const fetchUserData = async () => {
+      try {
+        const response = await fetch('/back-end/api/auth/me.php', {
+          method: 'GET',
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.user) {
+            setUserData(data.user);
+            
+            // Pre-fill form with user data
+            setFormData(prev => ({
+              ...prev,
+              first_name: data.user.first_name || '',
+              middle_name: data.user.middle_name || '',
+              last_name: data.user.last_name || '',
+              email: data.user.email || '',
+              mobile_number: data.user.mobile_number || '',
+              birthdate: data.user.birthdate || '',
+              gender: data.user.gender || '',
+              civil_status: data.user.civil_status || '',
+              nationality: data.user.nationality || '',
+              house_no: data.user.house_no || '',
+              street: data.user.street || '',
+              barangay: data.user.barangay || '',
+              city_municipality: data.user.city_municipality || '',
+              province: data.user.province || '',
+              zip_code: data.user.zip_code || '',
+              user_id: data.user.id || null
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchUserData();
   }, []);
 
   const handleChange = (e) => {
@@ -317,14 +256,17 @@ export default function BarangayNew() {
   const handleFormSubmit = (e) => {
     e.preventDefault();
     if (currentStep < steps.length - 1) {
+      // For steps 1-4, just go to next step
       nextStep();
     } else if (currentStep === steps.length - 1) {
+      // For step 4, go to review (step 5)
       const ok = validateStep(currentStep);
       if (ok) {
         setCurrentStep(currentStep + 1);
         setErrors({});
       }
     } else {
+      // On Step 5 (Review), show confirmation modal
       setShowConfirmModal(true);
     }
   };
@@ -355,6 +297,7 @@ export default function BarangayNew() {
 
     setIsSubmitting(true);
 
+    // Validate steps
     const step1Ok = validateStep(1);
     const step2Ok = validateStep(2);
     const step3Ok = validateStep(3);
@@ -372,8 +315,10 @@ export default function BarangayNew() {
     }
 
     try {
+      // Prepare FormData for backend
       const formDataToSend = new FormData();
 
+      // Append all text fields
       Object.entries({
         user_id: formData.user_id || "",
         application_date: formData.application_date,
@@ -404,6 +349,7 @@ export default function BarangayNew() {
         formDataToSend.append(key, value);
       });
 
+      // Attach file uploads
       const fileFields = [
         "valid_id_file",
         "proof_of_residence_file",
@@ -436,10 +382,12 @@ export default function BarangayNew() {
         throw new Error("Server did not return valid JSON");
       }
 
+      // Success
       if (data.success) {
         setShowConfirmModal(false);
         showSuccessMessage(data.message || "Application submitted successfully!");
         
+        // Reset form after successful submission
         setTimeout(() => {
           setFormData({
             permit_type: permitType,
@@ -478,9 +426,9 @@ export default function BarangayNew() {
           });
           setCurrentStep(1);
           setAgreeDeclaration(false);
-          setProfileLoaded(false);
         }, 2000);
 
+        // Navigate after showing success message
         setTimeout(() => {
           navigate("/user/dashboard");
         }, 3000);
@@ -501,53 +449,7 @@ export default function BarangayNew() {
       case 1:
         return (
           <div className="space-y-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold" style={{ color: COLORS.secondary }}>Applicant Information</h3>
-              
-              {/* Autofill Button */}
-              {!profileLoaded && !isLoadingProfile && (
-                <button
-                  type="button"
-                  onClick={() => setShowAutofillModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-300"
-                  style={{ fontFamily: COLORS.font }}
-                >
-                  <User className="w-4 h-4" />
-                  Autofill from Profile
-                </button>
-              )}
-              
-              {/* Profile Loaded Indicator */}
-              {profileLoaded && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-green-50 border border-green-200 rounded-lg">
-                  <Check className="w-4 h-4 text-green-600" />
-                  <span className="text-sm text-green-700 font-medium">
-                    Form auto-filled with your profile
-                  </span>
-                </div>
-              )}
-            </div>
-            
-            {/* Loading State */}
-            {isLoadingProfile && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                  <span className="text-sm text-blue-700">Loading your profile information...</span>
-                </div>
-              </div>
-            )}
-            
-            {/* Error State */}
-            {autofillError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
-                <div className="flex items-center gap-2">
-                  <X className="w-4 h-4 text-red-600" />
-                  <span className="text-sm text-red-700">{autofillError}</span>
-                </div>
-              </div>
-            )}
-            
+            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Applicant Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>First Name *</label>
@@ -717,19 +619,6 @@ export default function BarangayNew() {
                   </optgroup>
                 </select>
                 {errors.purpose && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.purpose}</p>}
-              </div>
-              <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Duration / Period of Validity *</label>
-                <input
-                  type="date"
-                  name="duration"
-                  value={formData.duration}
-                  onChange={handleChange}
-                  className={`w-full p-3 border border-black rounded-lg ${errors.duration ? 'border-red-500' : ''}`}
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  min="1900-01-01"
-                  max="2100-12-31"
-                />
               </div>
               <div>
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Valid ID Type *</label>
@@ -1228,16 +1117,6 @@ export default function BarangayNew() {
           )}
         </div>
       </form>
-
-      {/* Autofill Profile Modal */}
-      {showAutofillModal && (
-        <AutofillProfile 
-          onClose={() => setShowAutofillModal(false)}
-          onAutofill={triggerAutofill}
-          isLoading={isAutofillLoading}
-          error={autofillError}
-        />
-      )}
 
       {/* File Preview Modal */}
       {showPreview.url && (

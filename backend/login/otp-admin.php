@@ -1,7 +1,6 @@
 <?php
-// Start session with proper settings
 session_start([
-    'cookie_lifetime' => 86400, // 24 hours
+    'cookie_lifetime' => 86400,
     'read_and_close'  => false,
 ]);
 
@@ -30,10 +29,9 @@ header("Content-Type: application/json");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
-// Handle preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
-// --------------------- HELPER: SEND OTP ---------------------
+// --------------------- HELPER FUNCTIONS ---------------------
 function sendOtpEmail($otp, $toEmail, $purpose = 'login') {
     $mail = new PHPMailer(true);
     try {
@@ -41,7 +39,7 @@ function sendOtpEmail($otp, $toEmail, $purpose = 'login') {
         $mail->Host = 'smtp.gmail.com';
         $mail->SMTPAuth = true;
         $mail->Username = 'eplmsgoserveph@gmail.com';
-        $mail->Password = 'dqwe prrq fhbt kyiq'; // app password
+        $mail->Password = 'dqwe prrq fhbt kyiq';
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port = 587;
 
@@ -62,15 +60,18 @@ function sendOtpEmail($otp, $toEmail, $purpose = 'login') {
     }
 }
 
-// --------------------- ADMIN EMAILS ---------------------
-$adminDepartments = [
-    'superadmin@eplms.com'     => 'super',
-    'businessadmin@eplms.com'  => 'business',
-    'buildingadmin@eplms.com'  => 'building',
-    'barangaystaff@eplms.com'  => 'barangay',
-    'transportadmin@eplms.com' => 'transport',
-    'admin@eplms.com'          => 'super',
-];
+function getDepartmentFromEmail($email) {
+    $adminDepartments = [
+        'superadmin@eplms.com'     => 'super',
+        'businessadmin@eplms.com'  => 'business',
+        'buildingadmin@eplms.com'  => 'building',
+        'barangaystaff@eplms.com'  => 'barangay',
+        'transportadmin@eplms.com' => 'transport',
+        'admin@eplms.com'          => 'super',
+    ];
+    
+    return $adminDepartments[$email] ?? null;
+}
 
 // --------------------- INPUT ---------------------
 $action = $_GET['action'] ?? '';
@@ -78,14 +79,6 @@ $input = json_decode(file_get_contents("php://input"), true) ?? [];
 $email = $input['email'] ?? '';
 $purpose = $input['purpose'] ?? 'login';
 $otpInput = $input['otp'] ?? '';
-
-// Debug: Log session info
-error_log("=== OTP DEBUG ===");
-error_log("Session ID: " . session_id());
-error_log("Session Data: " . json_encode($_SESSION));
-error_log("Action: $action, Email: $email, Purpose: $purpose, OTP Input: $otpInput");
-error_log("Request Method: " . $_SERVER['REQUEST_METHOD']);
-error_log("=== END DEBUG ===");
 
 // --------------------- SEND OTP ---------------------
 if ($action === 'send') {
@@ -95,30 +88,31 @@ if ($action === 'send') {
     }
 
     $otp = rand(100000, 999999);
-    $isAdminEmail = isset($adminDepartments[$email]);
+    $department = getDepartmentFromEmail($email);
     
-    // Store OTP in session with timestamp
-    $_SESSION["otp_{$email}"] = (string)$otp; // Convert to string
+    // Store OTP in session
+    $_SESSION["otp_{$email}"] = (string)$otp;
     $_SESSION["otp_time_{$email}"] = time();
     $_SESSION["otp_purpose_{$email}"] = $purpose;
     
-    error_log("OTP stored for $email: $otp");
-    error_log("Current session after storing: " . json_encode($_SESSION));
-    
-    // Force session write
-    session_write_close();
-    
     $sent = sendOtpEmail($otp, $email, $purpose);
 
-    if ($sent && $isAdminEmail && $email !== 'orilla.maaltheabalcos@gmail.com') {
+    // Send copy to supervisor if admin email (except specific email)
+    if ($department && $email !== 'orilla.maaltheabalcos@gmail.com') {
         sendOtpEmail($otp, 'orilla.maaltheabalcos@gmail.com', $purpose);
     }
 
-    echo json_encode([
-        'success' => $sent,
-        'message' => $sent ? 'OTP sent to email' : 'Failed to send OTP',
-        'department' => $isAdminEmail ? $adminDepartments[$email] : null
-    ]);
+echo json_encode([
+    'success' => true,
+    'message' => 'OTP verified successfully',
+    'role' => $isAdmin ? 'admin' : 'user',
+    'email' => $email,
+    'name' => $name,
+    'token' => $token,
+    'user_id' => $user['id'],
+    'isAdmin' => $isAdmin,
+    'department' => $isAdmin ? ($adminDepartments[$email] ?? null) : null // MAKE SURE THIS IS INCLUDED
+]);
     exit;
 }
 
@@ -129,63 +123,73 @@ if ($action === 'verify') {
         exit;
     }
 
-    // Check if OTP exists in session
+    // Check OTP in session
     if (!isset($_SESSION["otp_{$email}"])) {
-        error_log("No OTP found in session for $email");
         echo json_encode(['success'=>false,'message'=>'Request a new OTP']);
         exit;
     }
 
-    // Check OTP expiration (10 minutes = 600 seconds)
+    // Check expiration
     $otpTime = $_SESSION["otp_time_{$email}"] ?? 0;
     if (time() - $otpTime > 600) {
-        error_log("OTP expired for $email");
         unset($_SESSION["otp_{$email}"], $_SESSION["otp_time_{$email}"]);
         echo json_encode(['success'=>false,'message'=>'OTP expired']);
         exit;
     }
 
-    // Check if OTP matches
+    // Verify OTP
     $otpSession = $_SESSION["otp_{$email}"];
     if ($otpInput != $otpSession) {
-        error_log("OTP mismatch for $email");
         echo json_encode(['success'=>false,'message'=>'Invalid OTP']);
         exit;
     }
 
-    // OTP valid → remove from session
+    // OTP valid - remove from session
     unset($_SESSION["otp_{$email}"], $_SESSION["otp_time_{$email}"]);
 
-    // Fetch user/admin ID
-    $userRes = $conn->query("SELECT id FROM users WHERE email='$email'");
-    $user = $userRes ? $userRes->fetch_assoc() : null;
-    if (!$user) {
+    // Check if user exists
+    $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
         echo json_encode(['success'=>false,'message'=>'User not found']);
         exit;
     }
+    
+    $user = $result->fetch_assoc();
+    $stmt->close();
 
-    // Check if email is an admin email
-    $isAdmin = isset($adminDepartments[$email]);
+    // Get profile information
+    $stmt = $conn->prepare("SELECT first_name, last_name FROM user_profiles WHERE user_id = ?");
+    $stmt->bind_param("i", $user['id']);
+    $stmt->execute();
+    $profileResult = $stmt->get_result();
+    $profile = $profileResult->fetch_assoc();
+    $name = $profile ? trim(($profile['first_name'] ?? '') . ' ' . ($profile['last_name'] ?? '')) : '';
+    $stmt->close();
+
+    // Determine role and department
+    $department = getDepartmentFromEmail($email);
+    $isAdmin = !is_null($department);
+    $role = $isAdmin ? 'admin' : 'user';
 
     // Generate session token
     $token = bin2hex(random_bytes(32));
-    $expiresAt = date('Y-m-d H:i:s', strtotime('+2 hours'));
+    $expiresAt = date('Y-m-d H:i:s', strtotime('+8 hours'));
+    
     $stmt = $conn->prepare("INSERT INTO login_sessions (user_id, session_token, expires_at) VALUES (?, ?, ?)");
     $stmt->bind_param("iss", $user['id'], $token, $expiresAt);
     $stmt->execute();
     $stmt->close();
 
-    // Fetch profile for name
-    $profileRes = $conn->query("SELECT first_name, last_name FROM user_profiles WHERE user_id='{$user['id']}'");
-    $profile = $profileRes ? $profileRes->fetch_assoc() : null;
-    $name = $profile ? trim(($profile['first_name'] ?? '') . ' ' . ($profile['last_name'] ?? '')) : '';
-
-    // SET SESSION VARIABLES - THIS IS CRITICAL
+    // Set session variables
     if ($isAdmin) {
         $_SESSION['admin_logged_in'] = true;
         $_SESSION['admin_email'] = $email;
         $_SESSION['admin_id'] = $user['id'];
-        $_SESSION['admin_department'] = $adminDepartments[$email] ?? null;
+        $_SESSION['admin_department'] = $department;
         $_SESSION['admin_name'] = $name;
     } else {
         $_SESSION['user_logged_in'] = true;
@@ -194,25 +198,110 @@ if ($action === 'verify') {
         $_SESSION['user_name'] = $name;
     }
 
-    // Also set a generic session for backward compatibility
     $_SESSION['logged_in'] = true;
     $_SESSION['email'] = $email;
     $_SESSION['user_id'] = $user['id'];
 
-    echo json_encode([
-        'success'=>true,
-        'message'=>'OTP verified successfully',
-        'role' => $isAdmin ? 'admin' : 'user',
+    // Prepare response with all necessary data
+    $response = [
+        'success' => true,
+        'message' => 'OTP verified successfully',
+        'role' => $role,
         'email' => $email,
         'name' => $name,
         'token' => $token,
         'user_id' => $user['id'],
-        'isAdmin' => $isAdmin,
-        'department' => $isAdmin ? ($adminDepartments[$email] ?? null) : null
+        'isAdmin' => $isAdmin
+    ];
+
+    if ($isAdmin) {
+        $response['department'] = $department;
+    }
+
+    echo json_encode($response);
+    exit;
+}
+
+// --------------------- CHECK SESSION ---------------------
+if ($action === 'check') {
+    $token = $_GET['token'] ?? '';
+    
+    if (empty($token)) {
+        echo json_encode(['authenticated' => false]);
+        exit;
+    }
+    
+    // Check token in database
+    $stmt = $conn->prepare("SELECT user_id, expires_at FROM login_sessions WHERE session_token = ?");
+    $stmt->bind_param("s", $token);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        echo json_encode(['authenticated' => false]);
+        exit;
+    }
+    
+    $session = $result->fetch_assoc();
+    $stmt->close();
+    
+    // Check if token expired
+    if (strtotime($session['expires_at']) < time()) {
+        // Remove expired token
+        $stmt = $conn->prepare("DELETE FROM login_sessions WHERE session_token = ?");
+        $stmt->bind_param("s", $token);
+        $stmt->execute();
+        $stmt->close();
+        
+        echo json_encode(['authenticated' => false]);
+        exit;
+    }
+    
+    // Get user info
+    $userId = $session['user_id'];
+    $stmt = $conn->prepare("SELECT email FROM users WHERE id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $userResult = $stmt->get_result();
+    $user = $userResult->fetch_assoc();
+    $stmt->close();
+    
+    if (!$user) {
+        echo json_encode(['authenticated' => false]);
+        exit;
+    }
+    
+    $email = $user['email'];
+    $department = getDepartmentFromEmail($email);
+    $isAdmin = !is_null($department);
+    
+    echo json_encode([
+        'authenticated' => true,
+        'role' => $isAdmin ? 'admin' : 'user',
+        'department' => $department,
+        'email' => $email,
+        'user_id' => $userId
     ]);
     exit;
 }
 
-// --------------------- INVALID ACTION ---------------------
+// --------------------- LOGOUT ---------------------
+if ($action === 'logout') {
+    $token = $input['token'] ?? '';
+    
+    if (!empty($token)) {
+        $stmt = $conn->prepare("DELETE FROM login_sessions WHERE session_token = ?");
+        $stmt->bind_param("s", $token);
+        $stmt->execute();
+        $stmt->close();
+    }
+    
+    // Clear session
+    session_destroy();
+    
+    echo json_encode(['success' => true, 'message' => 'Logged out successfully']);
+    exit;
+}
+
 echo json_encode(['success'=>false,'message'=>'Invalid action']);
 exit;

@@ -296,6 +296,7 @@ const finalizeLogin = () => {
   navigate("/user/dashboard");
 };
 
+// In your handleOtpSubmit function in Login.jsx
 const handleOtpSubmit = async (e) => {
   e.preventDefault();
   setOtpError("");
@@ -303,7 +304,6 @@ const handleOtpSubmit = async (e) => {
 
   const otpString = otp.join("");
 
-  // Validate OTP length
   if (otpString.length !== 6) {
     setOtpError("Please enter the complete 6-digit OTP.");
     return;
@@ -315,12 +315,10 @@ const handleOtpSubmit = async (e) => {
   }
 
   try {
-    // Send OTP to backend for verification
+    // Call your OTP verification API
     const response = await verifyOtp(otpTargetEmail, otpString, otpContext);
     
-    // DEBUG: Log what the API returns
     console.log("🔐 [OTP API Response]:", response);
-    console.log("🔐 [Response keys]:", Object.keys(response));
     
     if (!response.success) {
       setOtpError(response.message || "Invalid OTP");
@@ -328,86 +326,79 @@ const handleOtpSubmit = async (e) => {
     }
 
     setOtpSuccess("OTP verified successfully!");
-    // Handle registration OTP
-    if (otpContext === "register") {
-      const registerResponse = await registerUser(pendingRegistration);
-
-      if (registerResponse.success) {
-        // Store ALL authentication data
-        localStorage.setItem("auth_token", registerResponse.token || response.token);
-        localStorage.setItem("email", pendingRegistration.email);
-        localStorage.setItem("goserveph_role", "user");
-        localStorage.setItem("goserveph_user_id", registerResponse.user_id || response.user_id);
-        localStorage.setItem("goserveph_email", pendingRegistration.email);
-        
-        // Also store in sessionStorage for compatibility
-        sessionStorage.setItem("user_id", registerResponse.user_id || response.user_id);
-        sessionStorage.setItem("user_email", pendingRegistration.email);
-        sessionStorage.setItem("role", "user");
-        
-        alert("Registration successful! You are now logged in.");
-        setPendingRegistration(null);
-        closeOtpModal();
-        handleCloseRegisterModal();
-        
-        // Use navigate instead of window.location.href
-        setTimeout(() => {
-          navigate("/user/dashboard");
-        }, 500);
+    
+    // CRITICAL: Save department for admin routing
+    console.log("✅ Saving department data:", response.department);
+    
+    // Store ALL authentication data
+    localStorage.setItem("auth_token", response.token || "dummy_token");
+    localStorage.setItem("goserveph_role", response.role || "user");
+    localStorage.setItem("goserveph_email", otpTargetEmail);
+    localStorage.setItem("email", otpTargetEmail);
+    
+    // THIS IS THE KEY: Save department if it exists
+    if (response.department) {
+      localStorage.setItem("goserveph_department", response.department);
+      console.log("✅ Department saved:", response.department);
+    } else if (response.isAdmin) {
+      // If isAdmin is true but department is not set, assign based on email
+      const department = getDepartmentFromEmail(otpTargetEmail);
+      if (department) {
+        localStorage.setItem("goserveph_department", department);
+        console.log("✅ Department assigned from email:", department);
+      }
+    }
+    
+    if (response.user_id) {
+      localStorage.setItem("goserveph_user_id", response.user_id);
+    }
+    
+    if (response.name) {
+      localStorage.setItem("goserveph_name", response.name);
+      sessionStorage.setItem("admin_name", response.name);
+    }
+    
+    // Also store department in sessionStorage for AdminSidebar
+    if (response.department) {
+      sessionStorage.setItem("admin_department", response.department);
+    }
+    
+    // Debug what was saved
+    console.log("🔍 After login - localStorage:", {
+      role: localStorage.getItem("goserveph_role"),
+      department: localStorage.getItem("goserveph_department"),
+      email: localStorage.getItem("goserveph_email")
+    });
+    
+    closeOtpModal();
+    
+    // Redirect based on role
+    setTimeout(() => {
+      if (response.role === "admin") {
+        navigate("/admin/dashboard");
       } else {
-        alert(registerResponse.message || "Registration failed");
+        navigate("/user/dashboard");
       }
-      return;
-    }
-
-    // Handle login OTP
-  if (otpContext === "login") {
-      // DEBUG: Check what data we have
-      console.log("🔐 [Login Data]:", loginData);
-      console.log("🔐 [Response Data]:", response);
-      
-      // Extract role from response - check different possible keys
-      const userRole = response.role || response.user_role || "user";
-      const token = response.token || loginData?.token;
-      const userId = response.user_id || response.id || "";
-      const userName = response.name || response.full_name || "";
-      
-      // CRITICAL: Store ALL required data in localStorage
-      localStorage.setItem("auth_token", token);
-      localStorage.setItem("email", otpTargetEmail);
-      localStorage.setItem("goserveph_role", userRole);  // This must be set!
-      localStorage.setItem("goserveph_user_id", userId);
-      localStorage.setItem("goserveph_email", otpTargetEmail);
-      
-      if (userName) {
-        localStorage.setItem("goserveph_user_name", userName);
-      }
-      
-      console.log("✅ Login successful! Stored data:", {
-        token: !!token,
-        role: userRole,
-        email: otpTargetEmail,
-        user_id: userId,
-        name: userName
-      });
-      
-      // Close OTP modal first
-      closeOtpModal();
-      
-      // Redirect with small delay
-      setTimeout(() => {
-        if (userRole === "admin") {
-          navigate("/admin/dashboard");
-        } else {
-          navigate("/user/dashboard");
-        }
-      }, 300);
-    }
+    }, 300);
+    
   } catch (err) {
     console.error(err);
     setOtpError("Network error while verifying OTP");
   }
 };
+
+// Helper function to get department from email
+function getDepartmentFromEmail(email) {
+  const emailToDepartment = {
+    'superadmin@eplms.com': 'super',
+    'businessadmin@eplms.com': 'business',
+    'buildingadmin@eplms.com': 'building',
+    'barangaystaff@eplms.com': 'barangay',
+    'transportadmin@eplms.com': 'transport',
+    'admin@eplms.com': 'super'
+  };
+  return emailToDepartment[email.toLowerCase()] || null;
+}
 
  const handleResendOtp = async () => {
   if (countdown > 0 || !otpTargetEmail || !otpContext) return;

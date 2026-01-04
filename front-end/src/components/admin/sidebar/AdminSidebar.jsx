@@ -1,42 +1,75 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut, User } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext'; // FIXED IMPORT PATH
 import AdminSidebarItems from './AdminSidebarItems';
 
 function AdminSidebar({ collapsed }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  
   const [expandedItem, setExpandedItem] = useState(new Set());
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  // Safely read session storage with fallback
-  const rawAdminName = sessionStorage.getItem("admin_name");
-  const rawAdminDepartment = sessionStorage.getItem("admin_department");
+  // Get user info from AuthContext
+  const adminName = user?.name || user?.email || "Admin";
+  // In AdminSidebar.jsx
+const adminDepartment = user?.department || 
+                       localStorage.getItem("goserveph_department") || 
+                       sessionStorage.getItem("admin_department") || 
+                       "";
 
-  const adminName =
-    rawAdminName && rawAdminName !== "undefined" ? rawAdminName : "Admin";
-  const adminDepartment =
-    rawAdminDepartment && rawAdminDepartment !== "undefined"
-      ? rawAdminDepartment
-      : "all";
+  // Debug logging
+  useEffect(() => {
+    console.log("🔍 [AdminSidebar] User data:", {
+      user,
+      adminName,
+      adminDepartment,
+      localStorageDepartment: localStorage.getItem("goserveph_department")
+    });
+  }, [user]);
 
   // Memoize filteredItems to prevent recreating array every render
-const filteredItems = useMemo(() => {
-  return AdminSidebarItems.filter(item => {
-    // Convert to array if it's not
-    const depts = Array.isArray(item.department) ? item.department : [item.department];
+  const filteredItems = useMemo(() => {
+    if (!adminDepartment) {
+      console.log("⚠️ No department found, showing empty sidebar");
+      return [];
+    }
 
-    // Show if "all" is in departments OR current admin is super OR adminDepartment is included
-    return depts.includes("all") || adminDepartment === "super" || depts.includes(adminDepartment);
-  }).map(item => ({
-    ...item,
-    subItems: item.subItems?.filter(sub => {
-      const subDepts = Array.isArray(sub.department) ? sub.department : [sub.department];
-      return subDepts.includes("all") || adminDepartment === "super" || subDepts.includes(adminDepartment);
-    })
-  }));
-}, [adminDepartment]);
+    console.log(`🔍 Filtering sidebar for department: ${adminDepartment}`);
 
+    const filtered = AdminSidebarItems.filter(item => {
+      // If item has no department restriction, show to all
+      if (!item.department || item.department.length === 0) {
+        return true;
+      }
+      
+      // Check if user's department is in the allowed list
+      const hasAccess = item.department.includes(adminDepartment);
+      
+      console.log(`🔍 Checking item ${item.label}: departments ${JSON.stringify(item.department)} - Access: ${hasAccess}`);
+      
+      return hasAccess;
+    });
+
+    // Also filter sub-items
+    const withFilteredSubItems = filtered.map(item => ({
+      ...item,
+      subItems: item.subItems?.filter(sub => {
+        if (!sub.department || sub.department.length === 0) return true;
+        return sub.department.includes(adminDepartment);
+      }).filter(Boolean) // Remove undefined/null items
+    }));
+
+    console.log("🔍 Filtered sidebar items:", withFilteredSubItems.map(item => ({
+      label: item.label,
+      department: item.department,
+      hasSubItems: item.subItems?.length || 0
+    })));
+
+    return withFilteredSubItems;
+  }, [adminDepartment]);
 
   // Update expanded items based on active route
   useEffect(() => {
@@ -78,6 +111,10 @@ const filteredItems = useMemo(() => {
     setExpandedItem(newExpanded);
   };
 
+  const handleLogout = () => {
+    logout();
+  };
+
   return (
     <div className={`${
         collapsed ? 'w-[80px]' : 'w-64'
@@ -95,6 +132,16 @@ const filteredItems = useMemo(() => {
             <div>
               <h1 className="text-xl font-bold dark:text-white">GoServePH</h1>
               <p className="text-xs text-slate-500">Admin Dashboard</p>
+              
+                <p className="text-xs text-blue-600 font-medium">
+                  {adminDepartment === 'super' ? 'Super Admin' : 
+                   adminDepartment === 'business' ? 'Business ' :
+                   adminDepartment === 'building' ? 'Building ' :
+                   adminDepartment === 'transport' ? 'Transport ' :
+                   adminDepartment === 'barangay' ? 'Barangay ' : 
+                   adminDepartment.charAt(0).toUpperCase() + adminDepartment.slice(1)} Department
+                </p>
+            
             </div>
           )}
         </NavLink>
@@ -111,14 +158,17 @@ const filteredItems = useMemo(() => {
           >
             <div className="flex items-center">
               <User className={`w-6 h-6 transition-colors duration-200 ${userMenuOpen ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`} />
-              <span className="ml-2 text-sm font-medium">Hi, {adminName}</span>
+              <div className="ml-2">
+                <p className="text-sm font-medium">Hi, {adminName}</p>
+  
+              </div>
             </div>
             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${userMenuOpen ? 'rotate-180 text-white' : 'text-slate-500'}`} />
           </div>
 
           {userMenuOpen && (
             <button
-              onClick={() => navigate('/login')}
+              onClick={handleLogout}
               className="w-full flex items-center p-2 rounded-xl mt-2 transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-red-500 hover:text-white dark:hover:bg-red-500 dark:hover:text-white"
             >
               <LogOut className="w-5 h-5" />
@@ -130,73 +180,83 @@ const filteredItems = useMemo(() => {
 
       <hr className="border-t border-slate-300 dark:border-slate-700 mt-2" />
 
-      {/* Navigation Links */}
+      {/* Navigation Links - Show message if no items */}
       <nav className="flex-1 p-2 space-y-2 overflow-y-auto">
-        {filteredItems.map(item => {
-          const isActive =
-            item.path === location.pathname ||
-            (item.subItems && item.subItems.some(sub => sub.path === location.pathname));
+        {filteredItems.length === 0 ? (
+          <div className="p-4 text-center">
+            <p className="text-sm text-slate-500">No menu items available</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Department: {adminDepartment || 'Not set'}<br/>
+              Contact super admin for access
+            </p>
+          </div>
+        ) : (
+          filteredItems.map(item => {
+            const isActive =
+              item.path === location.pathname ||
+              (item.subItems && item.subItems.some(sub => sub.path === location.pathname));
 
-          return (
-            <div key={item.id}>
-              {item.subItems ? (
-                <>
-                  <button
-                    className={`w-full flex justify-between items-center p-2 rounded-xl transition-all duration-200 ${
-                      isActive
-                        ? 'bg-[#4CAF50] text-white font-semibold'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-[#4CAF50] hover:text-white dark:hover:bg-[#4CAF50] dark:hover:text-white'
-                    }`}
-                    onClick={() => toggleExpanded(item)}
+            return (
+              <div key={item.id}>
+                {item.subItems ? (
+                  <>
+                    <button
+                      className={`w-full flex justify-between items-center p-2 rounded-xl transition-all duration-200 ${
+                        isActive
+                          ? 'bg-[#4CAF50] text-white font-semibold'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-[#4CAF50] hover:text-white dark:hover:bg-[#4CAF50] dark:hover:text-white'
+                      }`}
+                      onClick={() => toggleExpanded(item)}
+                    >
+                      <div className="flex items-center justify-center">
+                        <item.icon className={`transition-all duration-200 ${collapsed ? 'w-5 h-5' : 'w-6 h-6'}`} />
+                        {!collapsed && <span className="ml-2 text-sm font-medium">{item.label}</span>}
+                      </div>
+                      {!collapsed && item.subItems && (
+                        <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${expandedItem.has(item.id) ? 'rotate-180' : ''}`} />
+                      )}
+                    </button>
+
+                    {!collapsed && expandedItem.has(item.id) && (
+                      <div className="ml-8 mt-2 space-y-1 border-l border-slate-300">
+                        {item.subItems.map(subitem => (
+                          <NavLink
+                            key={subitem.id}
+                            to={subitem.path}
+                            className={({ isActive }) =>
+                              `block w-full ml-2 text-sm text-left p-2 ${
+                                isActive
+                                  ? 'border-l-4 border-[#FDA811] text-[#4CAF50] font-semibold bg-transparent'
+                                  : 'text-slate-700 dark:text-slate-500 hover:bg-slate-200 dark:hover:text-slate-600 dark:hover:bg-slate-100'
+                              }`
+                            }
+                          >
+                            {subitem.label}
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <NavLink
+                    to={item.path}
+                    className={({ isActive }) =>
+                      `w-full flex items-center p-2 rounded-xl transition-all duration-200 ${
+                        isActive
+                          ? 'bg-[#4CAF50] text-white font-semibold'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-[#4CAF50] hover:text-white dark:hover:bg-[#4CAF50] dark:hover:text-white'
+                      }`}
                   >
                     <div className="flex items-center justify-center">
                       <item.icon className={`transition-all duration-200 ${collapsed ? 'w-5 h-5' : 'w-6 h-6'}`} />
                       {!collapsed && <span className="ml-2 text-sm font-medium">{item.label}</span>}
                     </div>
-                    {!collapsed && item.subItems && (
-                      <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${expandedItem.has(item.id) ? 'rotate-180' : ''}`} />
-                    )}
-                  </button>
-
-                  {!collapsed && expandedItem.has(item.id) && (
-                    <div className="ml-8 mt-2 space-y-1 border-l border-slate-300">
-                      {item.subItems.map(subitem => (
-                        <NavLink
-                          key={subitem.id}
-                          to={subitem.path}
-                          className={({ isActive }) =>
-                            `block w-full ml-2 text-sm text-left p-2 ${
-                              isActive
-                                ? 'border-l-4 border-[#FDA811] text-[#4CAF50] font-semibold bg-transparent'
-                                : 'text-slate-700 dark:text-slate-500 hover:bg-slate-200 dark:hover:text-slate-600 dark:hover:bg-slate-100'
-                            }`
-                          }
-                        >
-                          {subitem.label}
-                        </NavLink>
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <NavLink
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `w-full flex items-center p-2 rounded-xl transition-all duration-200 ${
-                      isActive
-                        ? 'bg-[#4CAF50] text-white font-semibold'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-[#4CAF50] hover:text-white dark:hover:bg-[#4CAF50] dark:hover:text-white'
-                    }`}
-                >
-                  <div className="flex items-center justify-center">
-                    <item.icon className={`transition-all duration-200 ${collapsed ? 'w-5 h-5' : 'w-6 h-6'}`} />
-                    {!collapsed && <span className="ml-2 text-sm font-medium">{item.label}</span>}
-                  </div>
-                </NavLink>
-              )}
-            </div>
-          );
-        })}
+                  </NavLink>
+                )}
+              </div>
+            );
+          })
+        )}
       </nav>
     </div>
   );

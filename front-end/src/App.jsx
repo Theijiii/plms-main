@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom"
-import { useState, useEffect } from "react"; // Add this line
+import { AuthProvider } from "./context/AuthContext"; // Import AuthProvider
 import UserLayout from "./layouts/UserLayout"
 import AdminLayout from "./layouts/AdminLayout"
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -67,99 +67,193 @@ import TestBarangayForm from "./components/TestBarangayForm";
 
 function App() {
   return (
-    <Routes>
-      {/* Public routes (no authentication required) */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/testbarangayform" element={<TestBarangayForm />} />
-      <Route path="/testform" element={<TestForm />} />
+    <AuthProvider> {/* Wrap entire app with AuthProvider */}
+      <Routes>
+        {/* Public routes (no authentication required) */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/testbarangayform" element={<TestBarangayForm />} />
+        <Route path="/testform" element={<TestForm />} />
 
-      {/* Protected User routes */}
-      <Route 
-        path="/user" 
-        element={
-          <ProtectedRoute requiredRole="user">
-            <UserLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<UserDashboard />} />
-        <Route path="dashboard" element={<UserDashboard />} />
+        {/* Protected User routes */}
+        <Route 
+          path="/user" 
+          element={
+            <ProtectedRoute requiredRole="user">
+              <UserLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<UserDashboard />} />
+          <Route path="dashboard" element={<UserDashboard />} />
 
-        {/* Legacy/redirects */}
-        <Route path="newbusiness" element={<Navigate to="/user/business/new" replace />} />
-        <Route path="newfranchise" element={<Navigate to="/user/franchise/new" replace />} />
-        <Route path="businesspermittype" element={<Navigate to="/user/business/type" replace />} />
-        <Route path="franchisepermit" element={<Navigate to="/user/franchise/type" replace />} />
+          {/* Legacy/redirects */}
+          <Route path="newbusiness" element={<Navigate to="/user/business/new" replace />} />
+          <Route path="newfranchise" element={<Navigate to="/user/franchise/new" replace />} />
+          <Route path="businesspermittype" element={<Navigate to="/user/business/type" replace />} />
+          <Route path="franchisepermit" element={<Navigate to="/user/franchise/type" replace />} />
 
-        {/* Business routes */}
-        <Route path="business/new" element={<BusinessNew />} />
-        <Route path="business/type" element={<BusPermitType />} />
-        <Route path="business/renewal" element={<BusinessRenewal />} />
-        <Route path="business/amendment" element={<BusinessAmendment />} />
-        <Route path="business/liquor" element={<BusinessLiquor />} />
-        <Route path="business/special" element={<BusinessSpecial />} />
-        <Route path="business/line" element={<BusinessLine />} />
-        <Route path="business/owner" element={<BusinessChangeOwner />} />
-        <Route path="business/location" element={<BusinessTransLoc />} />
-        <Route path="business/name" element={<BusinessChangeName />} />
+          {/* Business routes */}
+          <Route path="business/new" element={<BusinessNew />} />
+          <Route path="business/type" element={<BusPermitType />} />
+          <Route path="business/renewal" element={<BusinessRenewal />} />
+          <Route path="business/amendment" element={<BusinessAmendment />} />
+          <Route path="business/liquor" element={<BusinessLiquor />} />
+          <Route path="business/special" element={<BusinessSpecial />} />
+          <Route path="business/line" element={<BusinessLine />} />
+          <Route path="business/owner" element={<BusinessChangeOwner />} />
+          <Route path="business/location" element={<BusinessTransLoc />} />
+          <Route path="business/name" element={<BusinessChangeName />} />
 
-        {/* Building routes */}
-        <Route path="building/new" element={<BuildingNew />} />
-        <Route path="building/type" element={<BuildingPermitType />} />
-        <Route path="building/renewal" element={<RenewalBuilding />} />
-        <Route path="building/ancillary" element={<AncillaryPermits />} />
-        <Route path="building/electrical" element={<ElectricalPermit />} />
-        <Route path="building/mechanical" element={<MechanicalPermit />} />
-        <Route path="building/plumbing" element={<PlumbingPermit />} />
-        <Route path="building/fencing" element={<FencingPermit />} />
-        <Route path="building/demolition" element={<DemolitionPermit />} />
-        <Route path="building/excavation" element={<ExcavationPermit />} />
-        <Route path="building/occupancy" element={<OccupancyPermit />} />
-        <Route path="building/electronics" element={<ElectronicsPermit />} />
-        <Route path="building/signage" element={<SignagePermit />} />
-        <Route path="building/professional" element={<ProfessionalRegistration />} />
+          {/* Building routes */}
+          <Route path="building/new" element={<BuildingNew />} />
+          <Route path="building/type" element={<BuildingPermitType />} />
+          <Route path="building/renewal" element={<RenewalBuilding />} />
+          <Route path="building/ancillary" element={<AncillaryPermits />} />
+          <Route path="building/electrical" element={<ElectricalPermit />} />
+          <Route path="building/mechanical" element={<MechanicalPermit />} />
+          <Route path="building/plumbing" element={<PlumbingPermit />} />
+          <Route path="building/fencing" element={<FencingPermit />} />
+          <Route path="building/demolition" element={<DemolitionPermit />} />
+          <Route path="building/excavation" element={<ExcavationPermit />} />
+          <Route path="building/occupancy" element={<OccupancyPermit />} />
+          <Route path="building/electronics" element={<ElectronicsPermit />} />
+          <Route path="building/signage" element={<SignagePermit />} />
+          <Route path="building/professional" element={<ProfessionalRegistration />} />
 
-        {/* Franchise routes */}
-        <Route path="franchise/new" element={<FranchiseNew />} />
-        <Route path="franchise/type" element={<FranchisePermitType />} />
+          {/* Franchise routes */}
+          <Route path="franchise/new" element={<FranchiseNew />} />
+          <Route path="franchise/type" element={<FranchisePermitType />} />
 
-        {/* Barangay routes */}
-        <Route path="barangay/new" element={<BarangayNew />} />
-        <Route path="barangay/type" element={<BarangayPermitType />} />
+          {/* Barangay routes */}
+          <Route path="barangay/new" element={<BarangayNew />} />
+          <Route path="barangay/type" element={<BarangayPermitType />} />
 
-        {/* Other user routes */}
-        <Route path="permittracker" element={<UserTracker />} />
-        <Route path="general" element={<UserGeneralSettings />} />
-        <Route path="security" element={<UserSecuritySettings />} />
-      </Route>
+          {/* Other user routes */}
+          <Route path="permittracker" element={<UserTracker />} />
+          <Route path="general" element={<UserGeneralSettings />} />
+          <Route path="security" element={<UserSecuritySettings />} />
+        </Route>
 
-      {/* Protected Admin routes */}
-      <Route 
-        path="/admin" 
-        element={
-          <ProtectedRoute requiredRole="admin">
-            <AdminLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<AdminDashboard />} />
-        <Route path="dashboard" element={<AdminDashboard />} />
-        <Route path="businesspermit" element={<BusinessPermit />} />
-        <Route path="businessdashboard" element={<BusAppDash />} />
-        <Route path="businessprocessing" element={<BusinessProcess />} />
-        <Route path="buildingpermit" element={<Building />} />
-        <Route path="buildingdashboard" element={<BuildingDashboard />} />
-        <Route path="buildingprocessing" element={<BuildingProcess />} />
-        <Route path="franchisepermit" element={<Franchise />} />
-        <Route path="franchisedashboard" element={<FranchiseDashboard />} />
-        <Route path="barangaypermit" element={<BarangayPermit />} />
-        <Route path="barangay" element={<Navigate to="/admin/barangaypermit" replace />} />
-        <Route path="requestclearance" element={<RequestClearance />} />
-        <Route path="permittracker" element={<Tracker />} />
-      </Route>
-    </Routes>
+        {/* Protected Admin routes with Department Restrictions */}
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          
+          {/* Business Department Routes - Only accessible by Business Admin and Super Admin */}
+          <Route 
+            path="businesspermit" 
+            element={
+              <ProtectedRoute requiredRole="admin" allowedDepartments={['business', 'super']}>
+                <BusinessPermit />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="businessdashboard" 
+            element={
+              <ProtectedRoute requiredRole="admin" allowedDepartments={['business', 'super']}>
+                <BusAppDash />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="businessprocessing" 
+            element={
+              <ProtectedRoute requiredRole="admin" allowedDepartments={['business', 'super']}>
+                <BusinessProcess />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Building Department Routes - Only accessible by Building Admin and Super Admin */}
+          <Route 
+            path="buildingpermit" 
+            element={
+              <ProtectedRoute requiredRole="admin" allowedDepartments={['building', 'super']}>
+                <Building />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="buildingdashboard" 
+            element={
+              <ProtectedRoute requiredRole="admin" allowedDepartments={['building', 'super']}>
+                <BuildingDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="buildingprocessing" 
+            element={
+              <ProtectedRoute requiredRole="admin" allowedDepartments={['building', 'super']}>
+                <BuildingProcess />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Transport Department Routes - Only accessible by Transport Admin and Super Admin */}
+          <Route 
+            path="franchisepermit" 
+            element={
+              <ProtectedRoute requiredRole="admin" allowedDepartments={['transport', 'super']}>
+                <Franchise />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="franchisedashboard" 
+            element={
+              <ProtectedRoute requiredRole="admin" allowedDepartments={['transport', 'super']}>
+                <FranchiseDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Barangay Department Routes - Only accessible by Barangay Admin and Super Admin */}
+         <Route 
+  path="barangaypermit" 
+  element={
+    <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
+      <BarangayPermit />
+    </ProtectedRoute>
+  } 
+/>
+<Route 
+  path="requestclearance" 
+  element={
+    <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
+      <RequestClearance />
+    </ProtectedRoute>
+  } 
+/>
+          
+          {/* Universal Admin Routes - Accessible by all admins */}
+          <Route 
+            path="permittracker" 
+            element={
+              <ProtectedRoute requiredRole="admin" allowedDepartments={['super']}>
+                <Tracker />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Redirect for compatibility */}
+          <Route path="barangay" element={<Navigate to="/admin/barangaypermit" replace />} />
+        </Route>
+        
+        {/* 404 - Catch all route */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </AuthProvider>
   );
 }
 

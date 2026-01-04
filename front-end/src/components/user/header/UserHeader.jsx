@@ -27,80 +27,148 @@ export default function UserHeader() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [lastScrollY]);
 
-  // ================= FETCH USER (FIXED VERSION) =================
+  // ================= FETCH USER (DUAL AUTH) =================
   useEffect(() => {
     async function fetchUser() {
       try {
-        // Get token from localStorage (set by ProtectedRoute)
-        const token = localStorage.getItem("auth_token");
+        console.log("🔄 UserHeader: Fetching user profile...");
         
-        if (!token) {
-          console.warn("No auth token found in localStorage");
+        // Get authentication data
+        const token = localStorage.getItem("auth_token");
+        const email = localStorage.getItem("email");
+        
+        if (!token && !email) {
+          console.warn("No authentication data found");
           setUserName("Guest");
-          return; // Don't navigate - ProtectedRoute will handle this
+          return;
         }
 
+        // Prepare headers
+        const headers = {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        };
+        
+        // Add token if available
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        // Fetch profile
         const res = await fetch("http://localhost/eplms-main/backend/login/get_profile.php?action=get", {
           method: "GET",
-          credentials: "include",
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          credentials: "include", // Important for sessions
+          headers: headers
         });
+
+        console.log("Response status:", res.status);
         
+        if (res.status === 401) {
+          console.error("Authentication failed");
+          handleAuthFailure();
+          return;
+        }
+
         const data = await res.json();
+        console.log("Profile data:", data);
         
         if (data.success && data.data) {
-          const { first_name, last_name } = data.data;
-          setUserName(`${first_name} ${last_name}`);
-          // Optionally store in localStorage
-          localStorage.setItem("user_name", `${first_name} ${last_name}`);
-        } else {
-          // API failed but user might still be authenticated
-          const email = localStorage.getItem("email");
-          if (email) {
-            setUserName(email.split("@")[0]); // Use email username as fallback
+          const { first_name, last_name, email } = data.data;
+          
+          // Use name if available
+          if (first_name || last_name) {
+            const fullName = `${first_name || ''} ${last_name || ''}`.trim();
+            setUserName(fullName);
+            
+            // Store data
+            localStorage.setItem("user_name", fullName);
+            localStorage.setItem("first_name", first_name || "");
+            localStorage.setItem("last_name", last_name || "");
+            localStorage.setItem("email", email || "");
+            localStorage.setItem("user_profile", JSON.stringify(data.data));
+            
+            console.log(`✅ User: ${fullName} (via ${data.auth_method})`);
+          } else if (email) {
+            // Fallback to email
+            const username = email.split("@")[0];
+            setUserName(username);
+            localStorage.setItem("user_name", username);
+            localStorage.setItem("email", email);
+            console.log(`✅ User: ${username} (via email, auth: ${data.auth_method})`);
           } else {
             setUserName("User");
           }
-          console.warn("Profile fetch failed, using fallback:", data.message);
-        }
-      } catch (err) {
-        console.error("Failed to fetch user profile:", err);
-        // Use cached data if available
-        const cachedName = localStorage.getItem("user_name");
-        const email = localStorage.getItem("email");
-        
-        if (cachedName) {
-          setUserName(cachedName);
-        } else if (email) {
-          setUserName(email.split("@")[0]);
         } else {
-          setUserName("User");
+          console.warn("Profile fetch failed:", data.message);
+          useCachedData();
         }
-        // DO NOT NAVIGATE HERE - ProtectedRoute handles authentication
+        
+      } catch (err) {
+        console.error("Network error:", err);
+        useCachedData();
+      }
+    }
+
+    function handleAuthFailure() {
+      // Clear auth data
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("email");
+      localStorage.removeItem("user_id");
+      
+      // Check if we're already on login page
+      if (window.location.pathname !== "/login") {
+        navigate("/login");
+      } else {
+        setUserName("Guest");
+      }
+    }
+
+    function useCachedData() {
+      const cachedName = localStorage.getItem("user_name");
+      const cachedFirstName = localStorage.getItem("first_name");
+      const email = localStorage.getItem("email");
+      
+      if (cachedName) {
+        setUserName(cachedName);
+      } else if (cachedFirstName) {
+        setUserName(cachedFirstName);
+      } else if (email) {
+        setUserName(email.split("@")[0]);
+      } else {
+        setUserName("User");
       }
     }
 
     fetchUser();
-  }, []); // Removed navigate from dependencies
+  }, [navigate]);
 
-  // ================= LOGOUT =================
+  // ================= LOGOUT (DUAL SYSTEM) =================
   const handleLogout = async () => {
     try {
+      // Get token for API logout
+      const token = localStorage.getItem("auth_token");
+      
+      // Call logout API
       await fetch("http://localhost/eplms-main/backend/login/logout.php", {
         method: "POST",
-        credentials: "include",
+        credentials: "include", // Clear session cookies
+        headers: token ? {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        } : {
+          'Content-Type': 'application/json'
+        }
       });
+      
     } catch (err) {
-      console.error("Logout failed:", err);
+      console.error("Logout API error:", err);
     } finally {
-      // Clear all auth data
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("goserveph_role");
-      localStorage.removeItem("email");
-      localStorage.removeItem("user_id");
-      localStorage.removeItem("user_name");
+      // Clear ALL local storage
+      localStorage.clear();
+      
+      // Clear session cookies
+      document.cookie = "PHPSESSID=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      
       // Redirect to login
       navigate("/login");
     }

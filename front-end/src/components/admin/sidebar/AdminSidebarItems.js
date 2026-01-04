@@ -6,7 +6,7 @@ const AdminSidebarItems = [
     label: "Dashboard",
     icon: LayoutDashboard,
     path: "/admin/dashboard",
-    department: ["super"] // visible to all admins
+    department: ["super", "business", "building", "transport", "barangay"] // All admins can see dashboard
   },
   {
     id: "businessPermit",
@@ -25,6 +25,12 @@ const AdminSidebarItems = [
         id: "businessPermitSub",
         label: "Permit Application",
         path: "/admin/businesspermit",
+        department: ["business", "super"]
+      },
+      {
+        id: "businessProcessingSub",
+        label: "Processing",
+        path: "/admin/businessprocessing",
         department: ["business", "super"]
       }
     ]
@@ -47,6 +53,12 @@ const AdminSidebarItems = [
         label: "Permit Applications",
         path: "/admin/buildingpermit",
         department: ["building", "super"]
+      },
+      {
+        id: "buildingProcessingSub",
+        label: "Processing",
+        path: "/admin/buildingprocessing",
+        department: ["building", "super"]
       }
     ]
   },
@@ -55,19 +67,19 @@ const AdminSidebarItems = [
     label: "Franchise Permit",
     icon: Bus,
     path: "/admin/franchisedashboard",
-    department: ["franchise", "super"],
+    department: ["transport", "super"], // CHANGED: "franchise" → "transport"
     subItems: [
       {
         id: "franchiseDashboardSub",
         label: "Dashboard",
         path: "/admin/franchisedashboard",
-        department: ["franchise", "super"]
+        department: ["transport", "super"] // CHANGED: "franchise" → "transport"
       },
       {
         id: "franchiseApplicationsSub",
         label: "Permit Application",
         path: "/admin/franchisepermit",
-        department: ["franchise", "super"]
+        department: ["transport", "super"] // CHANGED: "franchise" → "transport"
       }
     ]
   },
@@ -86,7 +98,7 @@ const AdminSidebarItems = [
       },
       {
         id: "requestClearanceSub",
-        label: "Permit Application",
+        label: "Clearance Requests",
         path: "/admin/requestclearance",
         department: ["barangay", "super"]
       }

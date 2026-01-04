@@ -19,7 +19,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 $targetDb = 'eplms_barangay_permit_db';
 include __DIR__ . '/db.php';
 
-
 if (!$conn) {
     echo json_encode(["success" => false, "message" => "Failed to connect to database"]);
     exit;
@@ -29,6 +28,31 @@ if (!$conn) {
 function sanitize($str) {
     return htmlspecialchars(trim($str), ENT_QUOTES, 'UTF-8');
 }
+
+// ====== CHECK IF USER IS LOGGED IN ======
+$user_id = 0;
+if (isset($_SESSION['user_id'])) {
+    $user_id = intval($_SESSION['user_id']);
+} elseif (isset($_POST['user_id'])) {
+    $user_id = intval($_POST['user_id']);
+} elseif (isset($_GET['user_id'])) {
+    $user_id = intval($_GET['user_id']);
+}
+
+// If no user_id found, check for user in database by email
+if ($user_id === 0 && isset($_POST['email']) && !empty($_POST['email'])) {
+    $email = sanitize($_POST['email']);
+    $checkUser = "SELECT user_id FROM users WHERE email = ? LIMIT 1";
+    $stmtCheck = $conn->prepare($checkUser);
+    $stmtCheck->bind_param("s", $email);
+    $stmtCheck->execute();
+    $checkResult = $stmtCheck->get_result();
+    if ($row = $checkResult->fetch_assoc()) {
+        $user_id = $row['user_id'];
+    }
+    $stmtCheck->close();
+}
+// ====== END USER CHECK ======
 
 $uploadDir = __DIR__ . "/uploads/";
 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
@@ -103,17 +127,75 @@ foreach ($defaults as $key => $value) {
     }
 }
 
-$formData['user_id'] = isset($formData['user_id']) ? intval($formData['user_id']) : 0;
+// Set user_id from logged-in user
+$formData['user_id'] = $user_id;
 
 $formData['attachments'] = json_encode($uploadedFiles, JSON_UNESCAPED_SLASHES);
+
+// ====== GENERATE APPLICANT_ID ======
+// Simple rule: applicant_id = user_id (for logged-in users)
+// For guests, generate unique ID
+$applicant_id = 0;
+
+if ($user_id > 0) {
+    // User is logged in - use user_id as applicant_id
+    $applicant_id = $user_id;
+    
+    // Also update user's information if needed
+    $updateUser = "UPDATE users SET 
+                   first_name = ?, last_name = ?, email = ?, mobile_number = ?
+                   WHERE user_id = ?";
+    $stmtUpdate = $conn->prepare($updateUser);
+    $stmtUpdate->bind_param(
+        "ssssi",
+        $formData['first_name'],
+        $formData['last_name'],
+        $formData['email'],
+        $formData['mobile_number'],
+        $user_id
+    );
+    $stmtUpdate->execute();
+    $stmtUpdate->close();
+} else {
+    // Guest user - generate unique negative ID
+    // Check if this guest already has an applicant_id
+    $checkGuest = "SELECT applicant_id FROM barangay_permit 
+                   WHERE first_name = ? AND last_name = ? AND birthdate = ? 
+                   AND email = ? AND user_id = 0 
+                   ORDER BY created_at DESC LIMIT 1";
+    $stmtCheck = $conn->prepare($checkGuest);
+    $stmtCheck->bind_param(
+        "ssss",
+        $formData['first_name'],
+        $formData['last_name'],
+        $formData['birthdate'],
+        $formData['email']
+    );
+    $stmtCheck->execute();
+    $checkResult = $stmtCheck->get_result();
+    
+    if ($row = $checkResult->fetch_assoc()) {
+        // Same guest applying again - reuse their applicant_id
+        $applicant_id = $row['applicant_id'];
+    } else {
+        // New guest - generate negative ID
+        $maxQuery = "SELECT MIN(applicant_id) as min_id FROM barangay_permit WHERE applicant_id < 0";
+        $result = $conn->query($maxQuery);
+        $row = $result->fetch_assoc();
+        $applicant_id = $row['min_id'] ? $row['min_id'] - 1 : -1000;
+    }
+    $stmtCheck->close();
+}
+// ====== END GENERATE APPLICANT_ID ======
 
 if (!empty($uploadedFiles['signature_file'])) {
     $formData['applicant_signature'] = $uploadedFiles['signature_file'];
 }
 
-// Insert Query
+// Insert Query - applicant_id is included
 $sql = "INSERT INTO barangay_permit SET
     user_id = ?,
+    applicant_id = ?,
     application_date = ?,
     first_name = ?,
     middle_name = ?,
@@ -150,9 +232,11 @@ if (!$stmt) {
     echo json_encode(["success" => false, "message" => "Database error: " . $conn->error]);
     exit;
 }
+
 $stmt->bind_param(
-    "isssssssssssssssssssssssdsss", // 28 parameters: i, s x24, d, s x2
+    "iisssssssssssssssssssssssdsss",
     $formData['user_id'],             // i
+    $applicant_id,                    // i
     $formData['application_date'],    // s
     $formData['first_name'],          // s
     $formData['middle_name'],         // s
@@ -179,8 +263,7 @@ $stmt->bind_param(
     $formData['receipt_number'],      // s
     $formData['applicant_signature'], // s
     $formData['status'],
-    $formData['comments']    
-          // s
+    $formData['comments']
 );
 
 if ($stmt->execute()) {
@@ -191,6 +274,8 @@ if ($stmt->execute()) {
         "success" => true,
         "message" => "Barangay permit submitted successfully!",
         "permit_id" => $permitId,
+        "applicant_id" => $applicant_id,
+        "user_id" => $user_id,
         "reference_number" => $reference
     ]);
 } else {
