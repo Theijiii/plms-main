@@ -1,10 +1,8 @@
 const API_LOGIN = "http://localhost/plms-latest/backend/login/users.php";
 const OTP_API = "http://localhost/plms-latest/backend/login/otp-admin.php";
 const GET_PROFILE_API = "http://localhost/plms-latest/backend/login/get_profile.php?action=get";
-
 // --------------------- USERS ---------------------
 
-// Login user (regular + admin)
 export const loginUser = async ({ email, password }) => {
   try {
     const res = await fetch(`${API_LOGIN}?action=login`, {

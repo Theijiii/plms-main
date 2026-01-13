@@ -321,7 +321,7 @@ export default function BarangayNew() {
 
       console.log("Submitting barangay permit application...");
 
-      const response = await fetch("http://localhost/eplms-main/backend/barangay_permit/barangay_permit.php", {
+      const response = await fetch("http://localhost/plms-latest/backend/barangay_permit/barangay_permit.php", {
         method: "POST",
         body: formDataToSend,
       });

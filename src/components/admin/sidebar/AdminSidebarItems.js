@@ -1,10 +1,14 @@
 import {
-  BarChart3,   // graph icon for dashboards
+  LayoutDashboard,
+  BarChart3,
   Briefcase,
+  FileText,
   Building2,
+  ClipboardList,
   Bus,
+  Ticket,
   Home,
-  FileText     // papers icon for requests
+  ShieldCheck,
 } from "lucide-react";
 
 const AdminSidebarItems = [
@@ -12,9 +16,9 @@ const AdminSidebarItems = [
   {
     id: "dashboard",
     label: "Dashboard",
-    icon: BarChart3,
+    icon: LayoutDashboard,
     path: "/admin/dashboard",
-    department: ["super"],
+    department: ["super", "business", "building", "transport", "barangay"],
   },
 
   // BUSINESS PERMIT
@@ -35,7 +39,7 @@ const AdminSidebarItems = [
   {
     id: "businessProcessing",
     label: "Business Processing",
-    icon: Briefcase,
+    icon: FileText,
     path: "/admin/businessprocessing",
     department: ["business", "super"],
   },
@@ -44,7 +48,7 @@ const AdminSidebarItems = [
   {
     id: "buildingDashboard",
     label: "Permit Dashboard",
-    icon: BarChart3,
+    icon: ClipboardList,
     path: "/admin/buildingdashboard",
     department: ["building", "super"],
   },
@@ -58,7 +62,7 @@ const AdminSidebarItems = [
   {
     id: "buildingProcessing",
     label: "Building Processing",
-    icon: Building2,
+    icon: FileText,
     path: "/admin/buildingprocessing",
     department: ["building", "super"],
   },
@@ -67,7 +71,7 @@ const AdminSidebarItems = [
   {
     id: "franchiseDashboard",
     label: "Permit Dashboard",
-    icon: BarChart3,
+    icon: Ticket,
     path: "/admin/franchisedashboard",
     department: ["transport", "super"],
   },
@@ -82,7 +86,7 @@ const AdminSidebarItems = [
   // BARANGAY
   {
     id: "barangayPermit",
-    label: "Permit Applications",
+    label: "Permit Dashboard",
     icon: Home,
     path: "/admin/barangaypermit",
     department: ["barangay", "super"],
@@ -90,7 +94,7 @@ const AdminSidebarItems = [
   {
     id: "clearanceRequests",
     label: "Clearance Requests",
-    icon: FileText,
+    icon: ShieldCheck,
     path: "/admin/requestclearance",
     department: ["barangay", "super"],
   },

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { logTx } from '../../../lib/txLogger';
 
-const API_BRGY = "http://localhost/eplms-main/backend/barangay_permit";
+const API_BRGY = "http://localhost/plms-latest/backend/barangay_permit";
 
 export default function BarangayPermit() {
   const [selectedPermit, setSelectedPermit] = useState(null);

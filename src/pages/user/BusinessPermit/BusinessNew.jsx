@@ -12,6 +12,7 @@ const COLORS = {
   font: 'Montserrat, Arial, sans-serif'
 };
 
+const API_BUS = "http://localhost/plms-latest/backend/business_permit";
 const NATIONALITIES = [
   "Afghan", "Albanian", "Algerian", "American", "Andorran", "Angolan", "Antiguans", "Argentinean", "Armenian", "Australian", "Austrian", "Azerbaijani", "Bahamian", "Bahraini", "Bangladeshi", "Barbadian", "Barbudans", "Batswana", "Belarusian", "Belgian", "Belizean", "Beninese", "Bhutanese", "Bolivian", "Bosnian", "Brazilian", "British", "Bruneian", "Bulgarian", "Burkinabe", "Burmese", "Burundian", "Cambodian", "Cameroonian", "Canadian", "Cape Verdean", "Central African", "Chadian", "Chilean", "Chinese", "Colombian", "Comoran", "Congolese", "Costa Rican", "Croatian", "Cuban", "Cypriot", "Czech", "Danish", "Djibouti", "Dominican", "Dutch", "East Timorese", "Ecuadorean", "Egyptian", "Emirian", "Equatorial Guinean", "Eritrean", "Estonian", "Ethiopian", "Fijian", "Filipino", "Finnish", "French", "Gabonese", "Gambian", "Georgian", "German", "Ghanaian", "Greek", "Grenadian", "Guatemalan", "Guinea-Bissauan", "Guinean", "Guyanese", "Haitian", "Herzegovinian", "Honduran", "Hungarian", "I-Kiribati", "Icelander", "Indian", "Indonesian", "Iranian", "Iraqi", "Irish", "Israeli", "Italian", "Ivorian", "Jamaican", "Japanese", "Jordanian", "Kazakhstani", "Kenyan", "Kittian and Nevisian", "Kuwaiti", "Kyrgyz", "Laotian", "Latvian", "Lebanese", "Liberian", "Libyan", "Liechtensteiner", "Lithuanian", "Luxembourger", "Macedonian", "Malagasy", "Malawian", "Malaysian", "Maldivan", "Malian", "Maltese", "Marshallese", "Mauritanian", "Mauritian", "Mexican", "Micronesian", "Moldovan", "Monacan", "Mongolian", "Moroccan", "Mosotho", "Motswana", "Mozambican", "Namibian", "Nauruan", "Nepalese", "New Zealander", "Nicaraguan", "Nigerian", "Nigerien", "North Korean", "Northern Irish", "Norwegian", "Omani", "Pakistani", "Palauan", "Palestinian", "Panamanian", "Papua New Guinean", "Paraguayan", "Peruvian", "Polish", "Portuguese", "Qatari", "Romanian", "Russian", "Rwandan", "Saint Lucian", "Salvadoran", "Samoan", "San Marinese", "Sao Tomean", "Saudi", "Scottish", "Senegalese", "Serbian", "Seychellois", "Sierra Leonean", "Singaporean", "Slovakian", "Slovenian", "Solomon Islander", "Somali", "South African", "South Korean", "Spanish", "Sri Lankan", "Sudanese", "Surinamer", "Swazi", "Swedish", "Swiss", "Syrian", "Taiwanese", "Tajik", "Tanzanian", "Thai", "Togolese", "Tongan", "Trinidadian or Tobagonian", "Tunisian", "Turkish", "Tuvaluan", "Ugandan", "Ukrainian", "Uruguayan", "Uzbekistani", "Venezuelan", "Vietnamese", "Welsh", "Yemenite", "Zambian", "Zimbabwean"
 ];
@@ -32,14 +33,14 @@ export default function BusinessNew() {
   const [agreeDeclaration, setAgreeDeclaration] = useState(false);
   const [showPreview, setShowPreview] = useState({});
 
-  // State for attachment checkboxes - BIR certificate always required
+  // State for attachment checkboxes
   const [attachmentChecks, setAttachmentChecks] = useState({
-    barangay_clearance: false,
-    bir_certificate: true, // Always required
-    lease_or_title: false,
-    fsic: false,
-    owner_valid_id: false,
-    id_picture: false,
+    barangay_clearance: true,
+    bir_certificate: true,
+    lease_or_title: true,
+    fsic: true,
+    owner_valid_id: true,
+    id_picture: true,
     official_receipt_file: false,
   });
 
@@ -63,32 +64,38 @@ export default function BusinessNew() {
     valid_id_number: "",
 
     // Business Information
- house_bldg_no: "",
-  building_name: "",
-  block_no: "",
-  lot_no: "",
-  street: "",
-  subdivision: "",
-  province: "",
-  city_municipality: "Caloocan City", // Fixed value
-  barangay: "",
-  zip_code: "",
-  district: "",
+    business_name: "",
+    trade_name: "",
+    business_nature: "",
+    building_type: "",
+    capital_investment: 0,
 
-  // Updated Operations fields
-  zoning_permit_id: "",
-  sanitation_permit_id: "",
-  business_area: 0,
-  total_floor_area: 0,
-  operation_time_from: "",
-  operation_time_to: "",
-  total_employees: 0,
-  male_employees: 0,
-  female_employees: 0,
-  employees_in_qc: 0,
-  delivery_van_truck: 0,
-  delivery_motorcycle: 0,
+    // Business Address
+    house_bldg_no: "",
+    building_name: "",
+    block_no: "",
+    lot_no: "",
+    street: "",
+    subdivision: "",
+    province: "Metro Manila",
+    city_municipality: "Caloocan City",
+    barangay: "",
+    zip_code: "",
+    district: "",
 
+    // Operations Details
+    zoning_permit_id: "",
+    sanitation_permit_id: "",
+    business_area: 0,
+    total_floor_area: 0,
+    operation_time_from: "",
+    operation_time_to: "",
+    total_employees: 0,
+    male_employees: 0,
+    female_employees: 0,
+    employees_in_qc: 0,
+    delivery_van_truck: 0,
+    delivery_motorcycle: 0,
     
     // Barangay Clearance ID
     barangay_clearance_id: "",
@@ -109,15 +116,15 @@ export default function BusinessNew() {
     owner_scanned_id: null,
     dti_registration: null,
     sec_registration: null,
+    representative_scanned_id: null,
 
     // Declaration & Approval
     owner_type_declaration: "Business Owner",
     owner_representative_name: "",
     date_submitted: "",
-    representative_scanned_id: null,
   });
 
-  // Steps array with 5 and 6 switched
+  // Steps array
   const steps = [
     { id: 1, title: 'Owner Information', description: 'Personal details of the business owner' },
     { id: 2, title: 'Business Information', description: 'Details about your business establishment' },
@@ -139,8 +146,8 @@ export default function BusinessNew() {
   };
 
   const handleCheckboxChange = (field) => {
-    // Prevent unchecking BIR certificate
-    if (field === 'bir_certificate') {
+    // Prevent unchecking required documents
+    if (['barangay_clearance', 'bir_certificate', 'lease_or_title', 'fsic', 'owner_valid_id', 'id_picture'].includes(field)) {
       return;
     }
     
@@ -213,67 +220,68 @@ export default function BusinessNew() {
       return { ok: true };
     }
 
-if (step === 2) {
-  const missing = [];
-  if (isEmpty(formData.business_name)) missing.push("Registered Business Name");
-  if (isEmpty(formData.trade_name)) missing.push("Trade / Brand Name");
-  if (isEmpty(formData.business_nature)) missing.push("Nature of Business");
-  if (isEmpty(formData.building_type)) missing.push("Building Type");
-  if (isEmpty(formData.capital_investment)) missing.push("Capital Investment (₱)");
-
-
-  if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
-  return { ok: true };
-}
-
-if (step === 3) {
-  const missing = [];
-  if (isEmpty(formData.house_bldg_no)) missing.push("House/Bldg. No");
-  if (isEmpty(formData.street)) missing.push("Street");
-  if (isEmpty(formData.province)) missing.push("Province");
-  if (isEmpty(formData.barangay)) missing.push("Barangay");
-  if (isEmpty(formData.zoning_permit_id)) missing.push("Zoning Permit ID");
-  if (isEmpty(formData.sanitation_permit_id)) missing.push("Sanitation Permit ID");
-  if (isEmpty(formData.operation_type)) missing.push("Type of Operation");
-  if (isEmpty(formData.business_area)) missing.push("Business Area");
-  if (isEmpty(formData.total_floor_area)) missing.push("Total Floor/Building Area");
-  if (isEmpty(formData.operation_time_from)) missing.push("Operation Time From");
-  if (isEmpty(formData.operation_time_to)) missing.push("Operation Time To");
-  if (isEmpty(formData.total_employees)) missing.push("Total No. of Employees");
-
-  if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
-  return { ok: true };
-}
-
-    if (step === 4) {
+    if (step === 2) {
       const missing = [];
-      
-      // BIR Certificate is always required
-      if (isEmpty(formData.bir_certificate)) {
-        missing.push("BIR Certificate of Registration");
-      }
-      
-      Object.keys(attachmentChecks).forEach(field => {
-        if (attachmentChecks[field] && isEmpty(formData[field])) {
-          const labels = {
-            barangay_clearance: "Barangay Clearance",
-            bir_certificate: "BIR Certificate of Registration",
-            lease_or_title: "Lease Contract / Land Title",
-            fsic: "Fire Safety Inspection Certificate (FSIC)",
-            owner_valid_id: "Owner Valid ID",
-            id_picture: "2x2 ID Picture",
-            official_receipt_file: "Official Receipt of Payment",
-          };
-          // Skip BIR certificate as it's already checked above
-          if (field !== 'bir_certificate') {
-            missing.push(labels[field]);
-          }
-        }
-      });
+      if (isEmpty(formData.business_name)) missing.push("Registered Business Name");
+      if (isEmpty(formData.trade_name)) missing.push("Trade / Brand Name");
+      if (isEmpty(formData.business_nature)) missing.push("Nature of Business");
+      if (isEmpty(formData.building_type)) missing.push("Building Type");
+      if (isEmpty(formData.capital_investment)) missing.push("Capital Investment (₱)");
 
-      if (missing.length) return { ok: false, message: "Missing required attachments: " + missing.join(", ") };
+      if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
       return { ok: true };
     }
+
+    if (step === 3) {
+      const missing = [];
+      if (isEmpty(formData.house_bldg_no)) missing.push("House/Bldg. No");
+      if (isEmpty(formData.street)) missing.push("Street");
+      if (isEmpty(formData.barangay)) missing.push("Barangay");
+      if (isEmpty(formData.zoning_permit_id)) missing.push("Zoning Permit ID");
+      if (isEmpty(formData.sanitation_permit_id)) missing.push("Sanitation Permit ID");
+      if (isEmpty(formData.operation_type)) missing.push("Type of Operation");
+      if (isEmpty(formData.business_area)) missing.push("Business Area");
+      if (isEmpty(formData.total_floor_area)) missing.push("Total Floor/Building Area");
+      if (isEmpty(formData.operation_time_from)) missing.push("Operation Time From");
+      if (isEmpty(formData.operation_time_to)) missing.push("Operation Time To");
+      if (isEmpty(formData.total_employees)) missing.push("Total No. of Employees");
+
+      if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
+      return { ok: true };
+    }
+
+ // In validateStep function, case 4:
+if (step === 4) {
+  const missing = [];
+  
+  // Check all mandatory documents
+  const mandatoryDocs = [
+    { field: 'bir_certificate', label: 'BIR Certificate of Registration' },
+    { field: 'lease_or_title', label: 'Lease Contract / Land Title' },
+    { field: 'fsic', label: 'Fire Safety Inspection Certificate (FSIC)' },
+    { field: 'owner_valid_id', label: 'Owner Valid ID' },
+    { field: 'id_picture', label: '2x2 ID Picture' }
+  ];
+
+  mandatoryDocs.forEach(doc => {
+    if (isEmpty(formData[doc.field])) {
+      missing.push(doc.label);
+    }
+  });
+
+  // Barangay Clearance is required if no ID is provided
+  if (isEmpty(formData.barangay_clearance) && isEmpty(formData.barangay_clearance_id)) {
+    missing.push("Barangay Clearance (either file or ID must be provided)");
+  }
+
+  // Check optional documents if marked as required
+  if (attachmentChecks.official_receipt_file && isEmpty(formData.official_receipt_file)) {
+    missing.push("Official Receipt of Payment");
+  }
+
+  if (missing.length) return { ok: false, message: "Missing required attachments: " + missing.join(", ") };
+  return { ok: true };
+}
 
     if (step === 5) {
       const missing = [];
@@ -304,81 +312,138 @@ if (step === 3) {
 
   const prevStep = () => setCurrentStep(s => Math.max(s - 1, 1));
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Ensure BIR certificate is uploaded
-
-    
-    if (currentStep === 5) {
-      const res = validateStep(5);
-      if (!res.ok) {
-        setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
-        return;
-      }
-      setShowDeclarationModal(true);
-    } else {
-      const res = validateStep(currentStep);
-      if (!res.ok) {
-        setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
-        return;
-      }
-      setSubmitStatus(null);
-      setCurrentStep(s => Math.min(s + 1, steps.length));
-    }
-  };
-
-  const confirmDeclaration = async () => {
-    if (!agreeDeclaration) {
-      setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
-      setShowDeclarationModal(false);
+const handleSubmit = (e) => {
+  e.preventDefault();
+  
+  // For step 6 (review), show declaration modal
+  if (currentStep === 6) {
+    const res = validateStep(6);
+    if (!res.ok) {
+      setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
       return;
     }
-    
-    setIsSubmitting(true);
-    setShowDeclarationModal(false);
-
-    try {
-      const formDataToSend = new FormData();
-      Object.keys(formData).forEach((key) => {
-        const value = formData[key];
-        if (value === null || value === undefined || value === "") {
-          formDataToSend.append(key, "");
-        } else {
-          formDataToSend.append(key, value);
-        }
-      });
-
-      const response = await fetch("/api/business_permit.php", {
-        method: "POST",
-        body: formDataToSend,
-      });
-
-      const raw = await response.text();
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        throw new Error("Invalid JSON response from backend");
-      }
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Submission failed");
-      }
-
-      showSuccessMessage("Business permit application submitted successfully!");
-      
-      setTimeout(() => {
-        navigate("/user/permittracker");
-      }, 3000);
-
-    } catch (err) {
-      console.error("Submission error:", err);
-      showErrorMessage(err.message || "Submission failed. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+    setSubmitStatus(null);
+    setShowDeclarationModal(true);  // This will show the modal
+  } else {
+    // For other steps, validate and move to next
+    const res = validateStep(currentStep);
+    if (!res.ok) {
+      setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
+      return;
     }
-  };
+    setSubmitStatus(null);
+    setCurrentStep(s => Math.min(s + 1, steps.length));
+  }
+};
+
+const confirmDeclaration = async () => {
+  if (!agreeDeclaration) {
+    setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
+    setShowDeclarationModal(false);
+    return;
+  }
+  
+  setIsSubmitting(true);
+  setShowDeclarationModal(false);
+
+  try {
+    const formDataToSend = new FormData();
+    
+    // Add all form data to FormData
+    Object.keys(formData).forEach((key) => {
+      const value = formData[key];
+      if (value === null || value === undefined) {
+        // Skip null/undefined values
+      } else if (value instanceof File) {
+        formDataToSend.append(key, value, value.name);
+      } else if (value === "") {
+        formDataToSend.append(key, "");
+      } else {
+        formDataToSend.append(key, String(value));
+      }
+    });
+
+    // Add attachment check status
+    Object.keys(attachmentChecks).forEach(key => {
+      formDataToSend.append(`attachment_${key}`, attachmentChecks[key] ? '1' : '0');
+    });
+
+    console.log('Making request to:', "http://localhost/plms-latest/backend/business_permit/business_permit.php");
+
+    // First, test if we can reach the PHP file
+    try {
+      const testResponse = await fetch("http://localhost/plms-latest/backend/business_permit/business_permit.php", {
+        method: 'OPTIONS',
+      });
+      console.log('OPTIONS test response:', testResponse.status);
+    } catch (testError) {
+      console.error('Cannot reach PHP file:', testError);
+      throw new Error(`Cannot connect to server. Please make sure:
+        1. XAMPP Apache is running (green in control panel)
+        2. PHP file exists at: http://localhost/plms-latest/backend/business_permit/business_permit.php
+        3. Open the URL above in browser to test`);
+    }
+
+    const response = await fetch("http://localhost/plms-latest/backend/business_permit/business_permit.php", {
+      method: "POST",
+      body: formDataToSend,
+      // No need to set headers for FormData - browser sets it automatically
+    });
+
+    console.log('Response status:', response.status);
+
+    const raw = await response.text();
+    console.log('Raw response:', raw);
+    
+    // Check if response is empty
+    if (!raw.trim()) {
+      throw new Error('Server returned an empty response');
+    }
+    
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (parseError) {
+      console.error('JSON parse error. Raw response:', raw);
+      
+      // Check if it's a PHP error
+      if (raw.includes('<?php') || raw.includes('Fatal error') || raw.includes('Parse error')) {
+        throw new Error('PHP error detected. Server returned PHP code instead of JSON.');
+      }
+      
+      throw new Error('Server returned invalid JSON: ' + parseError.message);
+    }
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || `Submission failed with status: ${response.status}`);
+    }
+
+    showSuccessMessage(data.message || "Business permit application submitted successfully!");
+    
+    setTimeout(() => {
+      navigate("/user/permittracker");
+    }, 3000);
+
+  } catch (err) {
+    console.error("Submission error:", err);
+    
+    // More specific error messages
+    let userMessage = err.message;
+    
+    if (err.message.includes('Failed to fetch') || err.message.includes('Network error')) {
+      userMessage = `Network error. Please check:
+        1. XAMPP Control Panel → Start Apache (make it green)
+        2. Open browser and go to: http://localhost/
+        3. If you see XAMPP dashboard, Apache is running
+        4. Then visit: http://localhost/plms-latest/backend/business_permit/business_permit.php
+        5. If you see JSON error or PHP code, the file is accessible`;
+    }
+    
+    showErrorMessage(userMessage);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const renderStepContent = () => {
     switch (currentStep) {
@@ -539,7 +604,7 @@ if (step === 3) {
                             type="file"
                             name="dti_registration"
                             onChange={handleFile}
-                            accept=".pdf,.jpg,.png"
+                            accept=".pdf,.jpg,.png,.doc,.docx"
                             className="hidden"
                             required={formData.owner_type === "Individual"}
                           />
@@ -587,7 +652,7 @@ if (step === 3) {
                             type="file"
                             name="sec_registration"
                             onChange={handleFile}
-                            accept=".pdf,.jpg,.png"
+                            accept=".pdf,.jpg,.png,.doc,.docx"
                             className="hidden"
                             required={formData.owner_type === "Partnership"}
                           />
@@ -855,568 +920,7 @@ if (step === 3) {
           </div>
         );
 
- case 3:
-  return (
-    <div className="space-y-10">
-      <div>
-        <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Location & Operations</h3>
-        <p className="text-sm text-gray-600 mb-4">{steps[2].description}</p>
-      </div>
-
-      <div>
-        <h4 className="text-lg font-semibold mb-4" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Business Address</h4>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              House/Bldg. No <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="house_bldg_no"
-              value={formData.house_bldg_no}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter house or building number"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Name of Building
-            </label>
-            <input
-              type="text"
-              name="building_name"
-              value={formData.building_name}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter building name (if applicable)"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Block No.
-            </label>
-            <input
-              type="text"
-              name="block_no"
-              value={formData.block_no}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter block number"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Lot No.
-            </label>
-            <input
-              type="text"
-              name="lot_no"
-              value={formData.lot_no}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter lot number"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Street <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="street"
-              value={formData.street}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter street name"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Subdivision
-            </label>
-            <input
-              type="text"
-              name="subdivision"
-              value={formData.subdivision}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter subdivision name"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Province <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="province"
-              value={formData.province}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              required
-            >
-              <option value="">-- SELECT PROVINCE --</option>
-              <option value="Metro Manila">Metro Manila</option>
-              <option value="Abra">Abra</option>
-              <option value="Agusan del Norte">Agusan del Norte</option>
-              {/* Add more provinces as needed */}
-            </select>
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              City/Municipality <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="city_municipality"
-              value="Caloocan City"
-              readOnly
-              className="w-full p-3 border border-black rounded-lg bg-gray-100"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-            />
-            <p className="text-xs text-gray-500 mt-1">Fixed as Caloocan City</p>
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Barangay <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="barangay"
-              value={formData.barangay}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              required
-            >
-              <option value="">-- SELECT BARANGAY --</option>
-              <option value="Barangay 1">Barangay 1</option>
-              <option value="Barangay 2">Barangay 2</option>
-              <option value="Barangay 3">Barangay 3</option>
-              <option value="Barangay 4">Barangay 4</option>
-              <option value="Barangay 5">Barangay 5</option>
-              <option value="Barangay 6">Barangay 6</option>
-              <option value="Barangay 7">Barangay 7</option>
-              <option value="Barangay 8">Barangay 8</option>
-              <option value="Barangay 9">Barangay 9</option>
-              <option value="Barangay 10">Barangay 10</option>
-              <option value="Barangay 11">Barangay 11</option>
-              <option value="Barangay 12">Barangay 12</option>
-              <option value="Barangay 13">Barangay 13</option>
-              <option value="Barangay 14">Barangay 14</option>
-              <option value="Barangay 15">Barangay 15</option>
-              <option value="Barangay 16">Barangay 16</option>
-              <option value="Barangay 17">Barangay 17</option>
-              <option value="Barangay 18">Barangay 18</option>
-              <option value="Barangay 19">Barangay 19</option>
-              <option value="Barangay 20">Barangay 20</option>
-              <option value="Barangay 21">Barangay 21</option>
-              <option value="Barangay 22">Barangay 22</option>
-              <option value="Barangay 23">Barangay 23</option>
-              <option value="Barangay 24">Barangay 24</option>
-              <option value="Barangay 25">Barangay 25</option>
-              <option value="Barangay 26">Barangay 26</option>
-              <option value="Barangay 27">Barangay 27</option>
-              <option value="Barangay 28">Barangay 28</option>
-              <option value="Barangay 29">Barangay 29</option>
-              <option value="Barangay 30">Barangay 30</option>
-              <option value="Barangay 31">Barangay 31</option>
-              <option value="Barangay 32">Barangay 32</option>
-              <option value="Barangay 33">Barangay 33</option>
-              <option value="Barangay 34">Barangay 34</option>
-              <option value="Barangay 35">Barangay 35</option>
-              <option value="Barangay 36">Barangay 36</option>
-              <option value="Barangay 37">Barangay 37</option>
-              <option value="Barangay 38">Barangay 38</option>
-              <option value="Barangay 39">Barangay 39</option>
-              <option value="Barangay 40">Barangay 40</option>
-              <option value="Barangay 41">Barangay 41</option>
-              <option value="Barangay 42">Barangay 42</option>
-              <option value="Barangay 43">Barangay 43</option>
-              <option value="Barangay 44">Barangay 44</option>
-              <option value="Barangay 45">Barangay 45</option>
-              <option value="Barangay 46">Barangay 46</option>
-              <option value="Barangay 47">Barangay 47</option>
-              <option value="Barangay 48">Barangay 48</option>
-              <option value="Barangay 49">Barangay 49</option>
-              <option value="Barangay 50">Barangay 50</option>
-              <option value="Barangay 51">Barangay 51</option>
-              <option value="Barangay 52">Barangay 52</option>
-              <option value="Barangay 53">Barangay 53</option>
-              <option value="Barangay 54">Barangay 54</option>
-              <option value="Barangay 55">Barangay 55</option>
-              <option value="Barangay 56">Barangay 56</option>
-              <option value="Barangay 57">Barangay 57</option>
-              <option value="Barangay 58">Barangay 58</option>
-              <option value="Barangay 59">Barangay 59</option>
-              <option value="Barangay 60">Barangay 60</option>
-              <option value="Barangay 61">Barangay 61</option>
-              <option value="Barangay 62">Barangay 62</option>
-              <option value="Barangay 63">Barangay 63</option>
-              <option value="Barangay 64">Barangay 64</option>
-              <option value="Barangay 65">Barangay 65</option>
-              <option value="Barangay 66">Barangay 66</option>
-              <option value="Barangay 67">Barangay 67</option>
-              <option value="Barangay 68">Barangay 68</option>
-              <option value="Barangay 69">Barangay 69</option>
-              <option value="Barangay 70">Barangay 70</option>
-              <option value="Barangay 71">Barangay 71</option>
-              <option value="Barangay 72">Barangay 72</option>
-              <option value="Barangay 73">Barangay 73</option>
-              <option value="Barangay 74">Barangay 74</option>
-              <option value="Barangay 75">Barangay 75</option>
-              <option value="Barangay 76">Barangay 76</option>
-              <option value="Barangay 77">Barangay 77</option>
-              <option value="Barangay 78">Barangay 78</option>
-              <option value="Barangay 79">Barangay 79</option>
-              <option value="Barangay 80">Barangay 80</option>
-              <option value="Barangay 81">Barangay 81</option>
-              <option value="Barangay 82">Barangay 82</option>
-              <option value="Barangay 83">Barangay 83</option>
-              <option value="Barangay 84">Barangay 84</option>
-              <option value="Barangay 85">Barangay 85</option>
-              <option value="Barangay 86">Barangay 86</option>
-              <option value="Barangay 87">Barangay 87</option>
-              <option value="Barangay 88">Barangay 88</option>
-              <option value="Barangay 89">Barangay 89</option>
-              <option value="Barangay 90">Barangay 90</option>
-              <option value="Barangay 91">Barangay 91</option>
-              <option value="Barangay 92">Barangay 92</option>
-              <option value="Barangay 93">Barangay 93</option>
-              <option value="Barangay 94">Barangay 94</option>
-              <option value="Barangay 95">Barangay 95</option>
-              <option value="Barangay 96">Barangay 96</option>
-              <option value="Barangay 97">Barangay 97</option>
-              <option value="Barangay 98">Barangay 98</option>
-              <option value="Barangay 99">Barangay 99</option>
-              <option value="Barangay 100">Barangay 100</option>
-              <option value="Barangay 101">Barangay 101</option>
-              <option value="Barangay 102">Barangay 102</option>
-              <option value="Barangay 103">Barangay 103</option>
-              <option value="Barangay 104">Barangay 104</option>
-              <option value="Barangay 105">Barangay 105</option>
-              <option value="Barangay 106">Barangay 106</option>
-              <option value="Barangay 107">Barangay 107</option>
-              <option value="Barangay 108">Barangay 108</option>
-              <option value="Barangay 109">Barangay 109</option>
-              <option value="Barangay 110">Barangay 110</option>
-              <option value="Barangay 111">Barangay 111</option>
-              <option value="Barangay 112">Barangay 112</option>
-              <option value="Barangay 113">Barangay 113</option>
-              <option value="Barangay 114">Barangay 114</option>
-              <option value="Barangay 115">Barangay 115</option>
-              <option value="Barangay 116">Barangay 116</option>
-              <option value="Barangay 117">Barangay 117</option>
-              <option value="Barangay 118">Barangay 118</option>
-              <option value="Barangay 119">Barangay 119</option>
-              <option value="Barangay 120">Barangay 120</option>
-              <option value="Barangay 121">Barangay 121</option>
-              <option value="Barangay 122">Barangay 122</option>
-              <option value="Barangay 123">Barangay 123</option>
-              <option value="Barangay 124">Barangay 124</option>
-              <option value="Barangay 125">Barangay 125</option>
-              <option value="Barangay 126">Barangay 126</option>
-              <option value="Barangay 127">Barangay 127</option>
-              <option value="Barangay 128">Barangay 128</option>
-              <option value="Barangay 129">Barangay 129</option>
-              <option value="Barangay 130">Barangay 130</option>
-              <option value="Barangay 131">Barangay 131</option>
-              <option value="Barangay 132">Barangay 132</option>
-              <option value="Barangay 133">Barangay 133</option>
-              <option value="Barangay 134">Barangay 134</option>
-              <option value="Barangay 135">Barangay 135</option>
-              <option value="Barangay 136">Barangay 136</option>
-              <option value="Barangay 137">Barangay 137</option>
-              <option value="Barangay 138">Barangay 138</option>
-              <option value="Barangay 139">Barangay 139</option>
-              <option value="Barangay 140">Barangay 140</option>
-              <option value="Barangay 141">Barangay 141</option>
-              <option value="Barangay 142">Barangay 142</option>
-              <option value="Barangay 143">Barangay 143</option>
-              <option value="Barangay 144">Barangay 144</option>
-              <option value="Barangay 145">Barangay 145</option>
-              <option value="Barangay 146">Barangay 146</option>
-              <option value="Barangay 147">Barangay 147</option>
-              <option value="Barangay 148">Barangay 148</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Zip Code
-            </label>
-            <input
-              type="text"
-              name="zip_code"
-              value={formData.zip_code}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter ZIP code"
-              maxLength="4"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              District
-            </label>
-            <select
-              name="district"
-              value={formData.district}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-            >
-              <option value="">Select District</option>
-              <option value="District 1">District 1</option>
-              <option value="District 2">District 2</option>
-              <option value="District 3">District 3</option>
-
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <h4 className="text-lg font-semibold mb-4" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Operations Details</h4>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Zoning Permit ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="zoning_permit_id"
-              value={formData.zoning_permit_id}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter zoning permit ID"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Sanitation Permit ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="sanitation_permit_id"
-              value={formData.sanitation_permit_id}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter sanitation permit ID"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Type of Operation <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="operation_type"
-              value={formData.operation_type}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              required
-            >
-              <option value="">Select Type of Operation</option>
-              <option value="Main Office">Main Office</option>
-              <option value="Branch">Branch</option>
-              <option value="Franchise">Franchise</option>
-              <option value="Headquarters">Headquarters</option>
-              <option value="Satellite Office">Satellite Office</option>
-              <option value="Warehouse">Warehouse</option>
-              <option value="Factory">Factory</option>
-              <option value="Retail Store">Retail Store</option>
-              <option value="Food Establishment">Food Establishment</option>
-              <option value="Service Center">Service Center</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Business Area (in sq. m.) <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              name="business_area"
-              value={formData.business_area}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter business area"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Total Floor/Building Area (in sq.m.) <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              name="total_floor_area"
-              value={formData.total_floor_area}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter total floor area"
-              required
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Time of Operation <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm mb-1">From</label>
-                <input
-                  type="time"
-                  name="operation_time_from"
-                  value={formData.operation_time_from}
-                  onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">To</label>
-                <input
-                  type="time"
-                  name="operation_time_to"
-                  value={formData.operation_time_to}
-                  onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  required
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              Total No. of Employees in Establishment <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              name="total_employees"
-              value={formData.total_employees}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter total employees"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              MALE Employees
-            </label>
-            <input
-              type="number"
-              name="male_employees"
-              value={formData.male_employees}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter number of male employees"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              FEMALE Employees
-            </label>
-            <input
-              type="number"
-              name="female_employees"
-              value={formData.female_employees}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter number of female employees"
-            />
-          </div>
-
-          <div>
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              No. of Employees Residing within QC
-            </label>
-            <input
-              type="number"
-              name="employees_in_qc"
-              value={formData.employees_in_qc}
-              onChange={handleChange}
-              className="w-full p-3 border border-black rounded-lg"
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              placeholder="Enter number of employees in QC"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <h5 className="font-medium mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-              No. of Delivery Vehicle (if applicable)
-            </h5>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm mb-1">Van/Truck</label>
-                <input
-                  type="number"
-                  name="delivery_van_truck"
-                  value={formData.delivery_van_truck}
-                  onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  placeholder="Enter number of vans/trucks"
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">Motorcycle</label>
-                <input
-                  type="number"
-                  name="delivery_motorcycle"
-                  value={formData.delivery_motorcycle}
-                  onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  placeholder="Enter number of motorcycles"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+      case 3:
         return (
           <div className="space-y-10">
             <div>
@@ -1430,7 +934,7 @@ if (step === 3) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    House/Building Number <span className="text-red-500">*</span>
+                    House/Bldg. No <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -1445,7 +949,9 @@ if (step === 3) {
                 </div>
 
                 <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Building Name</label>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Name of Building
+                  </label>
                   <input
                     type="text"
                     name="building_name"
@@ -1454,6 +960,36 @@ if (step === 3) {
                     className="w-full p-3 border border-black rounded-lg"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
                     placeholder="Enter building name (if applicable)"
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Block No.
+                  </label>
+                  <input
+                    type="text"
+                    name="block_no"
+                    value={formData.block_no}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    placeholder="Enter block number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Lot No.
+                  </label>
+                  <input
+                    type="text"
+                    name="lot_no"
+                    value={formData.lot_no}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    placeholder="Enter lot number"
                   />
                 </div>
 
@@ -1475,20 +1011,18 @@ if (step === 3) {
 
                 <div>
                   <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    Barangay <span className="text-red-500">*</span>
+                    Subdivision
                   </label>
                   <input
                     type="text"
-                    name="barangay"
-                    value={formData.barangay}
+                    name="subdivision"
+                    value={formData.subdivision}
                     onChange={handleChange}
                     className="w-full p-3 border border-black rounded-lg"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    placeholder="Enter barangay"
-                    required
+                    placeholder="Enter subdivision name"
                   />
                 </div>
-
 
                 <div>
                   <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
@@ -1497,17 +1031,73 @@ if (step === 3) {
                   <input
                     type="text"
                     name="province"
-                    value={formData.province}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
+                    value="Metro Manila"
+                    readOnly
+                    className="w-full p-3 border border-black rounded-lg bg-gray-100"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    placeholder="Enter province"
-                    required
                   />
+                  <p className="text-xs text-gray-500 mt-1">Fixed as Metro Manila</p>
                 </div>
 
                 <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>ZIP Code</label>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    City/Municipality <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="city_municipality"
+                    value="Caloocan City"
+                    readOnly
+                    className="w-full p-3 border border-black rounded-lg bg-gray-100"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Fixed as Caloocan City</p>
+                </div>
+
+                <div>
+                  <label 
+                    className="block text-sm font-medium mb-1" 
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  >
+                    Barangay <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="barangay"
+                    value={formData.barangay}
+                    onChange={handleChange}
+                    className="p-3 border border-black rounded-lg w-full focus:ring-1 focus:border-black-400 focus:outline-none"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    required
+                  >
+                    <option value="">Select a barangay</option>
+                    
+                    {/* Barangay 1 to 175 */}
+                    {Array.from({length: 175}, (_, i) => (
+                      <option key={`Barangay ${i+1}`} value={`Barangay ${i+1}`}>
+                        Barangay {i+1}
+                      </option>
+                    ))}
+                    
+                    {/* Barangay 176-A to 176-F */}
+                    {['A', 'B', 'C', 'D', 'E', 'F'].map(letter => (
+                      <option key={`Barangay 176-${letter}`} value={`Barangay 176-${letter}`}>
+                        Barangay 176-{letter}
+                      </option>
+                    ))}
+                    
+                    {/* Barangay 177 to 188 */}
+                    {Array.from({length: 12}, (_, i) => (
+                      <option key={`Barangay ${177 + i}`} value={`Barangay ${177 + i}`}>
+                        Barangay {177 + i}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Zip Code
+                  </label>
                   <input
                     type="text"
                     name="zip_code"
@@ -1521,68 +1111,35 @@ if (step === 3) {
                 </div>
 
                 <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Zone / District</label>
-                  <input
-                    type="text"
-                    name="zone_district"
-                    value={formData.zone_district}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    placeholder="Enter zone or district"
-                  />
-                </div>
-
-                <div>
                   <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    Business Zone <span className="text-red-500">*</span>
+                    District
                   </label>
                   <select
-                    name="business_zone"
-                    value={formData.business_zone}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    required
-                  >
-                    <option value="">Select Zone</option>
-                    <option value="Commercial">Commercial</option>
-                    <option value="Industrial">Industrial</option>
-                    <option value="Residential">Residential</option>
-                    <option value="Mixed-use">Mixed-use</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Type of Establishment</label>
-                  <select
-                    name="establishment_type"
-                    value={formData.establishment_type}
+                    name="district"
+                    value={formData.district}
                     onChange={handleChange}
                     className="w-full p-3 border border-black rounded-lg"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
                   >
-                    <option value="">Select Type</option>
-                    <option value="Store">Store</option>
-                    <option value="Office">Office</option>
-                    <option value="Factory">Factory</option>
-                    <option value="Others">Others</option>
+                    <option value="">Select District</option>
+                    <option value="District 1">District 1</option>
+                    <option value="District 2">District 2</option>
+                    <option value="District 3">District 3</option>
                   </select>
                 </div>
               </div>
             </div>
 
-                
             <div>
               <h4 className="text-lg font-semibold mb-4" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Operations Details</h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                 <div>
+                <div>
                   <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
                     Zoning Permit ID <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     name="zoning_permit_id"
                     value={formData.zoning_permit_id}
                     onChange={handleChange}
@@ -1595,45 +1152,16 @@ if (step === 3) {
 
                 <div>
                   <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    Sanitation Permit ID
+                    Sanitation Permit ID <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     name="sanitation_permit_id"
                     value={formData.sanitation_permit_id}
                     onChange={handleChange}
                     className="w-full p-3 border border-black rounded-lg"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
                     placeholder="Enter sanitation permit ID"
-                    
-                  />
-                </div>
-
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Business Area (in sq. m.)</label>
-                  <input
-                    type="number"
-                    name="business_area"
-                    value={formData.business_area}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    placeholder="Enter business area in square meters"
-                  />
-                </div>
-
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    Number of Employees <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="no_of_employees"
-                    value={formData.no_of_employees}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    placeholder="Enter number of employees"
                     required
                   />
                 </div>
@@ -1650,11 +1178,175 @@ if (step === 3) {
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
                     required
                   >
-                    <option value="">Select Type</option>
+                    <option value="">Select Type of Operation</option>
                     <option value="Main Office">Main Office</option>
                     <option value="Branch">Branch</option>
                     <option value="Franchise">Franchise</option>
+                    <option value="Headquarters">Headquarters</option>
+                    <option value="Satellite Office">Satellite Office</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Factory">Factory</option>
+                    <option value="Retail Store">Retail Store</option>
+                    <option value="Food Establishment">Food Establishment</option>
+                    <option value="Service Center">Service Center</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Business Area (in sq. m.) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="business_area"
+                    value={formData.business_area}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    placeholder="Enter business area"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Total Floor/Building Area (in sq.m.) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="total_floor_area"
+                    value={formData.total_floor_area}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    placeholder="Enter total floor area"
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Time of Operation <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm mb-1">From</label>
+                      <input
+                        type="time"
+                        name="operation_time_from"
+                        value={formData.operation_time_from}
+                        onChange={handleChange}
+                        className="w-full p-3 border border-black rounded-lg"
+                        style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">To</label>
+                      <input
+                        type="time"
+                        name="operation_time_to"
+                        value={formData.operation_time_to}
+                        onChange={handleChange}
+                        className="w-full p-3 border border-black rounded-lg"
+                        style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Total No. of Employees in Establishment <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="total_employees"
+                    value={formData.total_employees}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    placeholder="Enter total employees"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Male Employees
+                  </label>
+                  <input
+                    type="number"
+                    name="male_employees"
+                    value={formData.male_employees}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    placeholder="Enter number of male employees"
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Female Employees
+                  </label>
+                  <input
+                    type="number"
+                    name="female_employees"
+                    value={formData.female_employees}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    placeholder="Enter number of female employees"
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    No. of Employees Residing within QC
+                  </label>
+                  <input
+                    type="number"
+                    name="employees_in_qc"
+                    value={formData.employees_in_qc}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    placeholder="Enter number of employees in QC"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <h5 className="font-medium mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    No. of Delivery Vehicle (if applicable)
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm mb-1">Van/Truck</label>
+                      <input
+                        type="number"
+                        name="delivery_van_truck"
+                        value={formData.delivery_van_truck}
+                        onChange={handleChange}
+                        className="w-full p-3 border border-black rounded-lg"
+                        style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                        placeholder="Enter number of vans/trucks"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Motorcycle</label>
+                      <input
+                        type="number"
+                        name="delivery_motorcycle"
+                        value={formData.delivery_motorcycle}
+                        onChange={handleChange}
+                        className="w-full p-3 border border-black rounded-lg"
+                        style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                        placeholder="Enter number of motorcycles"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1664,8 +1356,6 @@ if (step === 3) {
       case 4:
         return (
           <div className="space-y-6">
-
-            
             {/* Important Note */}
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-start">
@@ -1673,10 +1363,10 @@ if (step === 3) {
                 <div>
                   <p className="font-medium text-blue-800 mb-1">Important Note:</p>
                   <p className="text-sm text-blue-700">
-                    • <span className="font-semibold">BIR Certificate of Registration</span> is <span className="font-bold text-red-600">MANDATORY</span> for all business permit applications.
+                    • All documents marked with <span className="font-bold text-red-600">*</span> are <span className="font-bold text-red-600">MANDATORY</span> for business permit applications.
                   </p>
                   <p className="text-sm text-blue-700 mt-1">
-                    • Other documents are optional unless marked as required for your specific business type.
+                    • Official Receipt of Payment is optional unless you have already paid.
                   </p>
                 </div>
               </div>
@@ -1684,74 +1374,88 @@ if (step === 3) {
             
             <div className="space-y-4">
               {/* Barangay Clearance with ID field */}
-              <div className="border border-gray-300 rounded-lg">
-                <div className="flex items-center justify-between p-3 border-b">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={attachmentChecks.barangay_clearance}
-                      onChange={() => handleCheckboxChange('barangay_clearance')}
-                      className="mr-3 h-5 w-5"
-                    />
-                    <div>
-                      <span className="font-medium">Barangay Clearance:</span>
-                      <p className="text-sm text-gray-600">
-                        {formData.barangay_clearance ? formData.barangay_clearance.name : attachmentChecks.barangay_clearance ? 'Required' : 'Optional'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        name="barangay_clearance"
-                        onChange={handleFile}
-                        accept=".pdf,.jpg,.png"
-                        className="hidden"
-                      />
-                      <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.barangay_clearance ? 'border-gray-300' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
-                        <Upload className="w-4 h-4" />
-                        {formData.barangay_clearance ? 'Change' : 'Upload'}
-                      </div>
-                    </label>
-                    {formData.barangay_clearance && (
-                      <button
-                        type="button"
-                        onClick={() => previewFile(formData.barangay_clearance)}
-                        className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                        style={{ color: COLORS.secondary }}
-                      >
-                        <Eye className="w-4 h-4" />
-                        Preview
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="p-3 bg-gray-50">
-                  <label className="block text-sm font-medium mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    Barangay Clearance ID/Number:
-                  </label>
-                  <input
-                    type="text"
-                    name="barangay_clearance_id"
-                    value={formData.barangay_clearance_id}
-                    onChange={handleChange}
-                    placeholder="Enter Barangay Clearance ID or Reference Number"
-                    className="w-full p-2 border border-gray-300 rounded"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Please provide your barangay clearance reference number if available</p>
-                </div>
-              </div>
+{/* Barangay Clearance with ID field - file OR ID required */}
+<div className="border border-gray-300 rounded-lg bg-blue-50">
+  <div className="flex items-center justify-between p-3 border-b">
+    <div className="flex items-center">
+      <div className="mr-3">
+        {(formData.barangay_clearance || formData.barangay_clearance_id) ? (
+          <Check className="w-5 h-5 text-green-600" />
+        ) : (
+          <X className="w-5 h-5 text-red-600" />
+        )}
+      </div>
+      <div>
+        <span className="font-medium">Barangay Clearance: <span className="text-red-500">*</span></span>
+        <p className="text-sm text-gray-600">
+          {formData.barangay_clearance ? formData.barangay_clearance.name : 
+           formData.barangay_clearance_id ? 'ID Provided' : 'File or ID required'}
+        </p>
+        <p className="text-xs text-red-500 font-semibold">
+          * Either file upload OR ID number must be provided
+        </p>
+      </div>
+    </div>
+    <div className="flex items-center gap-2">
+      <label className="cursor-pointer">
+        <input
+          type="file"
+          name="barangay_clearance"
+          onChange={handleFile}
+          accept=".pdf,.jpg,.png,.doc,.docx"
+          className="hidden"
+        />
+        <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+          !formData.barangay_clearance ? 'border-gray-300' : 'border-green-200 bg-green-50'
+        }`} style={{ color: COLORS.secondary }}>
+          <Upload className="w-4 h-4" />
+          {formData.barangay_clearance ? 'Change' : 'Upload'}
+        </div>
+      </label>
+      {formData.barangay_clearance && (
+        <button
+          type="button"
+          onClick={() => previewFile(formData.barangay_clearance)}
+          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+          style={{ color: COLORS.secondary }}
+        >
+          <Eye className="w-4 h-4" />
+          Preview
+        </button>
+      )}
+    </div>
+  </div>
+  <div className="p-3 bg-gray-50">
+    <label className="block text-sm font-medium mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+      Barangay Clearance ID/Number (Alternative to file upload):
+    </label>
+    <input
+      type="text"
+      name="barangay_clearance_id"
+      value={formData.barangay_clearance_id}
+      onChange={handleChange}
+      placeholder="Enter Barangay Clearance ID or Reference Number (if no file uploaded)"
+      className="w-full p-2 border border-gray-300 rounded"
+      style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+    />
+
+    <p className="text-xs mt-1">
+      <span className={`font-medium ${
+        formData.barangay_clearance || formData.barangay_clearance_id ? 'text-green-600' : 'text-red-600'
+      }`}>
+        {formData.barangay_clearance || formData.barangay_clearance_id 
+          ? '✓ Requirement satisfied (either file or ID provided)' 
+          : '⚠ Please provide either the document or ID number'}
+      </span>
+    </p>
+  </div>
+</div>
 
               {/* BIR Certificate of Registration - ALWAYS REQUIRED */}
               <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
                 <div className="flex items-center">
-                  <div className="mr-3">
-                    <Check className="w-5 h-5 text-green-600" />
-                  </div>
                   <div>
-                    <span className="font-medium">BIR Certificate of Registration:</span>
+                    <span className="font-medium">BIR Certificate of Registration: <span className="text-red-500">*</span></span>
                     <p className="text-sm text-gray-600">
                       {formData.bir_certificate ? formData.bir_certificate.name : 'Required'}
                     </p>
@@ -1764,7 +1468,7 @@ if (step === 3) {
                       type="file"
                       name="bir_certificate"
                       onChange={handleFile}
-                      accept=".pdf,.jpg,.png"
+                      accept=".pdf,.jpg,.png,.doc,.docx"
                       className="hidden"
                       required
                     />
@@ -1788,19 +1492,14 @@ if (step === 3) {
               </div>
 
               {/* Lease Contract / Land Title */}
-              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
                 <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={attachmentChecks.lease_or_title}
-                    onChange={() => handleCheckboxChange('lease_or_title')}
-                    className="mr-3 h-5 w-5"
-                  />
                   <div>
-                    <span className="font-medium">Lease Contract / Land Title:</span>
+                    <span className="font-medium">Lease Contract / Land Title: <span className="text-red-500">*</span></span>
                     <p className="text-sm text-gray-600">
-                      {formData.lease_or_title ? formData.lease_or_title.name : attachmentChecks.lease_or_title ? 'Required' : 'Optional'}
+                      {formData.lease_or_title ? formData.lease_or_title.name : 'Required'}
                     </p>
+                    <p className="text-xs text-red-500 font-semibold">* This document is mandatory</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1809,10 +1508,11 @@ if (step === 3) {
                       type="file"
                       name="lease_or_title"
                       onChange={handleFile}
-                      accept=".pdf,.jpg,.png"
+                      accept=".pdf,.jpg,.png,.doc,.docx"
                       className="hidden"
+                      required
                     />
-                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.lease_or_title ? 'border-gray-300' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
+                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.lease_or_title ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
                       <Upload className="w-4 h-4" />
                       {formData.lease_or_title ? 'Change' : 'Upload'}
                     </div>
@@ -1832,19 +1532,14 @@ if (step === 3) {
               </div>
 
               {/* Fire Safety Inspection Certificate (FSIC) */}
-              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
                 <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={attachmentChecks.fsic}
-                    onChange={() => handleCheckboxChange('fsic')}
-                    className="mr-3 h-5 w-5"
-                  />
                   <div>
-                    <span className="font-medium">Fire Safety Inspection Certificate (FSIC):</span>
+                    <span className="font-medium">Fire Safety Inspection Certificate (FSIC): <span className="text-red-500">*</span></span>
                     <p className="text-sm text-gray-600">
-                      {formData.fsic ? formData.fsic.name : attachmentChecks.fsic ? 'Required' : 'Optional'}
+                      {formData.fsic ? formData.fsic.name : 'Required'}
                     </p>
+                    <p className="text-xs text-red-500 font-semibold">* This document is mandatory</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1853,10 +1548,11 @@ if (step === 3) {
                       type="file"
                       name="fsic"
                       onChange={handleFile}
-                      accept=".pdf,.jpg,.png"
+                      accept=".pdf,.jpg,.png,.doc,.docx"
                       className="hidden"
+                      required
                     />
-                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.fsic ? 'border-gray-300' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
+                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.fsic ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
                       <Upload className="w-4 h-4" />
                       {formData.fsic ? 'Change' : 'Upload'}
                     </div>
@@ -1876,19 +1572,14 @@ if (step === 3) {
               </div>
 
               {/* Owner Valid ID */}
-              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
                 <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={attachmentChecks.owner_valid_id}
-                    onChange={() => handleCheckboxChange('owner_valid_id')}
-                    className="mr-3 h-5 w-5"
-                  />
                   <div>
-                    <span className="font-medium">Owner Valid ID:</span>
+                    <span className="font-medium">Owner Valid ID: <span className="text-red-500">*</span></span>
                     <p className="text-sm text-gray-600">
-                      {formData.owner_valid_id ? formData.owner_valid_id.name : attachmentChecks.owner_valid_id ? 'Required' : 'Optional'}
+                      {formData.owner_valid_id ? formData.owner_valid_id.name : 'Required'}
                     </p>
+                    <p className="text-xs text-red-500 font-semibold">* This document is mandatory</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1897,10 +1588,11 @@ if (step === 3) {
                       type="file"
                       name="owner_valid_id"
                       onChange={handleFile}
-                      accept=".pdf,.jpg,.png"
+                      accept=".pdf,.jpg,.png,.doc,.docx"
                       className="hidden"
+                      required
                     />
-                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.owner_valid_id ? 'border-gray-300' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
+                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.owner_valid_id ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
                       <Upload className="w-4 h-4" />
                       {formData.owner_valid_id ? 'Change' : 'Upload'}
                     </div>
@@ -1920,19 +1612,14 @@ if (step === 3) {
               </div>
 
               {/* 2x2 ID Picture */}
-              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
                 <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={attachmentChecks.id_picture}
-                    onChange={() => handleCheckboxChange('id_picture')}
-                    className="mr-3 h-5 w-5"
-                  />
                   <div>
-                    <span className="font-medium">2x2 ID Picture:</span>
+                    <span className="font-medium">2x2 ID Picture: <span className="text-red-500">*</span></span>
                     <p className="text-sm text-gray-600">
-                      {formData.id_picture ? formData.id_picture.name : attachmentChecks.id_picture ? 'Required' : 'Optional'}
+                      {formData.id_picture ? formData.id_picture.name : 'Required'}
                     </p>
+                    <p className="text-xs text-red-500 font-semibold">* This document is mandatory</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1943,8 +1630,9 @@ if (step === 3) {
                       onChange={handleFile}
                       accept=".jpg,.jpeg,.png"
                       className="hidden"
+                      required
                     />
-                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.id_picture ? 'border-gray-300' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
+                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.id_picture ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
                       <Upload className="w-4 h-4" />
                       {formData.id_picture ? 'Change' : 'Upload'}
                     </div>
@@ -1985,7 +1673,7 @@ if (step === 3) {
                       type="file"
                       name="official_receipt_file"
                       onChange={handleFile}
-                      accept=".pdf,.jpg,.png"
+                      accept=".pdf,.jpg,.png,.doc,.docx"
                       className="hidden"
                     />
                     <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.official_receipt_file ? 'border-gray-300' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
@@ -2022,7 +1710,6 @@ if (step === 3) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-
                 <div className="flex items-center gap-4 mb-4">
                   <label className="flex items-center gap-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
                     <input
@@ -2172,6 +1859,18 @@ if (step === 3) {
                       <span className="font-medium" style={{ color: COLORS.secondary }}>Citizenship:</span>
                       <p>{formData.citizenship || 'Not provided'}</p>
                     </div>
+                    {formData.owner_type === "Corporation" && (
+                      <>
+                        <div>
+                          <span className="font-medium" style={{ color: COLORS.secondary }}>Filipino %:</span>
+                          <p>{formData.corp_filipino_percent || '0'}%</p>
+                        </div>
+                        <div>
+                          <span className="font-medium" style={{ color: COLORS.secondary }}>Foreign %:</span>
+                          <p>{formData.corp_foreign_percent || '0'}%</p>
+                        </div>
+                      </>
+                    )}
                     <div>
                       <span className="font-medium" style={{ color: COLORS.secondary }}>Date of Birth:</span>
                       <p>{formData.date_of_birth || 'Not provided'}</p>
@@ -2183,6 +1882,18 @@ if (step === 3) {
                     <div>
                       <span className="font-medium" style={{ color: COLORS.secondary }}>Email Address:</span>
                       <p>{formData.email_address || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Home Address:</span>
+                      <p>{formData.home_address || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Valid ID Type:</span>
+                      <p>{formData.valid_id_type || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Valid ID Number:</span>
+                      <p>{formData.valid_id_number || 'Not provided'}</p>
                     </div>
                   </div>
                 </div>
@@ -2204,153 +1915,167 @@ if (step === 3) {
                       <span className="font-medium" style={{ color: COLORS.secondary }}>Nature of Business:</span>
                       <p>{formData.business_nature || 'Not provided'}</p>
                     </div>
-
-                    <div>
-                      <span className="font-medium" style={{ color: COLORS.secondary }}>Capital Investment:</span>
-                      <p>₱{formData.capital_investment || '0'}</p>
-                    </div>
                     <div>
                       <span className="font-medium" style={{ color: COLORS.secondary }}>Building Type:</span>
                       <p>{formData.building_type || 'Not provided'}</p>
                     </div>
-
-
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Capital Investment:</span>
+                      <p>₱{formData.capital_investment || '0'}</p>
+                    </div>
                   </div>
                 </div>
-          <div>
-            <h5 className="font-semibold mb-4 text-lg border-b pb-2" style={{ color: COLORS.primary, fontFamily: COLORS.font }}>
-              Location Information
-            </h5>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>House/Bldg. No:</span>
-                <p>{formData.house_bldg_no || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Building Name:</span>
-                <p>{formData.building_name || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Block No:</span>
-                <p>{formData.block_no || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Lot No:</span>
-                <p>{formData.lot_no || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Street:</span>
-                <p>{formData.street || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Subdivision:</span>
-                <p>{formData.subdivision || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Province:</span>
-                <p>{formData.province || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>City/Municipality:</span>
-                <p>{formData.city_municipality || 'Caloocan City'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Barangay:</span>
-                <p>{formData.barangay || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Zip Code:</span>
-                <p>{formData.zip_code || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>District:</span>
-                <p>{formData.district || 'Not provided'}</p>
-              </div>
-            </div>
-          </div>
 
-          <div>
-            <h5 className="font-semibold mb-4 text-lg border-b pb-2" style={{ color: COLORS.primary, fontFamily: COLORS.font }}>
-              Operations Details
-            </h5>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Zoning Permit ID:</span>
-                <p>{formData.zoning_permit_id || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Sanitation Permit ID:</span>
-                <p>{formData.sanitation_permit_id || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Type of Operation:</span>
-                <p>{formData.operation_type || 'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Business Area:</span>
-                <p>{formData.business_area || '0'} sq. m.</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Total Floor Area:</span>
-                <p>{formData.total_floor_area || '0'} sq. m.</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Time of Operation:</span>
-                <p>{formData.operation_time_from && formData.operation_time_to ? 
-                  `${formData.operation_time_from} to ${formData.operation_time_to}` : 
-                  'Not provided'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Total Employees:</span>
-                <p>{formData.total_employees || '0'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Male Employees:</span>
-                <p>{formData.male_employees || '0'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Female Employees:</span>
-                <p>{formData.female_employees || '0'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Employees in QC:</span>
-                <p>{formData.employees_in_qc || '0'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Delivery Van/Truck:</span>
-                <p>{formData.delivery_van_truck || '0'}</p>
-              </div>
-              <div>
-                <span className="font-medium" style={{ color: COLORS.secondary }}>Delivery Motorcycle:</span>
-                <p>{formData.delivery_motorcycle || '0'}</p>
-              </div>
-            </div>
-          </div>
+                <div>
+                  <h5 className="font-semibold mb-4 text-lg border-b pb-2" style={{ color: COLORS.primary, fontFamily: COLORS.font }}>
+                    Location Information
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>House/Bldg. No:</span>
+                      <p>{formData.house_bldg_no || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Building Name:</span>
+                      <p>{formData.building_name || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Block No:</span>
+                      <p>{formData.block_no || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Lot No:</span>
+                      <p>{formData.lot_no || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Street:</span>
+                      <p>{formData.street || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Subdivision:</span>
+                      <p>{formData.subdivision || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Province:</span>
+                      <p>{formData.province || 'Metro Manila'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>City/Municipality:</span>
+                      <p>{formData.city_municipality || 'Caloocan City'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Barangay:</span>
+                      <p>{formData.barangay || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Zip Code:</span>
+                      <p>{formData.zip_code || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>District:</span>
+                      <p>{formData.district || 'Not provided'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="font-semibold mb-4 text-lg border-b pb-2" style={{ color: COLORS.primary, fontFamily: COLORS.font }}>
+                    Operations Details
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Zoning Permit ID:</span>
+                      <p>{formData.zoning_permit_id || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Sanitation Permit ID:</span>
+                      <p>{formData.sanitation_permit_id || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Type of Operation:</span>
+                      <p>{formData.operation_type || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Business Area:</span>
+                      <p>{formData.business_area || '0'} sq. m.</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Total Floor Area:</span>
+                      <p>{formData.total_floor_area || '0'} sq. m.</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Time of Operation:</span>
+                      <p>{formData.operation_time_from && formData.operation_time_to ? 
+                        `${formData.operation_time_from} to ${formData.operation_time_to}` : 
+                        'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Total Employees:</span>
+                      <p>{formData.total_employees || '0'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Male Employees:</span>
+                      <p>{formData.male_employees || '0'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Female Employees:</span>
+                      <p>{formData.female_employees || '0'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Employees in QC:</span>
+                      <p>{formData.employees_in_qc || '0'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Delivery Van/Truck:</span>
+                      <p>{formData.delivery_van_truck || '0'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Delivery Motorcycle:</span>
+                      <p>{formData.delivery_motorcycle || '0'}</p>
+                    </div>
+                  </div>
+                </div>
 
                 <div>
                   <h5 className="font-semibold mb-4 text-lg border-b pb-2" style={{ color: COLORS.primary, fontFamily: COLORS.font }}>
                     Permits & Clearances
                   </h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {formData.barangay_clearance_id && (
-                      <div>
-                        <span className="font-medium" style={{ color: COLORS.secondary }}>Barangay Clearance ID:</span>
-                        <p>{formData.barangay_clearance_id}</p>
-                      </div>
-                    )}
-                    {formData.zoning_permit_id && (
-                      <div>
-                        <span className="font-medium" style={{ color: COLORS.secondary }}>Zoning Permit ID:</span>
-                        <p>{formData.zoning_permit_id}</p>
-                      </div>
-                    )}
-                    {formData.sanitation_permit_id && (
-                      <div>
-                        <span className="font-medium" style={{ color: COLORS.secondary }}>Sanitation Permit ID:</span>
-                        <p>{formData.sanitation_permit_id}</p>
-                      </div>
-                    )}
-                  </div>
+{/* In case 6, review section */}
+<div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+  <div className="flex items-center">
+    {(formData.barangay_clearance || formData.barangay_clearance_id) ? (
+      <Check className="w-5 h-5 text-green-600 mr-3" />
+    ) : (
+      <X className="w-5 h-5 text-red-600 mr-3" />
+    )}
+    <div>
+      <span className="font-medium">Barangay Clearance:</span>
+      <p className="text-sm text-gray-600">
+        {formData.barangay_clearance 
+          ? formData.barangay_clearance.name 
+          : formData.barangay_clearance_id 
+            ? `ID: ${formData.barangay_clearance_id}` 
+            : 'Missing'}
+      </p>
+      <p className="text-xs text-gray-500">
+        {!formData.barangay_clearance && !formData.barangay_clearance_id 
+          ? 'Either file or ID required' 
+          : formData.barangay_clearance_id ? 'ID provided instead of file' : ''}
+      </p>
+    </div>
+  </div>
+  {formData.barangay_clearance && (
+    <button
+      type="button"
+      onClick={() => previewFile(formData.barangay_clearance)}
+      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+      style={{ color: COLORS.secondary }}
+    >
+      <Eye className="w-4 h-4" />
+      Preview
+    </button>
+  )}
+</div>
                 </div>
 
                 <div>
@@ -2358,81 +2083,206 @@ if (step === 3) {
                     Attachments
                   </h5>
                   <div className="space-y-3">
-                    {/* Always show BIR Certificate */}
-                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
-                      <div className="flex items-center">
-                        {formData.bir_certificate ? (
+                    {/* Owner Type Specific Documents */}
+                    {formData.owner_type === "Individual" && formData.dti_registration && (
+                      <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                        <div className="flex items-center">
                           <Check className="w-5 h-5 text-green-600 mr-3" />
-                        ) : (
-                          <X className="w-5 h-5 text-red-600 mr-3" />
-                        )}
-                        <div>
-                          <span className="font-medium">BIR Certificate of Registration:</span>
-                          <p className="text-sm text-gray-600">
-                            {formData.bir_certificate ? formData.bir_certificate.name : 'Not uploaded'}
-                          </p>
+                          <div>
+                            <span className="font-medium">DTI Registration:</span>
+                            <p className="text-sm text-gray-600">{formData.dti_registration.name}</p>
+                          </div>
                         </div>
-                      </div>
-                      {formData.bir_certificate && (
                         <button
                           type="button"
-                          onClick={() => previewFile(formData.bir_certificate)}
+                          onClick={() => previewFile(formData.dti_registration)}
                           className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
                           style={{ color: COLORS.secondary }}
                         >
                           <Eye className="w-4 h-4" />
                           Preview
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
-                    {Object.keys(attachmentChecks).map(field => {
-                      if (field === 'bir_certificate') return null; // Already shown above
-                      if (!attachmentChecks[field]) return null;
-                      
-                      const labels = {
-                        barangay_clearance: "Barangay Clearance",
-                        bir_certificate: "BIR Certificate of Registration",
-                        lease_or_title: "Lease Contract / Land Title",
-                        fsic: "Fire Safety Inspection Certificate (FSIC)",
-                        owner_valid_id: "Owner Valid ID",
-                        id_picture: "2x2 ID Picture",
-                        official_receipt_file: "Official Receipt of Payment",
-                      };
-                      
-                      return (
-                        <div key={field} className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                    {formData.owner_type === "Partnership" && formData.sec_registration && (
+                      <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                        <div className="flex items-center">
+                          <Check className="w-5 h-5 text-green-600 mr-3" />
+                          <div>
+                            <span className="font-medium">SEC Registration:</span>
+                            <p className="text-sm text-gray-600">{formData.sec_registration.name}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => previewFile(formData.sec_registration)}
+                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                          style={{ color: COLORS.secondary }}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Preview
+                        </button>
+                      </div>
+                    )}
+
+                    {/* All mandatory documents */}
+                    {[
+                      { field: 'barangay_clearance', label: 'Barangay Clearance' },
+                      { field: 'bir_certificate', label: 'BIR Certificate of Registration' },
+                      { field: 'lease_or_title', label: 'Lease Contract / Land Title' },
+                      { field: 'fsic', label: 'Fire Safety Inspection Certificate (FSIC)' },
+                      { field: 'owner_valid_id', label: 'Owner Valid ID' },
+                      { field: 'id_picture', label: '2x2 ID Picture' }
+                    ].map(doc => (
+                      formData[doc.field] && (
+                        <div key={doc.field} className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
                           <div className="flex items-center">
-                            {formData[field] ? (
-                              <Check className="w-5 h-5 text-green-600 mr-3" />
-                            ) : (
-                              <X className="w-5 h-5 text-red-600 mr-3" />
-                            )}
+                            <Check className="w-5 h-5 text-green-600 mr-3" />
                             <div>
-                              <span className="font-medium">{labels[field]}:</span>
-                              <p className="text-sm text-gray-600">
-                                {formData[field] ? formData[field].name : 'Not uploaded'}
-                              </p>
+                              <span className="font-medium">{doc.label}:</span>
+                              <p className="text-sm text-gray-600">{formData[doc.field].name}</p>
                             </div>
                           </div>
-                          {formData[field] && (
-                            <button
-                              type="button"
-                              onClick={() => previewFile(formData[field])}
-                              className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                              style={{ color: COLORS.secondary }}
-                            >
-                              <Eye className="w-4 h-4" />
-                              Preview
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => previewFile(formData[doc.field])}
+                            className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                            style={{ color: COLORS.secondary }}
+                          >
+                            <Eye className="w-4 h-4" />
+                            Preview
+                          </button>
                         </div>
-                      );
-                    })}
-                    
-                    {!Object.values(attachmentChecks).some(check => check) && (
-                      <p className="text-gray-500 italic">No optional attachments marked as required</p>
+                      )
+                    ))}
+
+                    {/* Optional documents if uploaded */}
+                    {formData.official_receipt_file && (
+                      <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                        <div className="flex items-center">
+                          <Check className="w-5 h-5 text-green-600 mr-3" />
+                          <div>
+                            <span className="font-medium">Official Receipt of Payment:</span>
+                            <p className="text-sm text-gray-600">{formData.official_receipt_file.name}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => previewFile(formData.official_receipt_file)}
+                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                          style={{ color: COLORS.secondary }}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Preview
+                        </button>
+                      </div>
                     )}
+
+                    {/* Representative Scanned ID if applicable */}
+                    {formData.owner_type_declaration === "Representative" && formData.representative_scanned_id && (
+                      <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                        <div className="flex items-center">
+                          <Check className="w-5 h-5 text-green-600 mr-3" />
+                          <div>
+                            <span className="font-medium">Representative's Scanned ID:</span>
+                            <p className="text-sm text-gray-600">{formData.representative_scanned_id.name}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => previewFile(formData.representative_scanned_id)}
+                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                          style={{ color: COLORS.secondary }}
+                        >
+                          <Eye className="w-4 h-4" />
+                          Preview
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Missing documents warning */}
+                    {!formData.barangay_clearance && !formData.barangay_clearance_id && (
+                      <div className="p-3 border border-red-300 rounded-lg bg-red-50">
+                        <div className="flex items-center">
+                          <X className="w-5 h-5 text-red-600 mr-3" />
+                          <span className="font-medium text-red-600">Missing: Barangay Clearance or ID</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {!formData.bir_certificate && (
+                      <div className="p-3 border border-red-300 rounded-lg bg-red-50">
+                        <div className="flex items-center">
+                          <X className="w-5 h-5 text-red-600 mr-3" />
+                          <span className="font-medium text-red-600">Missing: BIR Certificate of Registration</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {!formData.lease_or_title && (
+                      <div className="p-3 border border-red-300 rounded-lg bg-red-50">
+                        <div className="flex items-center">
+                          <X className="w-5 h-5 text-red-600 mr-3" />
+                          <span className="font-medium text-red-600">Missing: Lease Contract / Land Title</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {!formData.fsic && (
+                      <div className="p-3 border border-red-300 rounded-lg bg-red-50">
+                        <div className="flex items-center">
+                          <X className="w-5 h-5 text-red-600 mr-3" />
+                          <span className="font-medium text-red-600">Missing: Fire Safety Inspection Certificate (FSIC)</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {!formData.owner_valid_id && (
+                      <div className="p-3 border border-red-300 rounded-lg bg-red-50">
+                        <div className="flex items-center">
+                          <X className="w-5 h-5 text-red-600 mr-3" />
+                          <span className="font-medium text-red-600">Missing: Owner Valid ID</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {!formData.id_picture && (
+                      <div className="p-3 border border-red-300 rounded-lg bg-red-50">
+                        <div className="flex items-center">
+                          <X className="w-5 h-5 text-red-600 mr-3" />
+                          <span className="font-medium text-red-600">Missing: 2x2 ID Picture</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="font-semibold mb-4 text-lg border-b pb-2" style={{ color: COLORS.primary, fontFamily: COLORS.font }}>
+                    Declaration
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Submitted by:</span>
+                      <p>{formData.owner_type_declaration || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Name:</span>
+                      <p>{formData.owner_representative_name || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Date Submitted:</span>
+                      <p>{formData.date_submitted || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Application Date:</span>
+                      <p>{formData.application_date || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium" style={{ color: COLORS.secondary }}>Permit Type:</span>
+                      <p>{formData.permit_type || 'Not provided'}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2498,28 +2348,53 @@ if (step === 3) {
       <form onSubmit={handleSubmit} className="space-y-8">
         {renderStepContent()}
 
-        <div className="flex justify-between pt-6">
-          {currentStep > 1 && <button type="button" onClick={prevStep} className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300" style={{ 
-            background: COLORS.success, 
-            fontFamily: COLORS.font
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-          onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-          >Previous</button>}
-          {currentStep < steps.length ? <button type="submit" className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300" style={{ 
-            background: COLORS.success, 
-            fontFamily: COLORS.font
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-          onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-          >{currentStep === steps.length - 1 ? 'Review' : 'Next'}</button> : <button type="button" onClick={() => setCurrentStep(5)} className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300" style={{ 
-            background: COLORS.success, 
-            fontFamily: COLORS.font
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-          onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-          >Submit Application</button>}
-        </div>
+{/* In the form buttons section */}
+<div className="flex justify-between pt-6">
+  {currentStep > 1 && (
+    <button 
+      type="button" 
+      onClick={prevStep}
+      className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300" 
+      style={{ 
+        background: COLORS.success, 
+        fontFamily: COLORS.font
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+      onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+    >
+      Previous
+    </button>
+  )}
+  
+  {currentStep < steps.length ? (
+    <button 
+      type="submit"
+      className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300" 
+      style={{ 
+        background: COLORS.success, 
+        fontFamily: COLORS.font
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+      onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+    >
+      {currentStep === steps.length - 1 ? 'Review' : 'Next'}
+    </button>
+  ) : (
+    <button 
+      type="button" 
+      onClick={handleSubmit}  // Changed from setCurrentStep(6)
+      className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300" 
+      style={{ 
+        background: COLORS.success, 
+        fontFamily: COLORS.font
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+      onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+    >
+      Submit Application
+    </button>
+  )}
+</div>
       </form>
 
       {/* File Preview Modal */}
@@ -2596,7 +2471,7 @@ if (step === 3) {
         </div>
       )}
 
-      {/* Declaration Modal - UPDATED */}
+      {/* Declaration Modal */}
       {showDeclarationModal && (
         <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
           <div 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, LogOut, User } from 'lucide-react';
-import { useAuth } from '../../../context/AuthContext'; // FIXED IMPORT PATH
+import { ChevronDown, LogOut, User, Briefcase, Building2, Bus, Home } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
 import AdminSidebarItems from './AdminSidebarItems';
 
 function AdminSidebar({ collapsed }) {
@@ -14,11 +14,21 @@ function AdminSidebar({ collapsed }) {
 
   // Get user info from AuthContext
   const adminName = user?.name || user?.email || "Admin";
-  // In AdminSidebar.jsx
-const adminDepartment = user?.department || 
+  const adminDepartment = user?.department || 
                        localStorage.getItem("goserveph_department") || 
                        sessionStorage.getItem("admin_department") || 
                        "";
+
+  // Helper function to get department icon
+  const getDepartmentIcon = (department) => {
+    switch(department) {
+      case 'business': return Briefcase;
+      case 'building': return Building2;
+      case 'transport': return Bus;
+      case 'barangay': return Home;
+      default: return Briefcase;
+    }
+  };
 
   // Debug logging
   useEffect(() => {
@@ -30,7 +40,7 @@ const adminDepartment = user?.department ||
     });
   }, [user]);
 
-  // Memoize filteredItems to prevent recreating array every render
+  // AdminSidebar.jsx - Updated filteredItems logic
   const filteredItems = useMemo(() => {
     if (!adminDepartment) {
       console.log("⚠️ No department found, showing empty sidebar");
@@ -39,39 +49,55 @@ const adminDepartment = user?.department ||
 
     console.log(`🔍 Filtering sidebar for department: ${adminDepartment}`);
 
-    const filtered = AdminSidebarItems.filter(item => {
-      // If item has no department restriction, show to all
-      if (!item.department || item.department.length === 0) {
-        return true;
-      }
+    // For SUPER ADMIN: Group items by department
+    if (adminDepartment === 'super') {
+      // Create department groups
+      const departmentGroups = {};
       
-      // Check if user's department is in the allowed list
-      const hasAccess = item.department.includes(adminDepartment);
+      AdminSidebarItems.forEach(item => {
+        // Skip main dashboard for now
+        if (item.id === 'dashboard') return;
+        
+        // Find which department this item belongs to (excluding 'super')
+        const itemDept = item.department.find(dept => dept !== 'super');
+        
+        if (itemDept) {
+          if (!departmentGroups[itemDept]) {
+            // Create department group with icon
+            departmentGroups[itemDept] = {
+              id: `${itemDept}Department`,
+              label: `${itemDept.charAt(0).toUpperCase() + itemDept.slice(1)} Department`,
+              icon: getDepartmentIcon(itemDept), // ADD THIS LINE
+              department: ['super'],
+              subItems: []
+            };
+          }
+          
+          // Add item to department group
+          departmentGroups[itemDept].subItems.push(item);
+        }
+      });
+
+      // Create final array with main dashboard first, then department groups
+
       
-      console.log(`🔍 Checking item ${item.label}: departments ${JSON.stringify(item.department)} - Access: ${hasAccess}`);
-      
-      return hasAccess;
-    });
+      // Add department groups in specific order
+      const departmentOrder = ['business', 'building', 'transport', 'barangay'];
+      departmentOrder.forEach(dept => {
+        if (departmentGroups[dept]) {
+          result.push(departmentGroups[dept]);
+        }
+      });
 
-    // Also filter sub-items
-    const withFilteredSubItems = filtered.map(item => ({
-      ...item,
-      subItems: item.subItems?.filter(sub => {
-        if (!sub.department || sub.department.length === 0) return true;
-        return sub.department.includes(adminDepartment);
-      }).filter(Boolean) // Remove undefined/null items
-    }));
+      return result.filter(Boolean);
+    }
 
-    console.log("🔍 Filtered sidebar items:", withFilteredSubItems.map(item => ({
-      label: item.label,
-      department: item.department,
-      hasSubItems: item.subItems?.length || 0
-    })));
-
-    return withFilteredSubItems;
+    // For REGULAR DEPARTMENT ADMINS: Show flat items for their department
+    return AdminSidebarItems.filter(item => 
+      item.department.includes(adminDepartment)
+    );
   }, [adminDepartment]);
 
-  // Update expanded items based on active route
   useEffect(() => {
     const newExpanded = new Set();
     filteredItems.forEach(item => {
@@ -209,7 +235,10 @@ const adminDepartment = user?.department ||
                       onClick={() => toggleExpanded(item)}
                     >
                       <div className="flex items-center justify-center">
-                        <item.icon className={`transition-all duration-200 ${collapsed ? 'w-5 h-5' : 'w-6 h-6'}`} />
+                        {/* Check if item.icon exists and is a component */}
+                        {item.icon && (
+                          <item.icon className={`transition-all duration-200 ${collapsed ? 'w-5 h-5' : 'w-6 h-6'}`} />
+                        )}
                         {!collapsed && <span className="ml-2 text-sm font-medium">{item.label}</span>}
                       </div>
                       {!collapsed && item.subItems && (
@@ -248,7 +277,9 @@ const adminDepartment = user?.department ||
                       }`}
                   >
                     <div className="flex items-center justify-center">
-                      <item.icon className={`transition-all duration-200 ${collapsed ? 'w-5 h-5' : 'w-6 h-6'}`} />
+                      {item.icon && (
+                        <item.icon className={`transition-all duration-200 ${collapsed ? 'w-5 h-5' : 'w-6 h-6'}`} />
+                      )}
                       {!collapsed && <span className="ml-2 text-sm font-medium">{item.label}</span>}
                     </div>
                   </NavLink>
