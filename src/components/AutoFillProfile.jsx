@@ -1,27 +1,44 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { Check, X } from "lucide-react";
 
-export default function AutofillProfile({ onClose, onAutofill, isLoading, error }) {
+export default function AutofillProfile({ onClose, onAutofill }) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  // Auto-fetch on component mount
+  useEffect(() => {
+    handleAutofill();
+  }, []);
+
   const handleAutofill = async () => {
+    setIsLoading(true);
+    setError("");
+
     try {
       const response = await fetch('http://localhost/eplms-main/backend/login/get_profile.php?action=get', {
         method: 'GET',
-        credentials: 'include', // This is crucial for PHP sessions
+        credentials: 'include',
       });
 
-      if (response.ok) {
-        const result = await response.json();
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        onAutofill(data.data); // Pass the data to parent
+        setSuccess(true);
         
-        if (result.success && result.data) {
-          onAutofill(result.data); // Pass the data to parent
-          onClose(); // Close the modal
-        } else {
-          console.error('Profile fetch failed:', result.message);
-        }
+        // Auto-close after 3 seconds
+        setTimeout(() => {
+          onClose();
+        }, 3000);
       } else {
-        console.error('HTTP error:', response.status);
+        setError(data.message || 'Failed to fetch profile');
       }
     } catch (err) {
+      setError('Network error. Please check your connection.');
       console.error('Error fetching profile:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -34,43 +51,48 @@ export default function AutofillProfile({ onClose, onAutofill, isLoading, error 
           fontFamily: 'Montserrat, Arial, sans-serif',
         }}
       >
-        <h2 className="text-xl font-bold mb-4 text-black">Autofill from Profile</h2>
-        
-        <div className="mb-6">
-          <p className="text-sm text-gray-600 mb-4">
-            Do you want to automatically fill the form with your profile information?
-          </p>
-          
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
-              <p className="text-sm text-red-700">{error}</p>
+        {success ? (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check className="w-8 h-8 text-green-600" />
             </div>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-          
-          <button
-            onClick={handleAutofill}
-            disabled={isLoading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            {isLoading ? (
-              <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Loading...
-              </div>
-            ) : (
-              'Autofill'
-            )}
-          </button>
-        </div>
+            <h3 className="text-lg font-semibold text-green-800 mb-2">
+              Profile Data Loaded Successfully!
+            </h3>
+            <p className="text-gray-600">
+              Your form has been auto-filled with your profile information.
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              This modal will close automatically...
+            </p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-6">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <X className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-red-800 mb-2">
+              Unable to Auto-fill
+            </h3>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Continue Manually
+            </button>
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              Loading Your Profile...
+            </h3>
+            <p className="text-gray-600">
+              Fetching your information to auto-fill the form.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

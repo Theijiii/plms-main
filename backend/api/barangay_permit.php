@@ -3,40 +3,33 @@ session_start();
 header('Content-Type: application/json; charset=utf-8');
 ob_start();
 
-// ✅ Handle preflight (OPTIONS) request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 
-// ✅ --- Database Connection ---
 $targetDb = 'eplms_barangay_permit_db';
 include '../../connection.php';
 
-// Check if connection is successful
 if (!$conn) {
     echo json_encode(["success" => false, "message" => "Database connection failed"]);
     exit();
 }
 
-// ✅ --- Helper Function ---
 function sanitize($data) {
     if ($data === null || $data === '') return '';
     return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
 }
 
-// ✅ --- Upload Folder ---
 $uploadDir = __DIR__ . "/uploads/";
 if (!file_exists($uploadDir)) {
     mkdir($uploadDir, 0777, true);
 }
 
-// ✅ --- Debug: Log received data ---
 error_log("=== BARANGAY PERMIT FORM DATA RECEIVED ===");
 error_log("POST data: " . print_r($_POST, true));
 error_log("FILES data: " . print_r($_FILES, true));
 
-// ✅ --- Allowed File Fields ---
 $fileFields = [
     'valid_id_file',
     'proof_of_residence_file',
@@ -51,7 +44,7 @@ foreach ($fileFields as $f) {
         $fileTmp = $_FILES[$f]['tmp_name'];
         $fileName = time() . "_" . preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($_FILES[$f]['name']));
 
-        // ✅ Validate file type
+        
         $allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'];
         $ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
         if (!in_array($ext, $allowedExtensions)) {
@@ -59,13 +52,11 @@ foreach ($fileFields as $f) {
             exit();
         }
 
-        // ✅ Validate file size (5MB max)
         if ($_FILES[$f]['size'] > 5 * 1024 * 1024) {
             echo json_encode(["success" => false, "message" => "File too large for $f. Maximum size is 5MB"]);
             exit();
         }
 
-        // ✅ Move file to uploads folder
         if (move_uploaded_file($fileTmp, $uploadDir . $fileName)) {
             $uploadedFiles[$f] = $fileName;
         } else {
@@ -74,10 +65,8 @@ foreach ($fileFields as $f) {
     }
 }
 
-// ✅ --- Process Form Fields ---
 $formData = [];
 
-// Process all POST fields
 foreach ($_POST as $key => $val) {
     if ($val === '1' || $val === '0') {
         $formData[$key] = intval($val);
@@ -88,7 +77,6 @@ foreach ($_POST as $key => $val) {
     }
 }
 
-// ✅ Set default values for missing fields
 $defaults = [
     'application_date' => date('Y-m-d'),
     'status' => 'pending',
@@ -108,12 +96,10 @@ foreach ($defaults as $key => $value) {
     }
 }
 
-// ✅ Handle user_id separately (must be integer)
 $formData['user_id'] = isset($formData['user_id']) && $formData['user_id'] !== '' 
     ? intval($formData['user_id']) 
     : 0;
 
-// ✅ Build attachments JSON from uploaded files
 $attachments = [];
 foreach ($fileFields as $field) {
     if (isset($uploadedFiles[$field])) {
@@ -124,18 +110,14 @@ foreach ($fileFields as $field) {
 }
 $formData['attachments'] = json_encode($attachments, JSON_UNESCAPED_SLASHES);
 
-// ✅ Set applicant_signature from signature_file if available
 if (isset($uploadedFiles['signature_file'])) {
     $formData['applicant_signature'] = $uploadedFiles['signature_file'];
 }
 
-// ✅ --- Debug: Log processed data ---
 error_log("Processed form data: " . print_r($formData, true));
 
-// ✅ --- Insert Into Database ---
 $table = "barangay_permit";
 
-// Prepare SQL query with all required fields
 $sql = "INSERT INTO $table SET 
         user_id = ?,
         application_date = ?,

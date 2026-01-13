@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Upload, Check, X, Eye, FileText } from "lucide-react";
 
@@ -29,7 +29,6 @@ export default function BarangayNew() {
   const [modalTitle, setModalTitle] = useState('');
   const [agreeDeclaration, setAgreeDeclaration] = useState(false);
   const [showPreview, setShowPreview] = useState({});
-  const [userData, setUserData] = useState(null);
   
   // Initialize form data
   const [formData, setFormData] = useState({
@@ -87,50 +86,6 @@ export default function BarangayNew() {
     { id: 4, title: 'Uploads', description: 'Required documents' },
     { id: 5, title: 'Review', description: 'Review your application' }
   ];
-
-  // Fetch user data when component mounts
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const response = await fetch('/back-end/api/auth/me.php', {
-          method: 'GET',
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.user) {
-            setUserData(data.user);
-            
-            // Pre-fill form with user data
-            setFormData(prev => ({
-              ...prev,
-              first_name: data.user.first_name || '',
-              middle_name: data.user.middle_name || '',
-              last_name: data.user.last_name || '',
-              email: data.user.email || '',
-              mobile_number: data.user.mobile_number || '',
-              birthdate: data.user.birthdate || '',
-              gender: data.user.gender || '',
-              civil_status: data.user.civil_status || '',
-              nationality: data.user.nationality || '',
-              house_no: data.user.house_no || '',
-              street: data.user.street || '',
-              barangay: data.user.barangay || '',
-              city_municipality: data.user.city_municipality || '',
-              province: data.user.province || '',
-              zip_code: data.user.zip_code || '',
-              user_id: data.user.id || null
-            }));
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-      }
-    };
-
-    fetchUserData();
-  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, files } = e.target;
@@ -415,7 +370,7 @@ export default function BarangayNew() {
             id_number: '',
             clearance_fee: 0.00,
             receipt_number: '',
-            user_id: userData?.id || null,
+            user_id: null,
             applicant_signature: '',
             valid_id_file: null,
             proof_of_residence_file: null,
@@ -430,7 +385,7 @@ export default function BarangayNew() {
 
         // Navigate after showing success message
         setTimeout(() => {
-          navigate("/user/dashboard");
+          navigate("/user/permittracker");
         }, 3000);
       } else {
         showErrorMessage(data.message || "Failed to submit application.");
@@ -443,6 +398,7 @@ export default function BarangayNew() {
       setIsSubmitting(false);
     }
   };
+  
 
   const renderStepContent = () => {
     switch (currentStep) {
@@ -1304,14 +1260,14 @@ export default function BarangayNew() {
               <button
                 onClick={() => {
                   setShowSuccessModal(false);
-                  navigate("/user/dashboard");
+                  navigate("/user/permittracker");
                 }}
                 style={{ background: COLORS.success }}
                 onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
                 onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
                 className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
               >
-                Go to Dashboard Now
+                Track Application
               </button>
             </div>
           </div>

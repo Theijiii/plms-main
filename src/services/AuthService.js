@@ -1,6 +1,6 @@
-const API_LOGIN = "http://localhost/eplms-main/backend/login/users.php";
-const OTP_API = "http://localhost/eplms-main/backend/login/otp-admin.php";
-const AUTOFILL_API = "http://localhost/eplms-main/backend/login/get_profile.php?action=get";
+const API_LOGIN = "http://localhost/plms-latest/backend/login/users.php";
+const OTP_API = "http://localhost/plms-latest/backend/login/otp-admin.php";
+const GET_PROFILE_API = "http://localhost/plms-latest/backend/login/get_profile.php?action=get";
 
 // --------------------- USERS ---------------------
 
@@ -105,7 +105,7 @@ export const getUserProfile = async () => {
     const token = localStorage.getItem("auth_token");
     if (!token) return { success: false, message: "No auth token found" };
 
-    const res = await fetch(AUTOFILL_API, {
+    const res = await fetch(GET_PROFILE_API, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",

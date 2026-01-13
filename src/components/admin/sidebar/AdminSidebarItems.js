@@ -1,109 +1,99 @@
-import { LayoutDashboard, Briefcase, Building2, Bus, Home } from 'lucide-react'
+import {
+  BarChart3,   // graph icon for dashboards
+  Briefcase,
+  Building2,
+  Bus,
+  Home,
+  FileText     // papers icon for requests
+} from "lucide-react";
 
 const AdminSidebarItems = [
+  // MAIN DASHBOARD
   {
     id: "dashboard",
     label: "Dashboard",
-    icon: LayoutDashboard,
+    icon: BarChart3,
     path: "/admin/dashboard",
-    department: ["super", "business", "building", "transport", "barangay"] // All admins can see dashboard
+    department: ["super"],
+  },
+
+  // BUSINESS PERMIT
+  {
+    id: "businessDashboard",
+    label: "Permit Dashboard",
+    icon: BarChart3,
+    path: "/admin/businessdashboard",
+    department: ["business", "super"],
   },
   {
     id: "businessPermit",
-    label: "Business Permit",
+    label: "Business Permit Application",
     icon: Briefcase,
-    path: "/admin/businessdashboard",
+    path: "/admin/businesspermit",
     department: ["business", "super"],
-    subItems: [
-      {
-        id: "businessDashboardSub",
-        label: "Dashboard",
-        path: "/admin/businessdashboard",
-        department: ["business", "super"]
-      },
-      {
-        id: "businessPermitSub",
-        label: "Permit Application",
-        path: "/admin/businesspermit",
-        department: ["business", "super"]
-      },
-      {
-        id: "businessProcessingSub",
-        label: "Processing",
-        path: "/admin/businessprocessing",
-        department: ["business", "super"]
-      }
-    ]
+  },
+  {
+    id: "businessProcessing",
+    label: "Business Processing",
+    icon: Briefcase,
+    path: "/admin/businessprocessing",
+    department: ["business", "super"],
+  },
+
+  // BUILDING PERMIT
+  {
+    id: "buildingDashboard",
+    label: "Permit Dashboard",
+    icon: BarChart3,
+    path: "/admin/buildingdashboard",
+    department: ["building", "super"],
   },
   {
     id: "buildingPermit",
-    label: "Building Permit",
+    label: "Building Permit Applications",
     icon: Building2,
-    path: "/admin/buildingdashboard",
+    path: "/admin/buildingpermit",
     department: ["building", "super"],
-    subItems: [
-      {
-        id: "buildingDashboardSub",
-        label: "Building Dashboard",
-        path: "/admin/buildingdashboard",
-        department: ["building", "super"]
-      },
-      {
-        id: "buildingApplicationsSub",
-        label: "Permit Applications",
-        path: "/admin/buildingpermit",
-        department: ["building", "super"]
-      },
-      {
-        id: "buildingProcessingSub",
-        label: "Processing",
-        path: "/admin/buildingprocessing",
-        department: ["building", "super"]
-      }
-    ]
+  },
+  {
+    id: "buildingProcessing",
+    label: "Building Processing",
+    icon: Building2,
+    path: "/admin/buildingprocessing",
+    department: ["building", "super"],
+  },
+
+  // FRANCHISE / TRANSPORT
+  {
+    id: "franchiseDashboard",
+    label: "Permit Dashboard",
+    icon: BarChart3,
+    path: "/admin/franchisedashboard",
+    department: ["transport", "super"],
   },
   {
     id: "franchisePermit",
-    label: "Franchise Permit",
+    label: "Franchise Permit Application",
     icon: Bus,
-    path: "/admin/franchisedashboard",
-    department: ["transport", "super"], // CHANGED: "franchise" → "transport"
-    subItems: [
-      {
-        id: "franchiseDashboardSub",
-        label: "Dashboard",
-        path: "/admin/franchisedashboard",
-        department: ["transport", "super"] // CHANGED: "franchise" → "transport"
-      },
-      {
-        id: "franchiseApplicationsSub",
-        label: "Permit Application",
-        path: "/admin/franchisepermit",
-        department: ["transport", "super"] // CHANGED: "franchise" → "transport"
-      }
-    ]
+    path: "/admin/franchisepermit",
+    department: ["transport", "super"],
   },
+
+  // BARANGAY
   {
     id: "barangayPermit",
-    label: "Barangay Permit",
+    label: "Permit Applications",
     icon: Home,
     path: "/admin/barangaypermit",
     department: ["barangay", "super"],
-    subItems: [
-      {
-        id: "barangayDashboardSub",
-        label: "Dashboard",
-        path: "/admin/barangaypermit",
-        department: ["barangay", "super"]
-      },
-      {
-        id: "requestClearanceSub",
-        label: "Clearance Requests",
-        path: "/admin/requestclearance",
-        department: ["barangay", "super"]
-      }
-    ]
-  }
+  },
+  {
+    id: "clearanceRequests",
+    label: "Clearance Requests",
+    icon: FileText,
+    path: "/admin/requestclearance",
+    department: ["barangay", "super"],
+  },
 ];
 
 export default AdminSidebarItems;

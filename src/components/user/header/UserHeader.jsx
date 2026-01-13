@@ -8,6 +8,8 @@ export default function UserHeader() {
   const [lastScrollY, setLastScrollY] = useState(0);
   const [open, setOpen] = useState(false);
   const [userName, setUserName] = useState("Loading...");
+  const [userEmail, setUserEmail] = useState("");
+  const [userRole, setUserRole] = useState("");
   const navigate = useNavigate();
 
   // ================= TIME =================
@@ -27,151 +29,144 @@ export default function UserHeader() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [lastScrollY]);
 
-  // ================= FETCH USER (DUAL AUTH) =================
+  // ================= GET USER FROM LOCALSTORAGE =================
+  const getUserFromStorage = () => {
+    console.log("🔍 UserHeader: Getting user data from localStorage...");
+    
+    // Get ALL possible name sources
+    const nameSources = [
+      localStorage.getItem("goserveph_name"),
+      localStorage.getItem("user_name"),
+      localStorage.getItem("username"),
+      localStorage.getItem("display_name")
+    ];
+    
+    // Get email
+    const email = localStorage.getItem("email") || 
+                  localStorage.getItem("goserveph_email");
+    
+    // Get role
+    const role = localStorage.getItem("role") || 
+                 localStorage.getItem("goserveph_role") || 
+                 "user";
+    
+    // Find the first non-empty name
+    let displayName = nameSources.find(name => name && name.trim() !== "");
+    
+    // If no name found, create from email
+    if (!displayName && email) {
+      const emailName = email.split('@')[0];
+      displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+    }
+    
+    // Final fallback
+    if (!displayName) {
+      displayName = "User";
+    }
+    
+    console.log("✅ User data:", {
+      name: displayName,
+      email: email || "No email",
+      role: role
+    });
+    
+    return {
+      name: displayName,
+      email: email || "",
+      role: role
+    };
+  };
+
+  // ================= INITIALIZE & UPDATE USER INFO =================
   useEffect(() => {
-    async function fetchUser() {
-      try {
-        console.log("🔄 UserHeader: Fetching user profile...");
-        
-        // Get authentication data
-        const token = localStorage.getItem("auth_token");
-        const email = localStorage.getItem("email");
-        
-        if (!token && !email) {
-          console.warn("No authentication data found");
-          setUserName("Guest");
-          return;
-        }
+    const updateUserInfo = () => {
+      const userData = getUserFromStorage();
+      setUserName(userData.name);
+      setUserEmail(userData.email);
+      setUserRole(userData.role);
+    };
+    
+    updateUserInfo();
+    
+    // Listen for storage changes
+    const handleStorageChange = () => {
+      console.log("Storage changed, updating user info");
+      updateUserInfo();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom events from same tab
+    window.addEventListener('user-data-updated', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('user-data-updated', handleStorageChange);
+    };
+  }, []);
 
-        // Prepare headers
-        const headers = {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        };
-        
-        // Add token if available
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        // Fetch profile
-        const res = await fetch("http://localhost/eplms-main/backend/login/get_profile.php?action=get", {
-          method: "GET",
-          credentials: "include", // Important for sessions
-          headers: headers
-        });
-
-        console.log("Response status:", res.status);
-        
-        if (res.status === 401) {
-          console.error("Authentication failed");
-          handleAuthFailure();
-          return;
-        }
-
-        const data = await res.json();
-        console.log("Profile data:", data);
-        
-        if (data.success && data.data) {
-          const { first_name, last_name, email } = data.data;
-          
-          // Use name if available
-          if (first_name || last_name) {
-            const fullName = `${first_name || ''} ${last_name || ''}`.trim();
-            setUserName(fullName);
-            
-            // Store data
-            localStorage.setItem("user_name", fullName);
-            localStorage.setItem("first_name", first_name || "");
-            localStorage.setItem("last_name", last_name || "");
-            localStorage.setItem("email", email || "");
-            localStorage.setItem("user_profile", JSON.stringify(data.data));
-            
-            console.log(`✅ User: ${fullName} (via ${data.auth_method})`);
-          } else if (email) {
-            // Fallback to email
-            const username = email.split("@")[0];
-            setUserName(username);
-            localStorage.setItem("user_name", username);
-            localStorage.setItem("email", email);
-            console.log(`✅ User: ${username} (via email, auth: ${data.auth_method})`);
-          } else {
-            setUserName("User");
-          }
-        } else {
-          console.warn("Profile fetch failed:", data.message);
-          useCachedData();
-        }
-        
-      } catch (err) {
-        console.error("Network error:", err);
-        useCachedData();
-      }
-    }
-
-    function handleAuthFailure() {
-      // Clear auth data
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("email");
-      localStorage.removeItem("user_id");
-      
-      // Check if we're already on login page
-      if (window.location.pathname !== "/login") {
-        navigate("/login");
-      } else {
-        setUserName("Guest");
-      }
-    }
-
-    function useCachedData() {
-      const cachedName = localStorage.getItem("user_name");
-      const cachedFirstName = localStorage.getItem("first_name");
-      const email = localStorage.getItem("email");
-      
-      if (cachedName) {
-        setUserName(cachedName);
-      } else if (cachedFirstName) {
-        setUserName(cachedFirstName);
-      } else if (email) {
-        setUserName(email.split("@")[0]);
-      } else {
-        setUserName("User");
-      }
-    }
-
-    fetchUser();
-  }, [navigate]);
-
-  // ================= LOGOUT (DUAL SYSTEM) =================
+  // ================= LOGOUT =================
   const handleLogout = async () => {
     try {
-      // Get token for API logout
       const token = localStorage.getItem("auth_token");
       
-      // Call logout API
-      await fetch("http://localhost/eplms-main/backend/login/logout.php", {
-        method: "POST",
-        credentials: "include", // Clear session cookies
-        headers: token ? {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        } : {
-          'Content-Type': 'application/json'
-        }
-      });
-      
+      if (token) {
+        await fetch("http://localhost/plms-latest/backend/login/users.php?action=logout", {
+          method: "POST",
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ action: 'logout' })
+        });
+      }
     } catch (err) {
       console.error("Logout API error:", err);
     } finally {
-      // Clear ALL local storage
-      localStorage.clear();
+      // Clear ALL user data
+      const itemsToClear = [
+        "auth_token",
+        "email",
+        "user_id",
+        "user_name",
+        "username",
+        "role",
+        "isAdmin",
+        "department",
+        "otp_verified",
+        "goserveph_name",
+        "goserveph_email",
+        "goserveph_department",
+        "goserveph_user_id",
+        "goserveph_role",
+        "last_login_time",
+        "display_name"
+      ];
       
-      // Clear session cookies
-      document.cookie = "PHPSESSID=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      itemsToClear.forEach(item => localStorage.removeItem(item));
+      
+      // Clear cookies
+      document.cookie.split(";").forEach(cookie => {
+        const eqPos = cookie.indexOf("=");
+        const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      });
+      
+      // Clear sessionStorage
+      sessionStorage.clear();
       
       // Redirect to login
       navigate("/login");
     }
+  };
+
+  // ================= MANUAL REFRESH (for debugging) =================
+  const refreshUserInfo = () => {
+    console.log(" Manually refreshing user info");
+    const userData = getUserFromStorage();
+    setUserName(userData.name);
+    setUserEmail(userData.email);
+    setUserRole(userData.role);
   };
 
   return (
@@ -196,6 +191,9 @@ export default function UserHeader() {
 
         {/* RIGHT */}
         <div className="flex items-center gap-6">
+          {/* DEBUG BUTTON (remove in production) */}
+
+          
           <div className="text-right text-xs">
             <div className="font-semibold">{time.toLocaleTimeString()}</div>
             <div>
@@ -216,16 +214,41 @@ export default function UserHeader() {
             >
               <User size={20} />
               <span className="font-medium">{userName}</span>
+              {userRole && (
+                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded capitalize">
+                  {userRole}
+                </span>
+              )}
             </button>
 
             {open && (
-              <div className="absolute right-0 mt-2 w-36 bg-white shadow-lg rounded-lg border">
-                <button 
-                  onClick={handleLogout} 
-                  className="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-red-600"
-                >
-                  <LogOut size={12} className="mr-2" /> Log Out
-                </button>
+              <div className="absolute right-0 mt-2 w-56 bg-white shadow-lg rounded-lg border z-50">
+                <div className="px-4 py-3 border-b">
+                  <div className="font-medium">{userName}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {userEmail || "No email"}
+                  </div>
+                  {userRole && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Role: <span className="font-medium capitalize">{userRole}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="py-1">
+                  <Link 
+                    to="/user/profile" 
+                    className="flex items-center px-4 py-2 hover:bg-gray-100 text-sm"
+                    onClick={() => setOpen(false)}
+                  >
+                    <User size={14} className="mr-2" /> My Profile
+                  </Link>
+                  <button 
+                    onClick={handleLogout} 
+                    className="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-red-600 text-sm border-t"
+                  >
+                    <LogOut size={14} className="mr-2" /> Log Out
+                  </button>
+                </div>
               </div>
             )}
           </div>
