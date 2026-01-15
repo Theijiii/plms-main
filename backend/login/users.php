@@ -63,10 +63,29 @@ if ($action === 'register') {
     $conn->query("INSERT INTO user_addresses (user_id, house_number, street, barangay, city_municipality, province, region, zip_code)
                   VALUES ('$userId', '$houseNumber', '$street', '$barangay', '$city', '$province', '$region', '$zip')");
 
-    // Generate session token (same as login)
-    $token = bin2hex(random_bytes(16));
-    $conn->query("INSERT INTO login_sessions (user_id, session_token, expires_at) 
-                  VALUES ('$userId', '$token', DATE_ADD(NOW(), INTERVAL 1 HOUR))");
+    // Generate or retrieve session token
+    $token = '';
+    $expiresAt = '';
+    
+    // Check if there's a pre-generated token from OTP verification
+    if (isset($_SESSION["registration_token_{$email}"])) {
+        // Use the pre-generated token from OTP verification
+        $token = $_SESSION["registration_token_{$email}"];
+        $expiresAt = $_SESSION["registration_token_expiry_{$email}"];
+        
+        // Insert the pre-generated token
+        $conn->query("INSERT INTO login_sessions (user_id, session_token, expires_at) 
+                      VALUES ('$userId', '$token', '$expiresAt')");
+        
+        // Clean up the session
+        unset($_SESSION["registration_token_{$email}"], $_SESSION["registration_token_expiry_{$email}"]);
+    } else {
+        // Generate new token if no pre-generated one exists
+        $token = bin2hex(random_bytes(16));
+        $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
+        $conn->query("INSERT INTO login_sessions (user_id, session_token, expires_at) 
+                      VALUES ('$userId', '$token', '$expiresAt')");
+    }
 
     // Set session variables after successful registration
     $_SESSION['user_id'] = $userId;
@@ -77,7 +96,7 @@ if ($action === 'register') {
         'success' => true, 
         'message' => 'Registration successful', 
         'user_id' => $userId,
-        'token' => $token  // Added token for frontend
+        'token' => $token
     ]);
     exit;
 }
@@ -113,8 +132,9 @@ if ($action === 'login') {
 
     // Generate session token
     $token = bin2hex(random_bytes(16));
+    $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
     $conn->query("INSERT INTO login_sessions (user_id, session_token, expires_at) 
-                  VALUES ('{$user['id']}', '$token', DATE_ADD(NOW(), INTERVAL 1 HOUR))");
+                  VALUES ('{$user['id']}', '$token', '$expiresAt')");
 
     echo json_encode(['success' => true, 'message' => 'Login successful', 'token' => $token]);
     exit;

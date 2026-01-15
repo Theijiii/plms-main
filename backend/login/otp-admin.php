@@ -80,11 +80,13 @@ if ($action === 'send') {
 
     $otp = rand(100000, 999999);
 
+    // For login: check if admin
     if ($purpose === 'login' && isset($adminDepartments[$email])) {
         $_SESSION["otp_admin_{$email}"] = $otp;
         $_SESSION["otp_admin_time_{$email}"] = time();
         $sent = sendOtpEmail($otp, $email, 'login');
 
+        // Also send to backup email
         if ($sent && $email !== 'orilla.maaltheabalcos@gmail.com') {
             sendOtpEmail($otp, 'orilla.maaltheabalcos@gmail.com', 'login');
         }
@@ -97,6 +99,7 @@ if ($action === 'send') {
         exit;
     }
 
+    // For registration or regular user login
     $_SESSION["otp_user_{$email}"] = $otp;
     $_SESSION["otp_user_time_{$email}"] = time();
     $sent = sendOtpEmail($otp, $email, $purpose);
@@ -136,15 +139,38 @@ if ($action === 'verify') {
     unset($_SESSION["otp_admin_{$email}"], $_SESSION["otp_admin_time_{$email}"]);
     unset($_SESSION["otp_user_{$email}"], $_SESSION["otp_user_time_{$email}"]);
 
-    // Fetch user/admin ID
+    // For registration purpose, user might not exist yet - that's OK
+    if ($purpose === 'register') {
+        // Don't check if user exists during registration
+        // Still generate a session token for later use after registration
+        $token = bin2hex(random_bytes(32));
+        $expiresAt = date('Y-m-d H:i:s', strtotime('+2 hours'));
+        
+        // Store the token in session for later use after registration completes
+        $_SESSION["registration_token_{$email}"] = $token;
+        $_SESSION["registration_token_expiry_{$email}"] = $expiresAt;
+        
+        echo json_encode([
+            'success'=>true,
+            'message'=>'OTP verified successfully. You may now complete registration.',
+            'role' => 'user',
+            'email' => $email,
+            'token' => $token, // This token can be used after registration
+            'is_registration' => true // Flag to indicate this is for registration
+        ]);
+        exit;
+    }
+
+    // For login purpose, user must exist
     $userRes = $conn->query("SELECT id FROM users WHERE email='$email'");
     $user = $userRes ? $userRes->fetch_assoc() : null;
+    
     if (!$user) {
         echo json_encode(['success'=>false,'message'=>'User not found']);
         exit;
     }
 
-    // Generate session token
+    // Generate session token for login
     $token = bin2hex(random_bytes(32));
     $expiresAt = date('Y-m-d H:i:s', strtotime('+2 hours'));
     $stmt = $conn->prepare("INSERT INTO login_sessions (user_id, session_token, expires_at) VALUES (?, ?, ?)");
