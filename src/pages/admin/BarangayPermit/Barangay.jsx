@@ -62,7 +62,7 @@ ChartJS.register(
   Filler
 );
 
-const API_BASE = "http://localhost/plms-latest/backend/barangay_permit";
+const API_BASE = "/backend/barangay_permit";
 
 // Comprehensive permit purposes based on your requirements
 const PERMIT_PURPOSES = [

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react"; // Added useRef and useCallback
 import { logTx } from '../../../lib/txLogger';
 
-const API_BRGY = "http://localhost/plms-latest/backend/barangay_permit";
+const API_BRGY = "/backend/barangay_permit";
 
 // Helper functions for file preview modal
 const isImageFile = (fileType, fileName) => {
@@ -9,7 +9,7 @@ const isImageFile = (fileType, fileName) => {
     return fileType.startsWith('image/');
   }
   if (fileName) {
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.NPwebp', '.svg'];
     return imageExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
   }
   return false;
