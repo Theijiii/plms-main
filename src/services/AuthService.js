@@ -1,6 +1,6 @@
-const API_LOGIN = "http://localhost/plms-latest/backend/login/users.php";
-const OTP_API = "http://localhost/plms-latest/backend/login/otp-admin.php";
-const GET_PROFILE_API = "http://localhost/plms-latest/backend/login/get_profile.php?action=get";
+const API_LOGIN = "/plms-latest/backend/login/users.php";
+const OTP_API = "/plms-latest/backend/login/otp-admin.php";
+const GET_PROFILE_API = "/backend/login/get_profile.php?action=get";
 // --------------------- USERS ---------------------
 
 export const loginUser = async ({ email, password }) => {
