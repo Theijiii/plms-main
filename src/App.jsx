@@ -62,8 +62,6 @@ import BrgyPermitApplication from "./pages/admin/BarangayPermit/BrgyPermitApplic
 import Tracker from "./pages/admin/PermitTracker/Tracker";
 
 
-import TestForm from "./components/TestForm";
-import TestBarangayForm from "./components/TestBarangayForm";
 
 function App() {
   return (
@@ -73,8 +71,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/testbarangayform" element={<TestBarangayForm />} />
-        <Route path="/testform" element={<TestForm />} />
+
 
         {/* Protected User routes */}
         <Route 
