@@ -179,23 +179,24 @@ export default function Register() {
       setShowOtpModal(true);
       setCountdown(30);
 
-      setPendingRegistration({
-        email: registerForm.regEmail,
-        password: registerForm.regPassword,
-        firstName: registerForm.firstName,
-        lastName: registerForm.lastName,
-        middleName: noMiddleName ? "N/A" : registerForm.middleName,
-        suffix: registerForm.suffix,
-        birthdate: registerForm.birthdate,
-        mobile_number: `+63${registerForm.mobile}`,
-        house_number: registerForm.houseNumber,
-        street: registerForm.street,
-        barangay: registerForm.barangay,
-        address: registerForm.address,
-        city_municipality: "Default City",
-        province: "Default Province",
-        region: "Default Region",
-        zip_code: null
+setPendingRegistration({
+  email: registerForm.regEmail,
+  password: registerForm.regPassword,
+  firstName: registerForm.firstName,
+  lastName: registerForm.lastName,
+  middleName: noMiddleName ? "N/A" : registerForm.middleName,
+  suffix: registerForm.suffix || "", // Send empty string if no suffix
+  birthdate: registerForm.birthdate,
+  mobile_number: registerForm.mobile, // Remove +63 prefix, backend doesn't expect it
+  house_number: registerForm.houseNumber,
+  street: registerForm.street,
+  barangay: registerForm.barangay,
+  // Remove the 'address' field since backend doesn't use it
+  city_municipality: "Default City",
+  province: "Default Province",
+  region: "Default Region",
+  zip_code: null
+
       });
     } catch (err) {
       console.error(err);
@@ -240,48 +241,56 @@ export default function Register() {
     }
   };
 
-  const handleOtpSubmit = async (e) => {
-    e.preventDefault();
-    setOtpError("");
-    setOtpSuccess("");
+const handleOtpSubmit = async (e) => {
+  e.preventDefault();
+  setOtpError("");
+  setOtpSuccess("");
 
-    const otpString = otp.join("");
+  const otpString = otp.join("");
 
-    if (otpString.length !== 6) {
-      setOtpError("Please enter the complete 6-digit OTP.");
+  if (otpString.length !== 6) {
+    setOtpError("Please enter the complete 6-digit OTP.");
+    return;
+  }
+
+  if (!otpTargetEmail) {
+    setOtpError("No OTP request in progress. Please try again.");
+    return;
+  }
+
+  try {
+    const response = await verifyOtp(otpTargetEmail, otpString, "register");
+    
+    if (!response.success) {
+      setOtpError(response.message || "Invalid OTP");
       return;
     }
 
-    if (!otpTargetEmail) {
-      setOtpError("No OTP request in progress. Please try again.");
-      return;
-    }
-
-    try {
-      const response = await verifyOtp(otpTargetEmail, otpString, "register");
+    setOtpSuccess("OTP verified successfully! Completing registration...");
+    
+    if (pendingRegistration) {
+      // Debug: Log what we're sending
+      console.log("Registration data:", pendingRegistration);
       
-      if (!response.success) {
-        setOtpError(response.message || "Invalid OTP");
-        return;
-      }
-
-      setOtpSuccess("OTP verified successfully! Completing registration...");
+      const registerResponse = await registerUser(pendingRegistration);
       
-      if (pendingRegistration) {
-        const registerResponse = await registerUser(pendingRegistration);
-        
-        if (registerResponse.success) {
-          localStorage.setItem("auth_token", registerResponse.token || response.token);
+      // Debug: Log the response
+      console.log("Registration response:", registerResponse);
+      
+      if (registerResponse.success) {
+        // Store the token from registration response
+        if (registerResponse.token) {
+          localStorage.setItem("auth_token", registerResponse.token);
           localStorage.setItem("email", pendingRegistration.email);
           localStorage.setItem("goserveph_role", "user");
-          localStorage.setItem("goserveph_user_id", registerResponse.user_id || response.user_id);
+          localStorage.setItem("goserveph_user_id", registerResponse.user_id);
           localStorage.setItem("goserveph_email", pendingRegistration.email);
           
           if (pendingRegistration.firstName) {
             localStorage.setItem("goserveph_user_name", `${pendingRegistration.firstName} ${pendingRegistration.lastName}`);
           }
           
-          sessionStorage.setItem("user_id", registerResponse.user_id || response.user_id);
+          sessionStorage.setItem("user_id", registerResponse.user_id);
           sessionStorage.setItem("user_email", pendingRegistration.email);
           sessionStorage.setItem("role", "user");
           
@@ -292,19 +301,21 @@ export default function Register() {
             resetRegistrationForm();
             navigate("/user/dashboard");
           }, 500);
-          
         } else {
-          setOtpError(registerResponse.message || "Registration failed after OTP verification");
+          setOtpError("No token received from registration. Please try logging in manually.");
         }
       } else {
-        setOtpError("Registration data not found. Please try again.");
+        setOtpError(registerResponse.message || "Registration failed after OTP verification");
       }
-      
-    } catch (err) {
-      console.error(err);
-      setOtpError("Network error while verifying OTP");
+    } else {
+      setOtpError("Registration data not found. Please try again.");
     }
-  };
+    
+  } catch (err) {
+    console.error("Registration error:", err);
+    setOtpError("Network error while verifying OTP");
+  }
+};
 
   const handleResendOtp = async () => {
     if (countdown > 0 || !otpTargetEmail) return;
