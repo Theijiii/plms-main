@@ -63,12 +63,22 @@ if ($action === 'register') {
     $conn->query("INSERT INTO user_addresses (user_id, house_number, street, barangay, city_municipality, province, region, zip_code)
                   VALUES ('$userId', '$houseNumber', '$street', '$barangay', '$city', '$province', '$region', '$zip')");
 
+    // Generate session token (same as login)
+    $token = bin2hex(random_bytes(16));
+    $conn->query("INSERT INTO login_sessions (user_id, session_token, expires_at) 
+                  VALUES ('$userId', '$token', DATE_ADD(NOW(), INTERVAL 1 HOUR))");
+
     // Set session variables after successful registration
     $_SESSION['user_id'] = $userId;
     $_SESSION['user_email'] = $email;
     $_SESSION['user_logged_in'] = true;
 
-    echo json_encode(['success' => true, 'message' => 'Registration successful', 'user_id' => $userId]);
+    echo json_encode([
+        'success' => true, 
+        'message' => 'Registration successful', 
+        'user_id' => $userId,
+        'token' => $token  // Added token for frontend
+    ]);
     exit;
 }
 
