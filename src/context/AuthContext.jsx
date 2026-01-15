@@ -17,6 +17,16 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
 
+  // Admin email to department mapping
+  const adminDepartments = {
+    'superadmin@eplms.com': 'super',
+    'businessadmin@eplms.com': 'business',
+    'buildingadmin@eplms.com': 'building',
+    'barangaystaff@eplms.com': 'barangay',
+    'transportadmin@eplms.com': 'transport',
+    'admin@eplms.com': 'super'
+  };
+
   // Check authentication status on mount
   useEffect(() => {
     checkAuthStatus();
@@ -44,7 +54,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       // Fetch user profile
-      const res = await fetch('http://localhost/eplms-main/backend/login/get_profile.php?action=get', {
+      const res = await fetch('http://localhost/plms-latest/backend/login/get_profile.php?action=get', {
         method: 'GET',
         credentials: 'include',
         headers: headers
@@ -75,12 +85,17 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('auth_method', data.auth_method);
         }
         
-        // Store role for route protection
+        // Store role and department for route protection
         if (userData.role) {
           localStorage.setItem('user_role', userData.role);
         }
         if (userData.department) {
           localStorage.setItem('user_department', userData.department);
+        }
+        
+        // Store department from admin mapping if applicable
+        if (userData.email && adminDepartments[userData.email.toLowerCase()]) {
+          localStorage.setItem('admin_department', adminDepartments[userData.email.toLowerCase()]);
         }
       } else {
         // Try to use cached data
@@ -97,9 +112,19 @@ export const AuthProvider = ({ children }) => {
   const processUserData = (data) => {
     const firstName = data.first_name || data.firstName || '';
     const lastName = data.last_name || data.lastName || '';
-    const email = data.email || '';
+    const email = (data.email || '').toLowerCase();
     const role = data.role || data.user_type || 'user';
-    const department = data.department || data.dept || '';
+    
+    // Check if this is a fixed admin account
+    let department = data.department || data.dept || '';
+    
+    // Override department for fixed admin accounts
+    if (email && adminDepartments[email]) {
+      department = adminDepartments[email];
+    }
+    
+    // Determine if user is admin based on email or role
+    const isAdmin = email in adminDepartments || role.toLowerCase().includes('admin');
     
     return {
       ...data,
@@ -109,37 +134,50 @@ export const AuthProvider = ({ children }) => {
       role,
       department,
       fullName: `${firstName} ${lastName}`.trim(),
-      username: email ? email.split('@')[0] : 'User'
+      username: email ? email.split('@')[0] : 'User',
+      isAdmin: isAdmin,
+      adminType: isAdmin ? (email in adminDepartments ? 'fixed' : 'regular') : null
     };
   };
 
   const useCachedData = () => {
     const profile = localStorage.getItem('user_profile');
+    const email = localStorage.getItem('email')?.toLowerCase();
+    
     if (profile) {
       try {
         const userData = JSON.parse(profile);
         setUser(userData);
         setIsAuthenticated(true);
       } catch (e) {
-        // Invalid JSON
+        // Invalid JSON, fall back to individual fields
+        fallbackToIndividualFields(email);
       }
     } else {
-      // Check for individual fields
-      const userName = localStorage.getItem('user_name');
-      const email = localStorage.getItem('email');
-      const role = localStorage.getItem('user_role');
-      const department = localStorage.getItem('user_department');
+      fallbackToIndividualFields(email);
+    }
+  };
+
+  const fallbackToIndividualFields = (email) => {
+    const userName = localStorage.getItem('user_name');
+    const role = localStorage.getItem('user_role');
+    const department = localStorage.getItem('user_department');
+    
+    if (userName || email) {
+      // Check if this is a fixed admin account
+      const isAdmin = email && adminDepartments[email];
+      const adminDepartment = isAdmin ? adminDepartments[email] : department;
       
-      if (userName || email) {
-        setUser({
-          fullName: userName || '',
-          username: email ? email.split('@')[0] : userName || 'User',
-          email: email || '',
-          role: role || 'user',
-          department: department || ''
-        });
-        setIsAuthenticated(true);
-      }
+      setUser({
+        fullName: userName || '',
+        username: email ? email.split('@')[0] : userName || 'User',
+        email: email || '',
+        role: role || (isAdmin ? 'admin' : 'user'),
+        department: adminDepartment || '',
+        isAdmin: isAdmin || role?.toLowerCase().includes('admin') || false,
+        adminType: isAdmin ? 'fixed' : (role?.toLowerCase().includes('admin') ? 'regular' : null)
+      });
+      setIsAuthenticated(true);
     }
   };
 
@@ -148,7 +186,7 @@ export const AuthProvider = ({ children }) => {
       // Clear any existing auth
       clearAuth();
       
-      const response = await fetch('http://localhost/eplms-main/backend/login/login.php', {
+      const response = await fetch('http://localhost/plms-latest/backend/login/login.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -162,9 +200,18 @@ export const AuthProvider = ({ children }) => {
         if (data.token) {
           localStorage.setItem('auth_token', data.token);
         }
-        if (data.email) {
-          localStorage.setItem('email', data.email);
+        
+        const email = (data.email || '').toLowerCase();
+        
+        if (email) {
+          localStorage.setItem('email', email);
+          
+          // Check if this is a fixed admin account and store department
+          if (adminDepartments[email]) {
+            localStorage.setItem('admin_department', adminDepartments[email]);
+          }
         }
+        
         if (data.user_id) {
           localStorage.setItem('user_id', data.user_id);
         }
@@ -191,7 +238,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const token = localStorage.getItem('auth_token');
       
-      await fetch('http://localhost/eplms-main/backend/login/logout.php', {
+      await fetch('http://localhost/plms-latest/backend/login/logout.php', {
         method: 'POST',
         credentials: 'include',
         headers: token ? {
@@ -218,18 +265,53 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUser = (updates) => {
-    setUser(prev => ({ ...prev, ...updates }));
-    // Also update localStorage if needed
-    if (updates.firstName || updates.lastName) {
-      const fullName = `${updates.firstName || user?.firstName || ''} ${updates.lastName || user?.lastName || ''}`.trim();
-      localStorage.setItem('user_name', fullName);
+    setUser(prev => {
+      const updatedUser = { ...prev, ...updates };
+      
+      // Check if email changed and update admin status
+      if (updates.email) {
+        const email = updates.email.toLowerCase();
+        const isAdmin = email in adminDepartments;
+        updatedUser.isAdmin = isAdmin || updatedUser.role?.toLowerCase().includes('admin');
+        updatedUser.adminType = isAdmin ? 'fixed' : (updatedUser.role?.toLowerCase().includes('admin') ? 'regular' : null);
+        
+        if (isAdmin) {
+          updatedUser.department = adminDepartments[email];
+        }
+      }
+      
+      // Update localStorage
+      if (updates.firstName || updates.lastName) {
+        const fullName = `${updates.firstName || prev?.firstName || ''} ${updates.lastName || prev?.lastName || ''}`.trim();
+        localStorage.setItem('user_name', fullName);
+      }
+      if (updates.role) {
+        localStorage.setItem('user_role', updates.role);
+      }
+      if (updates.department) {
+        localStorage.setItem('user_department', updates.department);
+      }
+      if (updates.email && adminDepartments[updates.email.toLowerCase()]) {
+        localStorage.setItem('admin_department', adminDepartments[updates.email.toLowerCase()]);
+      }
+      
+      return updatedUser;
+    });
+  };
+
+  // Helper function to check if user is a specific type of admin
+  const isAdminType = (departmentType) => {
+    if (!user || !user.isAdmin) return false;
+    
+    const email = user.email?.toLowerCase();
+    
+    // Check fixed admin accounts
+    if (email && adminDepartments[email]) {
+      return adminDepartments[email] === departmentType;
     }
-    if (updates.role) {
-      localStorage.setItem('user_role', updates.role);
-    }
-    if (updates.department) {
-      localStorage.setItem('user_department', updates.department);
-    }
+    
+    // Check regular admins based on department
+    return user.department === departmentType;
   };
 
   const value = {
@@ -240,7 +322,9 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateUser,
     checkAuthStatus,
-    clearAuth
+    clearAuth,
+    isAdminType,
+    adminDepartments // Export for reference if needed
   };
 
   return (

@@ -12,7 +12,7 @@ const COLORS = {
   font: 'Montserrat, Arial, sans-serif'
 };
 
-const API_BUS = "http://localhost/plms-latest/backend/business_permit";
+const API_BUS = "http://localhost/plms-latest/backend/business_permit/business_permit.php";
 const NATIONALITIES = [
   "Afghan", "Albanian", "Algerian", "American", "Andorran", "Angolan", "Antiguans", "Argentinean", "Armenian", "Australian", "Austrian", "Azerbaijani", "Bahamian", "Bahraini", "Bangladeshi", "Barbadian", "Barbudans", "Batswana", "Belarusian", "Belgian", "Belizean", "Beninese", "Bhutanese", "Bolivian", "Bosnian", "Brazilian", "British", "Bruneian", "Bulgarian", "Burkinabe", "Burmese", "Burundian", "Cambodian", "Cameroonian", "Canadian", "Cape Verdean", "Central African", "Chadian", "Chilean", "Chinese", "Colombian", "Comoran", "Congolese", "Costa Rican", "Croatian", "Cuban", "Cypriot", "Czech", "Danish", "Djibouti", "Dominican", "Dutch", "East Timorese", "Ecuadorean", "Egyptian", "Emirian", "Equatorial Guinean", "Eritrean", "Estonian", "Ethiopian", "Fijian", "Filipino", "Finnish", "French", "Gabonese", "Gambian", "Georgian", "German", "Ghanaian", "Greek", "Grenadian", "Guatemalan", "Guinea-Bissauan", "Guinean", "Guyanese", "Haitian", "Herzegovinian", "Honduran", "Hungarian", "I-Kiribati", "Icelander", "Indian", "Indonesian", "Iranian", "Iraqi", "Irish", "Israeli", "Italian", "Ivorian", "Jamaican", "Japanese", "Jordanian", "Kazakhstani", "Kenyan", "Kittian and Nevisian", "Kuwaiti", "Kyrgyz", "Laotian", "Latvian", "Lebanese", "Liberian", "Libyan", "Liechtensteiner", "Lithuanian", "Luxembourger", "Macedonian", "Malagasy", "Malawian", "Malaysian", "Maldivan", "Malian", "Maltese", "Marshallese", "Mauritanian", "Mauritian", "Mexican", "Micronesian", "Moldovan", "Monacan", "Mongolian", "Moroccan", "Mosotho", "Motswana", "Mozambican", "Namibian", "Nauruan", "Nepalese", "New Zealander", "Nicaraguan", "Nigerian", "Nigerien", "North Korean", "Northern Irish", "Norwegian", "Omani", "Pakistani", "Palauan", "Palestinian", "Panamanian", "Papua New Guinean", "Paraguayan", "Peruvian", "Polish", "Portuguese", "Qatari", "Romanian", "Russian", "Rwandan", "Saint Lucian", "Salvadoran", "Samoan", "San Marinese", "Sao Tomean", "Saudi", "Scottish", "Senegalese", "Serbian", "Seychellois", "Sierra Leonean", "Singaporean", "Slovakian", "Slovenian", "Solomon Islander", "Somali", "South African", "South Korean", "Spanish", "Sri Lankan", "Sudanese", "Surinamer", "Swazi", "Swedish", "Swiss", "Syrian", "Taiwanese", "Tajik", "Tanzanian", "Thai", "Togolese", "Tongan", "Trinidadian or Tobagonian", "Tunisian", "Turkish", "Tuvaluan", "Ugandan", "Ukrainian", "Uruguayan", "Uzbekistani", "Venezuelan", "Vietnamese", "Welsh", "Yemenite", "Zambian", "Zimbabwean"
 ];
@@ -100,8 +100,7 @@ export default function BusinessNew() {
     // Barangay Clearance ID
     barangay_clearance_id: "",
     
-    // Operations & Employment
-    no_of_employees: 0,
+    // Operations
     operation_type: "",
 
     // Attachments
@@ -197,13 +196,6 @@ export default function BusinessNew() {
       if (isEmpty(formData.owner_type)) missing.push("Owner Type");
       if (isEmpty(formData.citizenship)) missing.push("Citizenship");
 
-      // Check for Owner Type specific uploads
-      if (formData.owner_type === "Individual") {
-        if (isEmpty(formData.dti_registration)) missing.push("DTI Registration (Required for Individual)");
-      } else if (formData.owner_type === "Partnership") {
-        if (isEmpty(formData.sec_registration)) missing.push("SEC Registration (Required for Partnership)");
-      }
-
       if (formData.owner_type === "Corporation") {
         if (isEmpty(formData.corp_filipino_percent)) missing.push("Filipino % (Corporation)");
         if (isEmpty(formData.corp_foreign_percent)) missing.push("Foreign % (Corporation)");
@@ -223,10 +215,10 @@ export default function BusinessNew() {
     if (step === 2) {
       const missing = [];
       if (isEmpty(formData.business_name)) missing.push("Registered Business Name");
-      if (isEmpty(formData.trade_name)) missing.push("Trade / Brand Name");
       if (isEmpty(formData.business_nature)) missing.push("Nature of Business");
       if (isEmpty(formData.building_type)) missing.push("Building Type");
-      if (isEmpty(formData.capital_investment)) missing.push("Capital Investment (₱)");
+      if (isEmpty(formData.capital_investment) || formData.capital_investment <= 0) 
+        missing.push("Capital Investment (₱)");
 
       if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
       return { ok: true };
@@ -240,48 +232,47 @@ export default function BusinessNew() {
       if (isEmpty(formData.zoning_permit_id)) missing.push("Zoning Permit ID");
       if (isEmpty(formData.sanitation_permit_id)) missing.push("Sanitation Permit ID");
       if (isEmpty(formData.operation_type)) missing.push("Type of Operation");
-      if (isEmpty(formData.business_area)) missing.push("Business Area");
-      if (isEmpty(formData.total_floor_area)) missing.push("Total Floor/Building Area");
+      if (isEmpty(formData.business_area) || formData.business_area <= 0) missing.push("Business Area");
+      if (isEmpty(formData.total_floor_area) || formData.total_floor_area <= 0) missing.push("Total Floor/Building Area");
       if (isEmpty(formData.operation_time_from)) missing.push("Operation Time From");
       if (isEmpty(formData.operation_time_to)) missing.push("Operation Time To");
-      if (isEmpty(formData.total_employees)) missing.push("Total No. of Employees");
+      if (isEmpty(formData.total_employees) || formData.total_employees < 0) missing.push("Total No. of Employees");
 
       if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
       return { ok: true };
     }
 
- // In validateStep function, case 4:
-if (step === 4) {
-  const missing = [];
-  
-  // Check all mandatory documents
-  const mandatoryDocs = [
-    { field: 'bir_certificate', label: 'BIR Certificate of Registration' },
-    { field: 'lease_or_title', label: 'Lease Contract / Land Title' },
-    { field: 'fsic', label: 'Fire Safety Inspection Certificate (FSIC)' },
-    { field: 'owner_valid_id', label: 'Owner Valid ID' },
-    { field: 'id_picture', label: '2x2 ID Picture' }
-  ];
+    if (step === 4) {
+      const missing = [];
+      
+      // Check all mandatory documents
+      const mandatoryDocs = [
+        { field: 'bir_certificate', label: 'BIR Certificate of Registration' },
+        { field: 'lease_or_title', label: 'Lease Contract / Land Title' },
+        { field: 'fsic', label: 'Fire Safety Inspection Certificate (FSIC)' },
+        { field: 'owner_valid_id', label: 'Owner Valid ID' },
+        { field: 'id_picture', label: '2x2 ID Picture' }
+      ];
 
-  mandatoryDocs.forEach(doc => {
-    if (isEmpty(formData[doc.field])) {
-      missing.push(doc.label);
+      mandatoryDocs.forEach(doc => {
+        if (isEmpty(formData[doc.field])) {
+          missing.push(doc.label);
+        }
+      });
+
+      // Barangay Clearance is required if no ID is provided
+      if (isEmpty(formData.barangay_clearance) && isEmpty(formData.barangay_clearance_id)) {
+        missing.push("Barangay Clearance (either file or ID must be provided)");
+      }
+
+      // Check optional documents if marked as required
+      if (attachmentChecks.official_receipt_file && isEmpty(formData.official_receipt_file)) {
+        missing.push("Official Receipt of Payment");
+      }
+
+      if (missing.length) return { ok: false, message: "Missing required attachments: " + missing.join(", ") };
+      return { ok: true };
     }
-  });
-
-  // Barangay Clearance is required if no ID is provided
-  if (isEmpty(formData.barangay_clearance) && isEmpty(formData.barangay_clearance_id)) {
-    missing.push("Barangay Clearance (either file or ID must be provided)");
-  }
-
-  // Check optional documents if marked as required
-  if (attachmentChecks.official_receipt_file && isEmpty(formData.official_receipt_file)) {
-    missing.push("Official Receipt of Payment");
-  }
-
-  if (missing.length) return { ok: false, message: "Missing required attachments: " + missing.join(", ") };
-  return { ok: true };
-}
 
     if (step === 5) {
       const missing = [];
@@ -312,138 +303,218 @@ if (step === 4) {
 
   const prevStep = () => setCurrentStep(s => Math.max(s - 1, 1));
 
-const handleSubmit = (e) => {
-  e.preventDefault();
-  
-  // For step 6 (review), show declaration modal
-  if (currentStep === 6) {
-    const res = validateStep(6);
-    if (!res.ok) {
-      setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
-      return;
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // For step 6 (review), show declaration modal
+    if (currentStep === 6) {
+      const res = validateStep(6);
+      if (!res.ok) {
+        setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
+        return;
+      }
+      setSubmitStatus(null);
+      setShowDeclarationModal(true);
+    } else {
+      // For other steps, validate and move to next
+      const res = validateStep(currentStep);
+      if (!res.ok) {
+        setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
+        return;
+      }
+      setSubmitStatus(null);
+      setCurrentStep(s => Math.min(s + 1, steps.length));
     }
-    setSubmitStatus(null);
-    setShowDeclarationModal(true);  // This will show the modal
-  } else {
-    // For other steps, validate and move to next
-    const res = validateStep(currentStep);
-    if (!res.ok) {
-      setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
-      return;
-    }
-    setSubmitStatus(null);
-    setCurrentStep(s => Math.min(s + 1, steps.length));
-  }
-};
+  };
 
-const confirmDeclaration = async () => {
-  if (!agreeDeclaration) {
-    setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
+  const confirmDeclaration = async () => {
+    if (!agreeDeclaration) {
+      setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
+      setShowDeclarationModal(false);
+      return;
+    }
+    
+    setIsSubmitting(true);
     setShowDeclarationModal(false);
-    return;
-  }
-  
-  setIsSubmitting(true);
-  setShowDeclarationModal(false);
 
-  try {
-    const formDataToSend = new FormData();
-    
-    // Add all form data to FormData
-    Object.keys(formData).forEach((key) => {
-      const value = formData[key];
-      if (value === null || value === undefined) {
-        // Skip null/undefined values
-      } else if (value instanceof File) {
-        formDataToSend.append(key, value, value.name);
-      } else if (value === "") {
-        formDataToSend.append(key, "");
-      } else {
-        formDataToSend.append(key, String(value));
-      }
-    });
-
-    // Add attachment check status
-    Object.keys(attachmentChecks).forEach(key => {
-      formDataToSend.append(`attachment_${key}`, attachmentChecks[key] ? '1' : '0');
-    });
-
-    console.log('Making request to:', "http://localhost/plms-latest/backend/business_permit/business_permit.php");
-
-    // First, test if we can reach the PHP file
     try {
-      const testResponse = await fetch("http://localhost/plms-latest/backend/business_permit/business_permit.php", {
-        method: 'OPTIONS',
+      const formDataToSend = new FormData();
+      
+      // Field mapping from frontend names to database column names
+      const fieldMapping = {
+        // Owner Information
+        'first_name': 'owner_first_name',
+        'last_name': 'owner_last_name',
+        'middle_name': 'owner_middle_name',
+        'owner_type': 'owner_type',
+        'citizenship': 'citizenship',
+        'corp_filipino_percent': 'corp_filipino_percent',
+        'corp_foreign_percent': 'corp_foreign_percent',
+        'date_of_birth': 'date_of_birth',
+        'contact_number': 'contact_number',
+        'email_address': 'email_address',
+        'home_address': 'home_address',
+        'valid_id_type': 'valid_id_type',
+        'valid_id_number': 'valid_id_number',
+        
+        // Business Information
+        'business_name': 'business_name',
+        'trade_name': 'trade_name',
+        'business_nature': 'business_nature',
+        'building_type': 'building_type',
+        'capital_investment': 'capital_investment',
+        
+        // Business Address
+        'house_bldg_no': 'house_bldg_no',
+        'building_name': 'building_name',
+        'block_no': 'block_no',
+        'lot_no': 'lot_no',
+        'street': 'street',
+        'subdivision': 'subdivision',
+        'province': 'province',
+        'city_municipality': 'city_municipality',
+        'barangay': 'barangay',
+        'zip_code': 'zip_code',
+        'district': 'district',
+        
+        // Operations Details
+        'zoning_permit_id': 'zoning_permit_id',
+        'sanitation_permit_id': 'sanitation_permit_id',
+        'business_area': 'business_area',
+        'total_floor_area': 'total_floor_area',
+        'operation_time_from': 'operation_time_from',
+        'operation_time_to': 'operation_time_to',
+        'operation_type': 'operation_type',
+        'total_employees': 'total_employees',
+        'male_employees': 'male_employees',
+        'female_employees': 'female_employees',
+        'employees_in_qc': 'employees_in_qc',
+        'delivery_van_truck': 'delivery_van_truck',
+        'delivery_motorcycle': 'delivery_motorcycle',
+        'barangay_clearance_id': 'barangay_clearance_id',
+        
+        // Declaration
+        'owner_type_declaration': 'owner_type_declaration',
+        'owner_representative_name': 'owner_representative_name',
+        'date_submitted': 'date_submitted',
+        'permit_type': 'permit_type',
+        'application_date': 'application_date'
+      };
+
+      // Add all mapped form data
+      Object.keys(fieldMapping).forEach((frontendField) => {
+        const dbField = fieldMapping[frontendField];
+        const value = formData[frontendField];
+        
+        if (value !== null && value !== undefined && value !== '') {
+          formDataToSend.append(dbField, String(value));
+        }
       });
-      console.log('OPTIONS test response:', testResponse.status);
-    } catch (testError) {
-      console.error('Cannot reach PHP file:', testError);
-      throw new Error(`Cannot connect to server. Please make sure:
-        1. XAMPP Apache is running (green in control panel)
-        2. PHP file exists at: http://localhost/plms-latest/backend/business_permit/business_permit.php
-        3. Open the URL above in browser to test`);
-    }
 
-    const response = await fetch("http://localhost/plms-latest/backend/business_permit/business_permit.php", {
-      method: "POST",
-      body: formDataToSend,
-      // No need to set headers for FormData - browser sets it automatically
-    });
-
-    console.log('Response status:', response.status);
-
-    const raw = await response.text();
-    console.log('Raw response:', raw);
-    
-    // Check if response is empty
-    if (!raw.trim()) {
-      throw new Error('Server returned an empty response');
-    }
-    
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch (parseError) {
-      console.error('JSON parse error. Raw response:', raw);
+      // Add boolean flags for document attachments
+      formDataToSend.append('has_barangay_clearance', formData.barangay_clearance ? '1' : '0');
+      formDataToSend.append('has_bir_certificate', formData.bir_certificate ? '1' : '0');
+      formDataToSend.append('has_lease_or_title', formData.lease_or_title ? '1' : '0');
+      formDataToSend.append('has_fsic', formData.fsic ? '1' : '0');
+      formDataToSend.append('has_owner_valid_id', formData.owner_valid_id ? '1' : '0');
+      formDataToSend.append('has_id_picture', formData.id_picture ? '1' : '0');
+      formDataToSend.append('has_official_receipt', formData.official_receipt_file ? '1' : '0');
+      formDataToSend.append('has_owner_scanned_id', formData.owner_scanned_id ? '1' : '0');
       
-      // Check if it's a PHP error
-      if (raw.includes('<?php') || raw.includes('Fatal error') || raw.includes('Parse error')) {
-        throw new Error('PHP error detected. Server returned PHP code instead of JSON.');
+      // Owner type specific flags
+      if (formData.owner_type === "Individual") {
+        formDataToSend.append('has_dti_registration', formData.dti_registration ? '1' : '0');
+      } else if (formData.owner_type === "Partnership") {
+        formDataToSend.append('has_sec_registration', formData.sec_registration ? '1' : '0');
       }
       
-      throw new Error('Server returned invalid JSON: ' + parseError.message);
-    }
+      if (formData.owner_type_declaration === "Representative") {
+        formDataToSend.append('has_representative_scanned_id', formData.representative_scanned_id ? '1' : '0');
+      }
 
-    if (!response.ok || !data.success) {
-      throw new Error(data.message || `Submission failed with status: ${response.status}`);
-    }
+      // Add file attachments
+      const fileFields = [
+        'barangay_clearance', 'bir_certificate', 'lease_or_title', 'fsic',
+        'owner_valid_id', 'id_picture', 'official_receipt_file',
+        'dti_registration', 'sec_registration', 'owner_scanned_id', 'representative_scanned_id'
+      ];
+      
+      fileFields.forEach(fieldName => {
+        if (formData[fieldName] instanceof File) {
+          formDataToSend.append(fieldName, formData[fieldName]);
+        }
+      });
 
-    showSuccessMessage(data.message || "Business permit application submitted successfully!");
-    
-    setTimeout(() => {
-      navigate("/user/permittracker");
-    }, 3000);
+      console.log('Submitting to:', API_BUS);
 
-  } catch (err) {
-    console.error("Submission error:", err);
-    
-    // More specific error messages
-    let userMessage = err.message;
-    
-    if (err.message.includes('Failed to fetch') || err.message.includes('Network error')) {
-      userMessage = `Network error. Please check:
-        1. XAMPP Control Panel → Start Apache (make it green)
-        2. Open browser and go to: http://localhost/
-        3. If you see XAMPP dashboard, Apache is running
-        4. Then visit: http://localhost/plms-latest/backend/business_permit/business_permit.php
-        5. If you see JSON error or PHP code, the file is accessible`;
+      // Test connection first
+      try {
+        const testResponse = await fetch(API_BUS, {
+          method: 'OPTIONS',
+        });
+        console.log('OPTIONS test response:', testResponse.status);
+      } catch (testError) {
+        console.error('Cannot reach PHP file:', testError);
+        throw new Error(`Cannot connect to server. Please check:
+          1. XAMPP Apache is running
+          2. PHP file exists at: ${API_BUS}
+          3. Check browser console for details`);
+      }
+
+      const response = await fetch(API_BUS, {
+        method: "POST",
+        body: formDataToSend,
+      });
+
+      console.log('Response status:', response.status);
+
+      const raw = await response.text();
+      console.log('Raw response:', raw);
+      
+      if (!raw.trim()) {
+        throw new Error('Server returned an empty response');
+      }
+      
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch (parseError) {
+        console.error('JSON parse error. Raw response:', raw);
+        
+        if (raw.includes('<?php') || raw.includes('Fatal error') || raw.includes('Parse error')) {
+          throw new Error('PHP error detected. Check server logs.');
+        }
+        
+        throw new Error('Server returned invalid JSON: ' + parseError.message);
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || `Submission failed with status: ${response.status}`);
+      }
+
+      showSuccessMessage(data.message || "Business permit application submitted successfully!");
+      
+      setTimeout(() => {
+        navigate("/user/permittracker");
+      }, 3000);
+
+    } catch (err) {
+      console.error("Submission error:", err);
+      
+      let userMessage = err.message;
+      
+      if (err.message.includes('Failed to fetch') || err.message.includes('Network error')) {
+        userMessage = `Network error. Please check:
+          1. XAMPP Control Panel → Start Apache
+          2. Open browser and go to: ${API_BUS}
+          3. If you see JSON response, the API is working`;
+      }
+      
+      showErrorMessage(userMessage);
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    showErrorMessage(userMessage);
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   const renderStepContent = () => {
     switch (currentStep) {

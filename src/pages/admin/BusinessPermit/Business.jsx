@@ -1,1057 +1,2055 @@
-import { useEffect, useState } from "react";
-import { logTx } from "../../../lib/txLogger";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import {
+  Bar,
+  Pie,
+  Line,
+  Doughnut
+} from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from "chart.js";
+import {
+  Search,
+  Download,
+  Calendar,
+  TrendingUp,
+  FileText,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  MoreVertical,
+  RefreshCw,
+  Eye,
+  Printer,
+  DownloadCloud,
+  TrendingDown,
+  Building,
+  Briefcase,
+  Users,
+  DollarSign,
+  MapPin,
+  Factory,
+  Store,
+  Coffee,
+  ShoppingBag,
+  Utensils,
+  Home,
+  Truck,
+  BarChart,
+  Layers,
+  File,
+  FileText as FileTextIcon,
+  FileSpreadsheet,
+  Image,
+  X,
+  AlertTriangle,
+  User,
+  FileCode,
+  Folder,
+  FileArchive,
+  FileVideo,
+  FileAudio
+} from "lucide-react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
-export default function BusinessPermit() {
-  // --- Mock data with enhanced business details ---
-  const mockBusinessData = [
-    {
-      id: "BP-1001",
-      business_name: "Sunrise Bakery",
-      trade_name: "Sunrise Breads & Pastries",
-      business_nature: "Food and Beverage - Retail",
-      business_structure: "Sole Proprietorship",
-      registration_no: "BN-2024-00123",
-      tin: "123-456-789-000",
-      ownership_status: "Owner-Operated",
-      building_type: "Commercial",
-      business_activity: "Bakery and Cafe",
-      business_description: "Fresh bread, pastries, and coffee shop serving daily baked goods",
-      capital_investment: 500000,
-      number_of_employees: 8,
-      applicant: { full_name: "Juan Dela Cruz", contact_number: "09171234567", email_address: "juan@example.com" },
-      business_address: { street: "123 M.L. Quezon St.", barangay: "San Isidro", city_municipality: "Metro City" },
-      permit_number: "PERMIT-001",
-      permit_type: "New",
-      submitted_at: "2025-09-28",
-      status: "For Compliance",
-      assigned_officer: null,
-      total_amount: 2500,
-      attachments: [{ name: "Business Registration.pdf", url: "https://example.com/sample1.pdf" }],
-      previous_permit_number: null,
-      review_status: null,
-      review_comments: null,
-      last_updated: "2025-09-28T10:00:00Z",
-      compliance_remarks: "",
-      compliance_files: []
-    },
-    {
-      id: "BP-1002",
-      business_name: "Green Grocers Corporation",
-      trade_name: "Green Grocers Supermarket",
-      business_nature: "Retail - Supermarket",
-      business_structure: "Corporation",
-      registration_no: "SEC-2023-04567",
-      tin: "987-654-321-000",
-      ownership_status: "Corporate Owned",
-      building_type: "Commercial",
-      business_activity: "Grocery and Supermarket",
-      business_description: "Full-service supermarket offering fresh produce, groceries, and household items",
-      capital_investment: 5000000,
-      number_of_employees: 45,
-      applicant: { full_name: "Maria Santos", contact_number: "09181234567", email_address: "maria@example.com" },
-      business_address: { street: "45 Rizal Ave.", barangay: "Bagong Bayan", city_municipality: "Metro City" },
-      permit_number: "PERMIT-002",
-      permit_type: "Renewal",
-      submitted_at: "2025-09-30",
-      status: "Approved",
-      assigned_officer: "Officer Reyes",
-      total_amount: 1200,
-      attachments: [{ name: "Renewal Form.pdf", url: "https://example.com/sample2.pdf" }],
-      previous_permit_number: "PERMIT-002-2024",
-      review_status: "Approved",
-      review_comments: "All documents complete",
-      last_updated: "2025-10-01T08:15:00Z",
-      compliance_remarks: "",
-      compliance_files: []
-    },
-    {
-      id: "BP-1003",
-      business_name: "Blue Harbor Restaurant",
-      trade_name: "Blue Harbor Seafood Grill",
-      business_nature: "Food and Beverage - Restaurant",
-      business_structure: "Partnership",
-      registration_no: "BN-2024-00345",
-      tin: "456-789-123-000",
-      ownership_status: "Partnership",
-      building_type: "Commercial",
-      business_activity: "Fine Dining Restaurant",
-      business_description: "Upscale seafood restaurant with bar and function room",
-      capital_investment: 3000000,
-      number_of_employees: 25,
-      applicant: { full_name: "Pedro Reyes", contact_number: "09201234567", email_address: "pedro@example.com" },
-      business_address: { street: "7 Marina Blvd.", barangay: "Port Area", city_municipality: "Bay City" },
-      permit_number: "PERMIT-003",
-      permit_type: "Liquor",
-      submitted_at: "2025-10-02",
-      status: "For Compliance",
-      assigned_officer: "Officer Cruz",
-      total_amount: 8500,
-      attachments: [{ name: "Floor Plan.pdf", url: "https://example.com/sample3.pdf" }],
-      previous_permit_number: null,
-      review_status: null,
-      review_comments: "Missing health certificate and fire safety inspection",
-      last_updated: "2025-10-02T13:30:00Z",
-      compliance_remarks: "Please submit health certificate and fire safety inspection report",
-      compliance_files: [
-        { 
-          id: 1, 
-          name: "health_certificate.pdf", 
-          type: "application/pdf",
-          submitted_date: "2025-10-05T10:30:00Z",
-          status: "pending_review",
-          size: "1.8 MB"
-        },
-        { 
-          id: 2, 
-          name: "fire_safety_inspection.jpg", 
-          type: "image/jpeg",
-          submitted_date: "2025-10-05T10:30:00Z", 
-          status: "approved",
-          size: "2.3 MB"
-        }
-      ]
-    },
-    {
-      id: "BP-1004",
-      business_name: "Ace Hardware and Construction Supply",
-      trade_name: "Ace Hardware",
-      business_nature: "Retail - Hardware",
-      business_structure: "Corporation",
-      registration_no: "SEC-2022-07890",
-      tin: "789-123-456-000",
-      ownership_status: "Corporate Owned",
-      building_type: "Industrial",
-      business_activity: "Hardware and Construction Materials",
-      business_description: "Complete hardware store serving construction and DIY needs",
-      capital_investment: 8000000,
-      number_of_employees: 35,
-      applicant: { full_name: "Ana Lopez", contact_number: "09051234567", email_address: "ana@example.com" },
-      business_address: { street: "88 Industrial Rd.", barangay: "Zone 2", city_municipality: "Metro City" },
-      permit_number: "PERMIT-004",
-      permit_type: "Amendment",
-      submitted_at: "2025-10-03",
-      status: "Rejected",
-      assigned_officer: null,
-      total_amount: 1800,
-      attachments: [{ name: "Amendment Request.pdf", url: "https://example.com/sample4.pdf" }],
-      previous_permit_number: "PERMIT-004-2024",
-      review_status: "Rejected",
-      review_comments: "Insufficient documentation for expansion",
-      last_updated: "2025-10-04T09:00:00Z",
-      compliance_remarks: "",
-      compliance_files: []
-    },
-    {
-      id: "BP-1005",
-      business_name: "Lotus Spa and Wellness Center",
-      trade_name: "Lotus Spa",
-      business_nature: "Health and Wellness Services",
-      business_structure: "Sole Proprietorship",
-      registration_no: "BN-2024-00567",
-      tin: "234-567-890-000",
-      ownership_status: "Owner-Operated",
-      building_type: "Commercial",
-      business_activity: "Spa and Wellness Services",
-      business_description: "Full-service spa offering massages, facials, and wellness treatments",
-      capital_investment: 1200000,
-      number_of_employees: 12,
-      applicant: { full_name: "Liza Cruz", contact_number: "09191234567", email_address: "liza@example.com" },
-      business_address: { street: "12 Wellness St.", barangay: "Green Park", city_municipality: "Metro City" },
-      permit_number: "PERMIT-005",
-      permit_type: "Special",
-      submitted_at: "2025-10-04",
-      status: "Approved",
-      assigned_officer: "Officer Ramos",
-      total_amount: 4500,
-      attachments: [{ name: "Certificate.pdf", url: "https://example.com/sample5.pdf" }],
-      previous_permit_number: null,
-      review_status: "Approved",
-      review_comments: "Approved with conditions - regular sanitation inspection required",
-      last_updated: "2025-10-05T11:20:00Z",
-      compliance_remarks: "",
-      compliance_files: []
-    },
-    {
-      id: "BP-1006",
-      business_name: "Metro Pharmacy and Drugstore",
-      trade_name: "Metro Pharmacy",
-      business_nature: "Healthcare - Retail Pharmacy",
-      business_structure: "Sole Proprietorship",
-      registration_no: "BN-2024-00678",
-      tin: "345-678-901-000",
-      ownership_status: "Owner-Operated",
-      building_type: "Commercial",
-      business_activity: "Pharmacy and Drugstore",
-      business_description: "Community pharmacy serving prescription and OTC medication needs",
-      capital_investment: 800000,
-      number_of_employees: 6,
-      applicant: { full_name: "Mark Lim", contact_number: "09211234567", email_address: "mark@example.com" },
-      business_address: { street: "200 Health Ave.", barangay: "Central", city_municipality: "Metro City" },
-      permit_number: "PERMIT-006",
-      permit_type: "New",
-      submitted_at: "2025-10-05",
-      status: "For Compliance",
-      assigned_officer: null,
-      total_amount: 3000,
-      attachments: [{ name: "Owner ID.pdf", url: "https://example.com/sample6.pdf" }],
-      previous_permit_number: null,
-      review_status: null,
-      review_comments: null,
-      last_updated: "2025-10-05T14:45:00Z",
-      compliance_remarks: "",
-      compliance_files: []
-    }
-  ];
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
-  // initialize states with mock data so manual input is immediately available
-  const [business, setBusiness] = useState(mockBusinessData);
+const API_BASE = "http://localhost/plms-latest/backend/business_permit";
+
+// Business types and categories
+const BUSINESS_CATEGORIES = [
+  { value: "retail", label: "Retail Store", icon: Store, color: "#4CAF50" },
+  { value: "restaurant", label: "Restaurant/Café", icon: Utensils, color: "#FDA811" },
+  { value: "manufacturing", label: "Manufacturing", icon: Factory, color: "#4A90E2" },
+  { value: "services", label: "Services", icon: Briefcase, color: "#9C27B0" },
+  { value: "wholesale", label: "Wholesale", icon: ShoppingBag, color: "#2196F3" },
+  { value: "construction", label: "Construction", icon: Home, color: "#795548" },
+  { value: "transport", label: "Transport", icon: Truck, color: "#607D8B" },
+  { value: "professional", label: "Professional Services", icon: Briefcase, color: "#3F51B5" },
+  { value: "others", label: "Others", icon: Building, color: "#F44336" }
+];
+
+const BUSINESS_SIZE = [
+  { value: "micro", label: "Micro (<₱3M)", color: "#4CAF50" },
+  { value: "small", label: "Small (₱3M-15M)", color: "#FDA811" },
+  { value: "medium", label: "Medium (₱15M-100M)", color: "#4A90E2" },
+  { value: "large", label: "Large (>₱100M)", color: "#9C27B0" }
+];
+
+// Format currency function
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount || 0);
+};
+
+// Helper function to match business category
+const matchesCategory = (businessType, category) => {
+  if (!businessType) return false;
+  
+  switch (category) {
+    case "retail": return businessType.includes("retail") || businessType.includes("store");
+    case "restaurant": return businessType.includes("restaurant") || businessType.includes("cafe") || businessType.includes("food");
+    case "manufacturing": return businessType.includes("manufactur");
+    case "services": return businessType.includes("service");
+    case "wholesale": return businessType.includes("wholesale");
+    case "construction": return businessType.includes("construct");
+    case "transport": return businessType.includes("transport");
+    case "professional": return businessType.includes("professional") || businessType.includes("consult");
+    case "others": return true;
+    default: return false;
+  }
+};
+
+export default function BusPermitAnalytics() {
+  const [permits, setPermits] = useState([]);
+  const [filteredPermits, setFilteredPermits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("all"); // all | new | renewal | special | liquor | amendment
-
-  const [selectedPermit, setSelectedPermit] = useState(null);
+  const [dateRange, setDateRange] = useState([null, null]);
+  const [startDate, endDate] = dateRange;
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sizeFilter, setSizeFilter] = useState("all");
+  const [exporting, setExporting] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [assignedOfficerInput, setAssignedOfficerInput] = useState("");
-  const [actionComment, setActionComment] = useState("");
-  const [complianceRemarks, setComplianceRemarks] = useState("");
-  const [complianceFiles, setComplianceFiles] = useState([]);
-  const [previewUrl, setPreviewUrl] = useState(null);
+  const [selectedPermit, setSelectedPermit] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [actionComment, setActionComment] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showFilePreview, setShowFilePreview] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const itemsPerPage = 8;
 
-  // canonical type detector — used by filtering and counts (strict)
-  const getEntryType = (p) => {
-    const pt = (p.permit_type || p.application_type || "").toString().toLowerCase();
-    if (pt.includes("renew")) return "renewal";
-    if (pt.includes("new")) return "new";
-    if (pt.includes("special")) return "special";
-    if (pt.includes("liquor")) return "liquor";
-    if (pt.includes("amend")) return "amendment";
-    // fallback heuristic: presence of previous_permit_number strongly implies renewal
-    if (p.previous_permit_number) return "renewal";
-    // conservative default — unknown so it won't show in strict tabs
-    return "unknown";
+  // Fetch permits from API
+  const fetchPermits = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch(`${API_BASE}/admin_fetch.php`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        setPermits(result.data);
+      } else {
+        throw new Error(result.message || 'Failed to fetch permits');
+      }
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching permits:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const [businessData, setBusinessData] = useState(mockBusinessData); // central source for counts
-  const [counts, setCounts] = useState({
-    total: mockBusinessData.length,
-    approved: mockBusinessData.filter(p => (p.status||"").toLowerCase() === "approved").length,
-    pending: mockBusinessData.filter(p => (p.status||"").toLowerCase() === "for compliance").length,
-    rejected: mockBusinessData.filter(p => (p.status||"").toLowerCase() === "rejected").length,
-  });
-  const [countByType, setCountByType] = useState(
-    (() => {
-      const byType = mockBusinessData.reduce((acc, p) => {
-        const t = getEntryType(p);
-        acc[t] = (acc[t] || 0) + 1;
-        return acc;
-      }, {});
-      byType.all = mockBusinessData.length;
-      return byType;
-    })()
-  );
+  // Fetch single permit with documents
+  const fetchSinglePermit = async (permitId) => {
+    try {
+      const response = await fetch(`${API_BASE}/fetch_single.php?permit_id=${permitId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        // If documents are not included, fetch them separately
+        if (!result.data.documents || result.data.documents.length === 0) {
+          const documents = await fetchPermitDocuments(permitId);
+          result.data.documents = documents;
+        }
+        
+        return result.data;
+      } else {
+        throw new Error(result.message || 'Failed to fetch permit details');
+      }
+    } catch (err) {
+      console.error('Error fetching single permit:', err);
+      return null;
+    }
+  };
 
-  // fetch -> update both business and businessData so UI + counts use same source
-  useEffect(() => {
-    fetch("http://e-plms.goserveph.com/front-end/src/pages/admin/BusinessPermit/businessAdminMock.php")
-      .then((res) => {
-        if (!res.ok) throw new Error("Network response was not ok");
-        return res.json();
-      })
-      .then((data) => {
-        const items = Array.isArray(data) && data.length ? data : mockBusinessData;
-        setBusiness(items);
-        setBusinessData(items);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Business Permit Service error:", err);
-        // fallback to inline mock data when remote fetch fails
-        setBusiness(mockBusinessData);
-        setBusinessData(mockBusinessData);
-        setError("");
-        setLoading(false);
-      });
+  // Fetch documents separately if needed
+  const fetchPermitDocuments = async (permitId) => {
+    try {
+      const response = await fetch(`${API_BASE}/fetch_documents.php?permit_id=${permitId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        return result.data;
+      } else {
+        return [];
+      }
+    } catch (err) {
+      console.error('Error fetching documents:', err);
+      return [];
+    }
+  };
+
+  // Enhanced stats with business-specific metrics
+  const stats = useMemo(() => {
+    const total = permits.length;
+    const approved = permits.filter(p => p.status?.toUpperCase() === "APPROVED").length;
+    const rejected = permits.filter(p => p.status?.toUpperCase() === "REJECTED").length;
+    const pending = permits.filter(p => p.status?.toUpperCase() === "PENDING" || !p.status).length;
+    const compliance = permits.filter(p => p.status?.toUpperCase() === "COMPLIANCE").length;
+
+    // Calculate business category statistics
+    const categoryStats = BUSINESS_CATEGORIES.map(category => {
+      const count = permits.filter(p => {
+        const businessType = p.business_nature?.toLowerCase();
+        if (!businessType) return false;
+        
+        return matchesCategory(businessType, category.value);
+      }).length;
+      
+      const approvedCount = permits.filter(p => {
+        const businessType = p.business_nature?.toLowerCase();
+        if (!businessType) return false;
+        
+        return matchesCategory(businessType, category.value) && p.status?.toUpperCase() === "APPROVED";
+      }).length;
+      
+      const approvalRate = count > 0 ? ((approvedCount / count) * 100).toFixed(1) : 0;
+      
+      // Calculate total capital for this category
+      const totalCapital = permits.filter(p => {
+        const businessType = p.business_nature?.toLowerCase();
+        if (!businessType) return false;
+        
+        return matchesCategory(businessType, category.value);
+      }).reduce((sum, p) => sum + (parseFloat(p.capital_investment) || 0), 0);
+      
+      return {
+        ...category,
+        count,
+        approvedCount,
+        approvalRate,
+        totalCapital: formatCurrency(totalCapital),
+        rawCapital: totalCapital
+      };
+    }).filter(p => p.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    // Calculate size distribution
+    const sizeStats = BUSINESS_SIZE.map(size => {
+      const count = permits.filter(p => {
+        const capital = parseFloat(p.capital_investment) || 0;
+        if (size.value === "micro" && capital < 3000000) return true;
+        if (size.value === "small" && capital >= 3000000 && capital < 15000000) return true;
+        if (size.value === "medium" && capital >= 15000000 && capital < 100000000) return true;
+        if (size.value === "large" && capital >= 100000000) return true;
+        return false;
+      }).length;
+      
+      return {
+        ...size,
+        count,
+        percentage: total > 0 ? ((count / total) * 100).toFixed(1) : 0
+      };
+    }).filter(s => s.count > 0);
+
+    const topCategory = categoryStats[0] || { label: "N/A", count: 0 };
+    
+    // Calculate totals
+    const totalCapital = permits.reduce((sum, p) => sum + (parseFloat(p.capital_investment) || 0), 0);
+    const totalEmployees = permits.reduce((sum, p) => sum + (parseInt(p.total_employees) || 0), 0);
+    const avgProcessingTime = 7;
+    
+    // Calculate trend
+    const lastMonthCount = Math.floor(total * 0.85);
+    const trend = total > 0 ? ((total - lastMonthCount) / lastMonthCount * 100).toFixed(1) : 0;
+    
+    return {
+      total,
+      approved,
+      rejected,
+      pending,
+      compliance,
+      categoryStats,
+      sizeStats,
+      topCategory,
+      totalCapital: formatCurrency(totalCapital),
+      totalEmployees,
+      avgProcessingTime,
+      trend,
+      approvalRate: total > 0 ? ((approved / total) * 100).toFixed(1) : 0,
+      completionRate: total > 0 ? (((approved + rejected + compliance) / total) * 100).toFixed(1) : 0
+    };
+  }, [permits]);
+
+  // Process business categories for charts
+  const topCategories = useMemo(() => {
+    return stats.categoryStats.slice(0, 5);
+  }, [stats.categoryStats]);
+
+  const categoryData = useMemo(() => {
+    return {
+      labels: topCategories.map(p => p.label),
+      counts: topCategories.map(p => p.count),
+      colors: topCategories.map(p => p.color),
+      capital: topCategories.map(p => p.rawCapital || 0)
+    };
+  }, [topCategories]);
+
+  // Monthly trends by category
+  const monthlyData = useMemo(() => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    // Get data for last 6 months
+    const last6Months = months.slice(Math.max(0, currentMonth - 5), currentMonth + 1);
+    
+    // Get top 3 categories
+    const top3Categories = topCategories.slice(0, 3);
+    
+    // Initialize monthly counts
+    const monthlyCounts = {};
+    top3Categories.forEach(category => {
+      monthlyCounts[category.value] = Array(last6Months.length).fill(0);
+    });
+    
+    // Count permits per month
+    permits.forEach(permit => {
+      if (!permit.application_date) return;
+      
+      const permitDate = new Date(permit.application_date);
+      const monthIndex = permitDate.getMonth();
+      const year = permitDate.getFullYear();
+      
+      if (year === currentYear && monthIndex <= currentMonth && monthIndex >= currentMonth - 5) {
+        const monthInRange = monthIndex - (currentMonth - 5);
+        if (monthInRange >= 0) {
+          const businessType = permit.business_nature?.toLowerCase() || "";
+          
+          // Find if this business type matches our top categories
+          top3Categories.forEach(category => {
+            if (matchesCategory(businessType, category.value)) {
+              monthlyCounts[category.value][monthInRange]++;
+            }
+          });
+        }
+      }
+    });
+    
+    const colors = ["#4CAF50", "#FDA811", "#4A90E2"];
+    return {
+      labels: last6Months,
+      datasets: top3Categories.map((category, idx) => ({
+        label: category.label,
+        data: monthlyCounts[category.value] || Array(last6Months.length).fill(0),
+        borderColor: colors[idx],
+        backgroundColor: colors[idx] + "20",
+        fill: true,
+        tension: 0.4
+      }))
+    };
+  }, [permits, topCategories]);
+
+  // Get status text and color
+  const getStatusText = (status) => {
+    const statusUpper = (status || "").toUpperCase();
+    switch (statusUpper) {
+      case "APPROVED":
+        return {
+          text: "Approved",
+          color: "text-[#4CAF50]",
+          bgColor: "bg-[#4CAF50]/10",
+          icon: CheckCircle
+        };
+      case "REJECTED":
+        return {
+          text: "Rejected",
+          color: "text-[#E53935]",
+          bgColor: "bg-[#E53935]/10",
+          icon: XCircle
+        };
+      case "PENDING":
+        return {
+          text: "Pending",
+          color: "text-[#4A90E2]",
+          bgColor: "bg-[#4A90E2]/10",
+          icon: Clock
+        };
+      case "COMPLIANCE":
+        return {
+          text: "For Compliance",
+          color: "text-[#FDA811]",
+          bgColor: "bg-[#FDA811]/10",
+          icon: AlertCircle
+        };
+      default:
+        return {
+          text: "Pending",
+          color: "text-[#4D4A4A]",
+          bgColor: "bg-gray-100",
+          icon: AlertCircle
+        };
+    }
+  };
+
+  // Get category icon
+  const getCategoryIcon = useCallback((businessType) => {
+    if (!businessType) return Building;
+    
+    const businessTypeLower = businessType.toLowerCase();
+    if (businessTypeLower.includes("retail") || businessTypeLower.includes("store")) return Store;
+    if (businessTypeLower.includes("restaurant") || businessTypeLower.includes("cafe") || businessTypeLower.includes("food")) return Utensils;
+    if (businessTypeLower.includes("manufactur")) return Factory;
+    if (businessTypeLower.includes("service")) return Briefcase;
+    if (businessTypeLower.includes("wholesale")) return ShoppingBag;
+    if (businessTypeLower.includes("construct")) return Home;
+    if (businessTypeLower.includes("transport")) return Truck;
+    if (businessTypeLower.includes("professional") || businessTypeLower.includes("consult")) return Briefcase;
+    return Building;
   }, []);
 
-  // recompute counts whenever businessData changes (keeps dashboard trackable)
+  // Filter permits based on filters
   useEffect(() => {
-    const items = businessData || [];
-    const total = items.length;
-    const approved = items.filter((p) => (p.status || "").toLowerCase() === "approved").length;
-    const pending = items.filter((p) => (p.status || "").toLowerCase() === "for compliance").length;
-    const rejected = items.filter((p) => (p.status || "").toLowerCase() === "rejected").length;
+    let filtered = [...permits];
+    const searchLower = searchTerm.toLowerCase();
 
-    const byType = items.reduce((acc, p) => {
-      const t = getEntryType(p);
-      acc[t] = (acc[t] || 0) + 1;
-      return acc;
-    }, {});
-    // ensure "all" key exists so the All tab badge shows total count
-    byType.all = total;
-
-    setCounts({ total, approved, pending, rejected });
-    setCountByType(byType);
-  }, [businessData]);
-
-  // 🔍 Filtering logic (strict type match per tab)
-  const filteredBusiness = business.filter((permit) => {
-    const type = getEntryType(permit);
-    switch (activeTab) {
-      case "new":
-        return type === "new";
-      case "renewal":
-        return type === "renewal";
-      case "special":
-        return type === "special";
-      case "liquor":
-        return type === "liquor";
-      case "amendment":
-        return type === "amendment";
-      case "all":
-      default:
-        return true;
+    // Date range filter
+    if (startDate && endDate) {
+      filtered = filtered.filter(p => {
+        if (!p.application_date) return false;
+        const permitDate = new Date(p.application_date);
+        return permitDate >= startDate && permitDate <= endDate;
+      });
     }
-  });
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(p => 
+        p.owner_first_name?.toLowerCase().includes(searchLower) ||
+        p.owner_last_name?.toLowerCase().includes(searchLower) ||
+        p.business_name?.toLowerCase().includes(searchLower) ||
+        p.trade_name?.toLowerCase().includes(searchLower) ||
+        p.barangay?.toLowerCase().includes(searchLower) ||
+        p.applicant_id?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(p => {
+        const status = (p.status || "").toUpperCase();
+        return status === statusFilter.toUpperCase();
+      });
+    }
+
+    // Category filter
+    if (categoryFilter !== "all") {
+      filtered = filtered.filter(p => 
+        matchesCategory(p.business_nature?.toLowerCase(), categoryFilter)
+      );
+    }
+
+    // Size filter
+    if (sizeFilter !== "all") {
+      filtered = filtered.filter(p => {
+        const capital = parseFloat(p.capital_investment) || 0;
+        switch (sizeFilter) {
+          case "micro": return capital < 3000000;
+          case "small": return capital >= 3000000 && capital < 15000000;
+          case "medium": return capital >= 15000000 && capital < 100000000;
+          case "large": return capital >= 100000000;
+          default: return true;
+        }
+      });
+    }
+
+    setFilteredPermits(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [permits, startDate, endDate, searchTerm, statusFilter, categoryFilter, sizeFilter]);
+
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchPermits();
+  }, []);
+
+  // Export to CSV
+  const exportToCSV = useCallback(() => {
+    setExporting(true);
+    const headers = ["Application ID", "Business Name", "Owner", "Business Type", "Capital", "Status", "Application Date", "Barangay", "Employees"];
+    const csvContent = [
+      headers.join(","),
+      ...filteredPermits.map(p => [
+        p.applicant_id || "N/A",
+        p.business_name || "N/A",
+        `${p.owner_last_name}, ${p.owner_first_name}`,
+        p.business_nature || "N/A",
+        formatCurrency(p.capital_investment),
+        getStatusText(p.status).text,
+        p.application_date ? new Date(p.application_date).toLocaleDateString() : "N/A",
+        p.barangay || "N/A",
+        p.total_employees || "0"
+      ].map(field => `"${field || ''}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `business-permits-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    setExporting(false);
+  }, [filteredPermits]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredPermits.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentPermits = filteredPermits.slice(startIndex, endIndex);
+
+  // Helper functions for modal
+  const getUIStatus = (dbStatus) => {
+    if (!dbStatus) return 'Pending';
+    switch (dbStatus.toUpperCase()) {
+      case 'APPROVED': return 'Approved';
+      case 'REJECTED': return 'Rejected';
+      case 'COMPLIANCE': return 'Compliance';
+      case 'PENDING': return 'Pending';
+      default: return 'Pending';
+    }
+  };
+
+  const getDBStatus = (uiStatus) => {
+    switch (uiStatus) {
+      case 'Approved': return 'APPROVED';
+      case 'Rejected': return 'REJECTED';
+      case 'Compliance': return 'COMPLIANCE';
+      case 'Pending': return 'PENDING';
+      default: return 'PENDING';
+    }
+  };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case "Approved":
-        return "text-green-600 bg-green-100";
-      case "Rejected":
-        return "text-red-600 bg-red-100";
-      case "For Compliance":
-        return "text-orange-600 bg-orange-100";
-      default:
-        return "text-gray-600 bg-gray-100";
+    const uiStatus = getUIStatus(status);
+    switch (uiStatus) {
+      case "Approved": return "text-[#4CAF50] bg-[#4CAF50]/10";
+      case "Rejected": return "text-[#E53935] bg-[#E53935]/10";
+      case "Compliance": return "text-[#FDA811] bg-[#FDA811]/10";
+      case "Pending": return "text-[#4A90E2] bg-[#4A90E2]/10";
+      default: return "text-gray-600 bg-gray-100";
     }
   };
 
-  const getFileStatusColor = (status) => {
-    switch (status) {
-      case "approved": return "text-green-600 bg-green-100 border-green-200";
-      case "rejected": return "text-red-600 bg-red-100 border-red-200";
-      case "pending_review": return "text-yellow-600 bg-yellow-100 border-yellow-200";
-      default: return "text-gray-600 bg-gray-100 border-gray-200";
+  // Check if file is an image
+  const isImageFile = (fileType, fileName = '') => {
+    const fileTypeLower = (fileType || '').toLowerCase();
+    const fileNameLower = (fileName || '').toLowerCase();
+    
+    if (fileNameLower.endsWith('.jpg') || 
+        fileNameLower.endsWith('.jpeg') || 
+        fileNameLower.endsWith('.png') || 
+        fileNameLower.endsWith('.gif') || 
+        fileNameLower.endsWith('.bmp') || 
+        fileNameLower.endsWith('.webp') ||
+        fileNameLower.endsWith('.svg')) {
+      return true;
+    }
+    
+    if (fileTypeLower.includes('image/jpeg') || 
+        fileTypeLower.includes('image/png') || 
+        fileTypeLower.includes('image/gif') || 
+        fileTypeLower.includes('image/bmp') || 
+        fileTypeLower.includes('image/webp') ||
+        fileTypeLower.includes('image/svg')) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Get file icon - Updated to use Lucide icons
+  const getFileIcon = (fileType, fileName = '') => {
+    const fileTypeLower = (fileType || '').toLowerCase();
+    const fileNameLower = (fileName || '').toLowerCase();
+    
+    if (fileNameLower.endsWith('.pdf') || fileTypeLower.includes('pdf')) {
+      return {
+        icon: FileTextIcon,
+        bgColor: 'bg-red-100',
+        textColor: 'text-red-600',
+        iconColor: '#dc2626'
+      };
+    }
+    
+    if (fileNameLower.endsWith('.doc') || fileNameLower.endsWith('.docx') ||
+        fileTypeLower.includes('word') || fileTypeLower.includes('officedocument.wordprocessingml')) {
+      return {
+        icon: FileText,
+        bgColor: 'bg-blue-100',
+        textColor: 'text-blue-600',
+        iconColor: '#2563eb'
+      };
+    }
+    
+    if (fileNameLower.endsWith('.xls') || fileNameLower.endsWith('.xlsx') ||
+        fileTypeLower.includes('excel') || fileTypeLower.includes('spreadsheetml')) {
+      return {
+        icon: FileSpreadsheet,
+        bgColor: 'bg-green-100',
+        textColor: 'text-green-600',
+        iconColor: '#059669'
+      };
+    }
+    
+    if (fileTypeLower.includes('image/')) {
+      return {
+        icon: Image,
+        bgColor: 'bg-purple-100',
+        textColor: 'text-purple-600',
+        iconColor: '#7c3aed'
+      };
+    }
+    
+    if (fileNameLower.endsWith('.zip') || fileNameLower.endsWith('.rar') || 
+        fileNameLower.endsWith('.7z') || fileTypeLower.includes('zip') ||
+        fileTypeLower.includes('compressed')) {
+      return {
+        icon: FileArchive,
+        bgColor: 'bg-orange-100',
+        textColor: 'text-orange-600',
+        iconColor: '#ea580c'
+      };
+    }
+    
+    if (fileNameLower.endsWith('.mp4') || fileNameLower.endsWith('.avi') || 
+        fileNameLower.endsWith('.mov') || fileTypeLower.includes('video')) {
+      return {
+        icon: FileVideo,
+        bgColor: 'bg-pink-100',
+        textColor: 'text-pink-600',
+        iconColor: '#db2777'
+      };
+    }
+    
+    if (fileNameLower.endsWith('.mp3') || fileNameLower.endsWith('.wav') || 
+        fileNameLower.endsWith('.flac') || fileTypeLower.includes('audio')) {
+      return {
+        icon: FileAudio,
+        bgColor: 'bg-indigo-100',
+        textColor: 'text-indigo-600',
+        iconColor: '#4f46e5'
+      };
+    }
+    
+    if (fileNameLower.endsWith('.js') || fileNameLower.endsWith('.ts') || 
+        fileNameLower.endsWith('.html') || fileNameLower.endsWith('.css') ||
+        fileNameLower.endsWith('.json') || fileNameLower.endsWith('.xml')) {
+      return {
+        icon: FileCode,
+        bgColor: 'bg-gray-100',
+        textColor: 'text-gray-600',
+        iconColor: '#4b5563'
+      };
+    }
+    
+    return {
+      icon: File,
+      bgColor: 'bg-gray-100',
+      textColor: 'text-gray-600',
+      iconColor: '#4b5563'
+    };
+  };
+
+  // Get file type name
+  const getFileTypeName = (fileType, fileName = '') => {
+    const fileTypeLower = (fileType || '').toLowerCase();
+    const fileNameLower = (fileName || '').toLowerCase();
+    
+    if (fileNameLower.endsWith('.pdf')) return 'PDF Document';
+    if (fileNameLower.endsWith('.doc') || fileNameLower.endsWith('.docx')) return 'Word Document';
+    if (fileNameLower.endsWith('.xls') || fileNameLower.endsWith('.xlsx')) return 'Excel Spreadsheet';
+    if (fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg')) return 'JPEG Image';
+    if (fileNameLower.endsWith('.png')) return 'PNG Image';
+    if (fileNameLower.endsWith('.gif')) return 'GIF Image';
+    if (fileNameLower.endsWith('.zip') || fileNameLower.endsWith('.rar')) return 'Compressed Archive';
+    if (fileNameLower.endsWith('.mp4') || fileNameLower.endsWith('.mov')) return 'Video File';
+    if (fileNameLower.endsWith('.mp3') || fileNameLower.endsWith('.wav')) return 'Audio File';
+    if (fileTypeLower.includes('pdf')) return 'PDF Document';
+    if (fileTypeLower.includes('image/')) return 'Image';
+    if (fileTypeLower.includes('video/')) return 'Video';
+    if (fileTypeLower.includes('audio/')) return 'Audio';
+    if (fileTypeLower.includes('zip')) return 'Compressed File';
+    
+    return 'Document';
+  };
+
+  // Get file extension
+  const getFileExtension = (fileName = '') => {
+    const parts = fileName.split('.');
+    return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : 'FILE';
+  };
+
+  // Format time
+  const formatTime = (time) => {
+    if (!time) return 'N/A';
+    try {
+      const [hours, minutes] = time.split(':');
+      const date = new Date();
+      date.setHours(hours, minutes);
+      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return time;
     }
   };
 
-  const getTabBadgeColor = (tab) =>
-    tab === activeTab ? "bg-[#4CAF50] text-white" : "bg-gray-100 text-gray-600";
-
-  const getTabBorderColor = (tab) => {
-    return tab === activeTab ? "border-[#4CAF50]" : "border-transparent";
+  // Format comments
+  const formatComments = (commentsText) => {
+    if (!commentsText || typeof commentsText !== 'string') return [];
+    
+    try {
+      const commentBlocks = commentsText.split(/(?=---\s+.+?\s+---)/g);
+      const formattedComments = [];
+      
+      for (let block of commentBlocks) {
+        block = block.trim();
+        if (!block) continue;
+        
+        const match = block.match(/^---\s+(.+?)\s+---\n([\s\S]*)$/);
+        
+        if (match) {
+          const timestamp = match[1].trim();
+          const comment = match[2].trim();
+          
+          if (comment) {
+            formattedComments.push({
+              timestamp,
+              comment
+            });
+          }
+        } else {
+          formattedComments.push({
+            timestamp: 'Just now',
+            comment: block
+          });
+        }
+      }
+      
+      return formattedComments;
+    } catch (e) {
+      console.error('Error formatting comments:', e);
+      return [{
+        timestamp: 'Recent',
+        comment: commentsText
+      }];
+    }
   };
 
-  const getTabTextColor = (tab) => {
-    return tab === activeTab ? "text-[#4CAF50] dark:text-[#4CAF50]" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300";
-  };
-
-  const openModal = (permit) => {
-    setSelectedPermit(permit);
-    setAssignedOfficerInput(permit.assigned_officer || "");
-    setActionComment(permit.review_comments || "");
-    setComplianceRemarks(permit.compliance_remarks || "");
-    setComplianceFiles(permit.compliance_files || []);
-    setPreviewUrl(null);
-    setShowModal(true);
+  const openModal = async (permit) => {
+    try {
+      const detailedPermit = await fetchSinglePermit(permit.permit_id);
+      
+      if (detailedPermit) {
+        const uiStatus = getUIStatus(detailedPermit.status);
+        setSelectedPermit({
+          ...detailedPermit,
+          uiStatus: uiStatus
+        });
+      } else {
+        const uiStatus = getUIStatus(permit.status);
+        setSelectedPermit({
+          ...permit,
+          uiStatus: uiStatus
+        });
+      }
+      
+      setActionComment('');
+      setShowModal(true);
+    } catch (err) {
+      console.error('Error opening modal:', err);
+      const uiStatus = getUIStatus(permit.status);
+      setSelectedPermit({
+        ...permit,
+        uiStatus: uiStatus
+      });
+      setActionComment('');
+      setShowModal(true);
+    }
   };
 
   const closeModal = () => {
     setSelectedPermit(null);
-    setAssignedOfficerInput("");
-    setActionComment("");
-    setComplianceRemarks("");
-    setComplianceFiles([]);
-    setPreviewUrl(null);
+    setActionComment('');
+    setSelectedFile(null);
+    setShowFilePreview(false);
     setShowModal(false);
   };
 
-  const updatePermitStatus = (id, status, comment = '', remarks = '', files = []) => {
-    const now = new Date().toISOString();
-    const updated = business.map(p =>
-      p.id === id
-        ? { 
-            ...p, 
-            status, 
-            review_status: status, 
-            review_comments: comment || p.review_comments, 
-            compliance_remarks: remarks || p.compliance_remarks,
-            compliance_files: files.length > 0 ? files : p.compliance_files,
-            last_updated: now, 
-            assigned_officer: assignedOfficerInput || p.assigned_officer 
-          }
-        : p
-    );
-    setBusiness(updated);
-    setSelectedPermit(updated.find(p => p.id === id));
-  };
-
-  const handleApprove = () => {
+  // Update permit status
+  const updatePermitStatus = async (status) => {
     if (!selectedPermit) return;
-    if (selectedPermit.status === "Approved") {
-      updatePermitStatus(selectedPermit.id, 'Approved', actionComment);
-      try { logTx({ service: 'business', permitId: selectedPermit.id, action: 'update_review', comment: actionComment }); } catch(e) {}
-    } else {
-      updatePermitStatus(selectedPermit.id, 'Approved', actionComment);
-      try { logTx({ service: 'business', permitId: selectedPermit.id, action: 'approve', comment: actionComment }); } catch(e) {}
+    
+    try {
+      const dbStatus = getDBStatus(status);
+      
+      const response = await fetch(`${API_BASE}/update_status.php`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          permit_id: selectedPermit.permit_id,
+          status: dbStatus,
+          comments: actionComment
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update permit status');
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to update permit status');
+      }
+
+      // Update the selected permit in state
+      setSelectedPermit(prev => ({
+        ...prev,
+        status: dbStatus,
+        uiStatus: status,
+        comments: result.data?.comments || prev.comments
+      }));
+
+      // Refresh the permits list
+      await fetchPermits();
+
+      // Clear the comment input
+      setActionComment('');
+
+      // Show success message
+      setSuccessMessage(`Permit ${status.toLowerCase()} successfully!`);
+      setShowSuccessModal(true);
+
+    } catch (err) {
+      console.error('Error updating permit status:', err);
+      setError(err.message || 'Failed to update permit status');
     }
   };
 
-  const handleReject = () => {
-    if (!selectedPermit) return;
-    if (selectedPermit.status === "Rejected") {
-      updatePermitStatus(selectedPermit.id, 'Rejected', actionComment);
-      try { logTx({ service: 'business', permitId: selectedPermit.id, action: 'update_review', comment: actionComment }); } catch(e) {}
-    } else {
-      updatePermitStatus(selectedPermit.id, 'Rejected', actionComment);
-      try { logTx({ service: 'business', permitId: selectedPermit.id, action: 'reject', comment: actionComment }); } catch(e) {}
+  const viewFile = async (file) => {
+    try {
+      if (!file || !file.file_path) {
+        alert('File path not available');
+        return;
+      }
+      
+      // Extract filename
+      const filename = file.file_path.split('/').pop();
+      
+      // Call API endpoint instead of direct file access
+      const fullUrl = `${API_BASE}/uploads/${encodeURIComponent(filename)}`;
+      
+      setSelectedFile({
+        ...file,
+        url: fullUrl,
+        name: file.document_name || file.document_type || 'Document'
+      });
+      setShowFilePreview(true);
+      
+    } catch (err) {
+      console.error('Error accessing file:', err);
+      alert('Unable to access the file');
     }
   };
 
-  const handleForCompliance = () => {
-    if (!selectedPermit) return;
-    updatePermitStatus(selectedPermit.id, 'For Compliance', actionComment, complianceRemarks, complianceFiles);
-    try { 
-      logTx({ 
-        service: 'business', 
-        permitId: selectedPermit.id, 
-        action: 'for_compliance', 
-        comment: actionComment,
-        remarks: complianceRemarks 
-      }); 
-    } catch(e) {}
+  const closeFilePreview = () => {
+    setSelectedFile(null);
+    setShowFilePreview(false);
   };
 
-  const handleSaveAssignment = () => {
-    if (!selectedPermit) return;
-    const now = new Date().toISOString();
-    const updated = business.map(p =>
-      p.id === selectedPermit.id
-        ? { ...p, assigned_officer: assignedOfficerInput, last_updated: now }
-        : p
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FBFBFB] p-6 flex items-center justify-center font-poppins">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4CAF50] mx-auto"></div>
+          <p className="mt-4 text-[#4D4A4A]">Loading business analytics...</p>
+        </div>
+      </div>
     );
-    setBusiness(updated);
-    setSelectedPermit(updated.find(p => p.id === selectedPermit.id));
-    try { logTx({ service: 'business', permitId: selectedPermit.id, action: 'assign', comment: `assigned:${assignedOfficerInput}` }); } catch(e) {}
-  };
-
-  const handleFileStatusChange = (fileId, newStatus) => {
-    if (!selectedPermit) return;
-    
-    const updatedFiles = selectedPermit.compliance_files.map(file => 
-      file.id === fileId ? { ...file, status: newStatus } : file
-    );
-    
-    const updated = business.map(p =>
-      p.id === selectedPermit.id
-        ? { ...p, compliance_files: updatedFiles }
-        : p
-    );
-    
-    setBusiness(updated);
-    setSelectedPermit(updated.find(p => p.id === selectedPermit.id));
-    
-    try { 
-      logTx({ 
-        service: 'business', 
-        permitId: selectedPermit.id, 
-        action: 'update_file_status', 
-        fileId: fileId,
-        status: newStatus 
-      }); 
-    } catch(e) {}
-  };
-
-  const handleFileReview = (fileId, reviewComment) => {
-    if (!selectedPermit) return;
-    
-    const updatedFiles = selectedPermit.compliance_files.map(file => 
-      file.id === fileId ? { ...file, review_comment: reviewComment, reviewed_at: new Date().toISOString() } : file
-    );
-    
-    const updated = business.map(p =>
-      p.id === selectedPermit.id
-        ? { ...p, compliance_files: updatedFiles }
-        : p
-    );
-    
-    setBusiness(updated);
-    setSelectedPermit(updated.find(p => p.id === selectedPermit.id));
-  };
+  }
 
   return (
-    <div className="bg-white dark:bg-slate-700 p-6 rounded-lg">
-
+    <div className="min-h-screen bg-[#FBFBFB] p-4 md:p-6 font-poppins">
+      {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Business Permits Dashboard
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Manage and track all business permit types
-        </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#4D4A4A] font-montserrat">
+              Business Permit Analytics
+            </h1>
+            <p className="text-[#4D4A4A] text-opacity-70 mt-2">
+              Track and analyze business permit applications by category, size, and status
+            </p>
+          </div>
+          <div className="flex items-center space-x-3 mt-4 md:mt-0">
+            <button
+              onClick={fetchPermits}
+              className="p-2 rounded-lg bg-white border border-[#E9E7E7] hover:bg-gray-50 transition-colors"
+              title="Refresh Data"
+            >
+              <RefreshCw className="w-5 h-5 text-[#4D4A4A]" />
+            </button>
+            <button
+              onClick={exportToCSV}
+              disabled={exporting}
+              className="px-4 py-2 bg-[#4CAF50] text-white rounded-lg hover:bg-opacity-90 transition-colors flex items-center space-x-2 disabled:opacity-50 font-montserrat"
+            >
+              <DownloadCloud className="w-5 h-5" />
+              <span>{exporting ? "Exporting..." : "Export Report"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {[
+            {
+              title: "Total Applications",
+              value: stats.total,
+              icon: FileText,
+              color: "#4CAF50",
+              trend: `${stats.trend}%`,
+              trendUp: stats.trend > 0,
+              description: "All business types"
+            },
+            {
+              title: "Total Capital",
+              value: stats.totalCapital,
+              icon: DollarSign,
+              color: "#FDA811",
+              trend: "+12.5%",
+              trendUp: true,
+              description: "Total investment"
+            },
+            {
+              title: "Top Category",
+              value: stats.topCategory.label,
+              icon: stats.topCategory.icon || Building,
+              color: stats.topCategory.color || '#4CAF50',
+              trend: `${stats.topCategory.count} applications`,
+              trendUp: true,
+              description: "Most registered"
+            },
+            {
+              title: "Pending Review",
+              value: stats.pending + stats.compliance,
+              icon: Clock,
+              color: "#4A90E2",
+              trend: `${stats.pending} pending, ${stats.compliance} compliance`,
+              trendUp: stats.pending > 0,
+              description: "Awaiting action"
+            }
+          ].map((stat, idx) => (
+            <div
+              key={idx}
+              className="bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7] transition-all hover:shadow"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-[#4D4A4A] text-opacity-70">{stat.title}</p>
+                  <p className="text-2xl font-bold text-[#4D4A4A] mt-2 font-montserrat">
+                    {stat.value}
+                  </p>
+                  <div className="mt-2">
+                    <div className="flex items-center">
+                      {stat.trendUp ? (
+                        <TrendingUp className="w-4 h-4 text-[#4CAF50] mr-1" />
+                      ) : (
+                        <TrendingDown className="w-4 h-4 text-[#E53935] mr-1" />
+                      )}
+                      <span className={`text-sm ${stat.trendUp ? 'text-[#4CAF50]' : 'text-[#E53935]'}`}>
+                        {stat.trend}
+                      </span>
+                    </div>
+                    <span className="text-xs text-[#4D4A4A] text-opacity-60">{stat.description}</span>
+                  </div>
+                </div>
+                <div className={`p-3 rounded-lg`} style={{ backgroundColor: stat.color }}>
+                  <stat.icon className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Secondary Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-lg p-4 shadow-sm border border-[#E9E7E7]">
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Approval Rate</p>
+            <p className="text-xl font-bold text-[#4CAF50]">{stats.approvalRate}%</p>
+          </div>
+          <div className="bg-white rounded-lg p-4 shadow-sm border border-[#E9E7E7]">
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Total Employees</p>
+            <p className="text-xl font-bold text-[#4A90E2]">{stats.totalEmployees}</p>
+          </div>
+          <div className="bg-white rounded-lg p-4 shadow-sm border border-[#E9E7E7]">
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Avg Processing</p>
+            <p className="text-xl font-bold text-[#FDA811]">{stats.avgProcessingTime} days</p>
+          </div>
+          <div className="bg-white rounded-lg p-4 shadow-sm border border-[#E9E7E7]">
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Completion Rate</p>
+            <p className="text-xl font-bold text-[#9C27B0]">{stats.completionRate}%</p>
+          </div>
+        </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-[#4CAF50]/10 p-4 rounded-lg border border-[#4CAF50]/20">
-          <p className="text-[#4CAF50] text-sm font-medium">Total Permits</p>
-          <p className="text-[#4CAF50] text-2xl font-bold">{counts.total}</p>
-        </div>
-        <div className="bg-[#4A90E2]/10 p-4 rounded-lg border border-[#4A90E2]/20">
-          <p className="text-[#4A90E2] text-sm font-medium">Approved</p>
-          <p className="text-[#4A90E2] text-2xl font-bold">{counts.approved}</p>
-        </div>
-        <div className="bg-[#FDA811]/10 p-4 rounded-lg border border-[#FDA811]/20">
-          <p className="text-[#FDA811] text-sm font-medium">Pending</p>
-          <p className="text-[#FDA811] text-2xl font-bold">{counts.pending}</p>
-        </div>
-        <div className="bg-red-100 p-4 rounded-lg border border-red-200">
-          <p className="text-red-600 text-sm font-medium">Rejected</p>
-          <p className="text-red-600 text-2xl font-bold">{counts.rejected}</p>
-        </div>
-      </div>
+      {/* Filters and Controls */}
+      <div className="mb-6">
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-[#E9E7E7]">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#4D4A4A] text-opacity-50 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="Search businesses, owners, or barangays..."
+                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-[#E9E7E7] bg-white text-[#4D4A4A] focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent font-poppins"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap gap-3">
+              <div className="relative">
+                <DatePicker
+                  selectsRange={true}
+                  startDate={startDate}
+                  endDate={endDate}
+                  onChange={(update) => setDateRange(update)}
+                  className="px-4 py-2 rounded-lg border border-[#E9E7E7] bg-white text-[#4D4A4A] focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent font-poppins w-full md:w-auto"
+                  placeholderText="Select date range"
+                />
+                <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#4D4A4A] text-opacity-50 w-5 h-5 pointer-events-none" />
+              </div>
 
-      {/* 🧭 Tab Navigation with New Color Scheme */}
-      <div className="mb-6 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm">
-        <div className="border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
-          <nav className="flex space-x-6 px-6 min-w-max">
-            {[
-              { key: "all", label: "All Permits" },
-              { key: "new", label: "New Permit" },
-              { key: "renewal", label: "Renewal Permit" },
-              { key: "special", label: "Special" },
-              { key: "liquor", label: "Liquor Permit" },
-              { key: "amendment", label: "Amendment" },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center gap-2 transition-all ${getTabBorderColor(tab.key)} ${getTabTextColor(tab.key)}`}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-2 rounded-lg border border-[#E9E7E7] bg-white text-[#4D4A4A] focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent font-poppins"
               >
-                {tab.label}
-                <span className={`px-2 py-1 text-xs rounded-full ${getTabBadgeColor(tab.key)}`}>
-                  {countByType[tab.key] || 0}
+                <option value="all">All Status</option>
+                <option value="approved">Approved</option>
+                <option value="pending">Pending</option>
+                <option value="compliance">For Compliance</option>
+                <option value="rejected">Rejected</option>
+              </select>
+
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="px-4 py-2 rounded-lg border border-[#E9E7E7] bg-white text-[#4D4A4A] focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent font-poppins"
+              >
+                <option value="all">All Categories</option>
+                {BUSINESS_CATEGORIES.map(category => (
+                  <option key={category.value} value={category.value}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={sizeFilter}
+                onChange={(e) => setSizeFilter(e.target.value)}
+                className="px-4 py-2 rounded-lg border border-[#E9E7E7] bg-white text-[#4D4A4A] focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent font-poppins"
+              >
+                <option value="all">All Sizes</option>
+                {BUSINESS_SIZE.map(size => (
+                  <option key={size.value} value={size.value}>
+                    {size.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {/* Line Chart - Trends by Category */}
+        <div className="lg:col-span-2 bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Monthly Trends by Business Category</h3>
+              <p className="text-sm text-[#4D4A4A] text-opacity-70">Applications for top business categories</p>
+            </div>
+            <div className="flex items-center space-x-4">
+              {monthlyData.datasets.map((dataset, idx) => (
+                <span key={idx} className="flex items-center">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: dataset.borderColor }}></div>
+                  <span className="text-sm text-[#4D4A4A] ml-2">{dataset.label}</span>
                 </span>
-              </button>
-            ))}
-          </nav>
+              ))}
+            </div>
+          </div>
+          <div className="h-[300px]">
+            <Line
+              data={monthlyData}
+              options={{
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                  }
+                },
+                scales: {
+                  x: {
+                    grid: {
+                      color: 'rgba(233, 231, 231, 0.5)'
+                    },
+                    ticks: {
+                      color: '#4D4A4A',
+                      font: {
+                        family: 'Poppins'
+                      }
+                    }
+                  },
+                  y: {
+                    grid: {
+                      color: 'rgba(233, 231, 231, 0.5)'
+                    },
+                    ticks: {
+                      color: '#4D4A4A',
+                      font: {
+                        family: 'Poppins'
+                      }
+                    }
+                  }
+                }
+              }}
+            />
+          </div>
         </div>
 
-        {/* Tab Content Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5">
+        {/* Donut Chart - Business Size Distribution */}
+        <div className="bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Business Size Distribution</h3>
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">By capital investment</p>
+          </div>
+          <div className="h-[250px] flex items-center justify-center">
+            <Doughnut
+              data={{
+                labels: stats.sizeStats.map(s => s.label),
+                datasets: [{
+                  data: stats.sizeStats.map(s => s.count),
+                  backgroundColor: stats.sizeStats.map(s => s.color),
+                  borderColor: '#FBFBFB',
+                  borderWidth: 2,
+                }]
+              }}
+              options={{
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: {
+                  legend: {
+                    position: 'bottom',
+                    labels: {
+                      color: '#4D4A4A',
+                      padding: 20,
+                      usePointStyle: true,
+                      font: {
+                        family: 'Poppins'
+                      }
+                    }
+                  }
+                }
+              }}
+            />
+          </div>
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            {stats.sizeStats.map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 bg-[#FBFBFB] rounded-lg border border-[#E9E7E7]">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-full mr-3" style={{ backgroundColor: item.color }}></div>
+                  <span className="text-sm text-[#4D4A4A] font-poppins">{item.label}</span>
+                </div>
+                <span className="font-semibold text-[#4D4A4A] font-montserrat">{item.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Bar Chart - Business Categories */}
+      <div className="mb-6 bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Applications by Business Category</h3>
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Distribution across different business types</p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-[#4D4A4A] text-opacity-70">
+              Showing top {topCategories.length} categories
+            </span>
+          </div>
+        </div>
+        <div className="h-[300px]">
+          <Bar
+            data={{
+              labels: categoryData.labels,
+              datasets: [
+                {
+                  label: "Applications",
+                  data: categoryData.counts,
+                  backgroundColor: categoryData.colors,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: "#E9E7E7",
+                },
+              ],
+            }}
+            options={{
+              maintainAspectRatio: false,
+              responsive: true,
+              plugins: {
+                legend: { 
+                  display: false
+                },
+              },
+              scales: {
+                x: { 
+                  ticks: { 
+                    color: '#4D4A4A',
+                    font: {
+                      family: 'Poppins'
+                    }
+                  }, 
+                  grid: { 
+                    color: 'rgba(233, 231, 231, 0.5)' 
+                  } 
+                },
+                y: { 
+                  ticks: { 
+                    color: '#4D4A4A',
+                    font: {
+                      family: 'Poppins'
+                    }
+                  }, 
+                  grid: { 
+                    color: 'rgba(233, 231, 231, 0.5)' 
+                  }, 
+                  beginAtZero: true 
+                },
+              },
+            }}
+          />
+        </div>
+        
+        {/* Category Summary Cards */}
+        <div className="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {topCategories.map((category, idx) => {
+            const CategoryIcon = category.icon;
+            return (
+              <div 
+                key={idx}
+                className="p-3 rounded-lg border border-[#E9E7E7] hover:shadow transition-all"
+                style={{ borderLeftColor: category.color, borderLeftWidth: '4px' }}
+              >
+                <div className="flex items-center mb-2">
+                  <CategoryIcon className="w-5 h-5 mr-2" style={{ color: category.color }} />
+                  <span className="text-sm font-medium text-[#4D4A4A] font-poppins truncate">
+                    {category.label}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-bold text-[#4D4A4A] font-montserrat">
+                    {category.count}
+                  </span>
+                  <span className="text-xs px-2 py-1 rounded-full bg-[#FBFBFB] text-[#4D4A4A]">
+                    {category.approvalRate}% approved
+                  </span>
+                </div>
+                <div className="mt-2 text-xs text-[#4D4A4A] text-opacity-70">
+                  Capital: {category.totalCapital}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Data Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-[#E9E7E7] overflow-hidden">
+        <div className="p-5 border-b border-[#E9E7E7]">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                {activeTab === "all" && "All Business Permits"}
-                {activeTab === "new" && "New Permit Applications"}
-                {activeTab === "renewal" && "Renewal Applications"}
-                {activeTab === "special" && "Special Permits"}
-                {activeTab === "liquor" && "Liquor Permits"}
-                {activeTab === "amendment" && "Amendment Requests"}
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-                {countByType[activeTab] || 0} {countByType[activeTab] === 1 ? 'record' : 'records'} found
+              <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Business Permit Applications</h3>
+              <p className="text-sm text-[#4D4A4A] text-opacity-70">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredPermits.length)} of {filteredPermits.length} applications
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-[#4CAF50] animate-pulse"></div>
-              <span className="text-sm text-gray-500">Live</span>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => window.print()}
+                className="px-3 py-2 text-sm border border-[#E9E7E7] rounded-lg hover:bg-[#FBFBFB] transition-colors flex items-center font-poppins"
+                title="Print Report"
+              >
+                <Printer className="w-4 h-4 mr-2" />
+                Print
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Tab Content */}
-        <div className="p-6">
-          {loading && (
-            <div className="text-center py-12">
-              <div className="inline-flex items-center justify-center w-12 h-12 bg-[#4CAF50]/10 rounded-full mb-4">
-                <div className="w-6 h-6 border-2 border-[#4CAF50] border-t-transparent rounded-full animate-spin"></div>
-              </div>
-              <p className="text-gray-500 dark:text-gray-400">Loading permits...</p>
-            </div>
-          )}
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-center">
-              <div className="text-red-600 font-semibold">{error}</div>
-            </div>
-          )}
-          {!loading && filteredBusiness.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-gray-400 text-6xl mb-4">📋</div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No {activeTab} permits found
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
-                There are currently no {activeTab} permits in the system.
-              </p>
-              <button className="px-4 py-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/90 transition-colors">
-                Refresh Data
-              </button>
-            </div>
-          )}
-
-          {!loading && filteredBusiness.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full bg-white dark:bg-slate-800 shadow rounded-lg">
-                <thead className="bg-gradient-to-r from-[#4CAF50]/10 to-[#4A90E2]/10">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Business Name
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Owner
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Location
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Permit No.
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Submitted
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Assigned
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredBusiness.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
-                        {p.business_name}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                        {p.applicant?.full_name}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                        {`${p.business_address?.street || ""} ${p.business_address?.barangay || ""}`}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-mono text-gray-600 dark:text-gray-300">
-                        {p.permit_number}
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <span
-                     className={`px-3 py-1.5 text-xs font-sm rounded-full ${
-
-                            p.permit_type?.toLowerCase() === "new"
-                              ? "bg-[#4CAF50]/20 text-[#4CAF50] border border-[#4CAF50]/30"
-                              : p.permit_type?.toLowerCase() === "renewal"
-                              ? "bg-[#4A90E2]/20 text-[#4A90E2] border border-[#4A90E2]/30"
-                              : p.permit_type?.toLowerCase() === "special"
-                              ? "bg-[#FDA811]/20 text-[#FDA811] border border-[#FDA811]/30"
-                              : p.permit_type?.toLowerCase() === "liquor"
-                              ? "bg-purple-100 text-purple-800 border border-purple-200"
-                              : p.permit_type?.toLowerCase() === "amendment"
-                              ? "bg-sky-100 text-sky-800 border border-sky-200"
-                              : "bg-gray-100 text-gray-800 border border-gray-200"
-                          }`}
-                        >
-                          {p.permit_type || "Unknown"}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-[#FBFBFB]">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">
+                  App ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">
+                  Business
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">
+                  Owner
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">
+                  Category
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">
+                  Capital
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E9E7E7]">
+              {currentPermits.map((permit, index) => {
+                const statusInfo = getStatusText(permit.status);
+                const StatusIcon = statusInfo.icon;
+                const CategoryIcon = getCategoryIcon(permit.business_nature);
+                const categoryInfo = BUSINESS_CATEGORIES.find(c => 
+                  matchesCategory(permit.business_nature?.toLowerCase(), c.value)
+                ) || BUSINESS_CATEGORIES[BUSINESS_CATEGORIES.length - 1];
+                
+                return (
+                  <tr key={index} className="hover:bg-[#FBFBFB] transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-mono text-sm text-[#4D4A4A] font-medium">
+                        {permit.applicant_id || `BP-${String(permit.permit_id).padStart(4, '0')}`}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="font-medium text-[#4D4A4A] font-montserrat">
+                          {permit.business_name || "N/A"}
+                        </p>
+                        {permit.trade_name && (
+                          <p className="text-sm text-[#4D4A4A] text-opacity-70 font-poppins">
+                            Trade: {permit.trade_name}
+                          </p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="text-[#4D4A4A] font-poppins">
+                          {permit.owner_last_name}, {permit.owner_first_name}
+                        </p>
+                        <p className="text-sm text-[#4D4A4A] text-opacity-70">
+                          {permit.owner_type || "N/A"}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center">
+                        <CategoryIcon className="w-5 h-5 mr-3" style={{ color: categoryInfo.color }} />
+                        <span className="text-[#4D4A4A] font-poppins truncate max-w-[150px]">
+                          {permit.business_nature || "N/A"}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                        {p.submitted_at}
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <span
-                          className={`px-3 py-1.5 text-xs font-medium rounded-full border ${getStatusColor(
-                            p.status
-                          )} border-current border-opacity-30`}
-                        >
-                          {p.status}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-lg font-semibold text-[#4D4A4A] font-montserrat">
+                        {formatCurrency(permit.capital_investment)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-[#4D4A4A] text-opacity-70 font-poppins">
+                        {permit.application_date ? new Date(permit.application_date).toLocaleDateString() : "N/A"}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className={`inline-flex items-center px-3 py-1.5 rounded-full ${statusInfo.bgColor} ${statusInfo.color}`}>
+                        <StatusIcon className={`w-4 h-4 mr-2 ${statusInfo.color}`} />
+                        <span className={`text-sm font-medium ${statusInfo.color} font-poppins`}>
+                          {statusInfo.text}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          p.assigned_officer 
-                            ? "bg-[#4CAF50]/20 text-[#4CAF50] border border-[#4CAF50]/30" 
-                            : "bg-gray-100 text-gray-600 border border-gray-200"
-                        }`}>
-                          {p.assigned_officer || "Unassigned"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <button
-                          onClick={() => openModal(p)}
-                          className="inline-flex items-center px-4 py-2 text-xs font-medium rounded-lg text-white bg-gradient-to-r from-[#4CAF50] to-[#4A90E2] hover:from-[#4CAF50]/90 hover:to-[#4A90E2]/90 transition-all shadow-sm hover:shadow-md"
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onClick={() => openModal(permit)}
+                          title="View Details"
+                          className="p-2 bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors"
                         >
-                          View Details
+                          <Eye className="w-5 h-5" />
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
+
+        {filteredPermits.length === 0 && !loading && (
+          <div className="p-12 text-center">
+            <Building className="w-12 h-12 text-[#E9E7E7] mx-auto mb-4" />
+            <p className="text-[#4D4A4A] text-opacity-70">No business permits match your filters</p>
+            <button
+              onClick={() => {
+                setSearchTerm("");
+                setStatusFilter("all");
+                setCategoryFilter("all");
+                setSizeFilter("all");
+                setDateRange([null, null]);
+              }}
+              className="mt-4 text-[#4CAF50] hover:underline font-poppins"
+            >
+              Clear all filters
+            </button>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {filteredPermits.length > itemsPerPage && (
+          <div className="p-5 border-t border-[#E9E7E7]">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-[#4D4A4A] text-opacity-70 font-poppins">
+                Page {currentPage} of {totalPages}
+              </p>
+              <div className="flex items-center space-x-2">
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 text-sm border border-[#E9E7E7] rounded-lg hover:bg-[#FBFBFB] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-poppins"
+                >
+                  Previous
+                </button>
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 text-sm border border-[#E9E7E7] rounded-lg hover:bg-[#FBFBFB] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-poppins"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Modal with Enhanced Business Details */}
+      {/* Error State */}
+      {error && (
+        <div className="mt-6 p-4 bg-[#E53935] bg-opacity-20 border border-[#E53935] border-opacity-30 rounded-lg">
+          <div className="flex items-center">
+            <AlertCircle className="w-5 h-5 text-[#E53935] mr-3" />
+            <p className="text-[#4D4A4A] font-poppins">{error}</p>
+            <button 
+              onClick={() => setError(null)}
+              className="ml-auto text-sm text-[#4CAF50] hover:underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Detailed View Modal */}
       {showModal && selectedPermit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-auto">
-          <div className="w-full max-w-6xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-sm p-4 overflow-auto">
+          <div className="w-full max-w-6xl bg-white rounded-xl shadow-2xl">
             {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5 rounded-t-xl">
+            <div className="p-6 border-b border-[#E9E7E7] bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5 rounded-t-xl">
               <div className="flex justify-between items-start">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Business Permit Details</h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {selectedPermit.permit_number} • {selectedPermit.business_name}
+                  <h2 className="text-2xl font-bold text-[#4D4A4A]">Business Permit Application</h2>
+                  <p className="text-sm text-[#4D4A4A] text-opacity-70 mt-1">
+                    Application ID: {selectedPermit.applicant_id} • Permit ID: BP-{String(selectedPermit.permit_id).padStart(4, '0')}
                   </p>
                   <span className={`mt-2 px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(selectedPermit.status)}`}>
-                    {selectedPermit.status}
+                    {selectedPermit.uiStatus || getUIStatus(selectedPermit.status)}
                   </span>
                 </div>
                 <button 
                   onClick={closeModal}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                  className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors"
                 >
-                  <span className="text-2xl text-gray-500">×</span>
+                  <X className="w-6 h-6" />
                 </button>
               </div>
             </div>
 
             <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              {/* Business Information Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
+              {/* Personal Information */}
+              <div>
+                <h3 className="text-lg font-semibold text-[#4D4A4A] mb-4">Applicant Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Business Name</label>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.business_name}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Full Name</label>
+                    <p className="text-lg font-semibold text-[#4D4A4A] mt-1">
+                      {selectedPermit.owner_last_name}, {selectedPermit.owner_first_name} {selectedPermit.owner_middle_name}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Trade Name</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.trade_name || "N/A"}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Owner Type</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.owner_type || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Business Nature</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.business_nature || "N/A"}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Citizenship</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.citizenship || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Business Structure</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.business_structure || "N/A"}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Date of Birth</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.date_of_birth ? new Date(selectedPermit.date_of_birth).toLocaleDateString() : 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Registration Number</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.registration_no || "N/A"}
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">TIN Number</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.tin || "N/A"}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Contact Number</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.contact_number || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Ownership Status</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.ownership_status || "N/A"}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Email Address</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.email_address || 'N/A'}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Home Address</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.home_address || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Building Type</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.building_type || "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Business Activity</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.business_activity || "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Number of Employees</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.number_of_employees || "0"}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Valid ID</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.valid_id_type || 'N/A'}: {selectedPermit.valid_id_number || 'N/A'}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Business Description */}
-              {selectedPermit.business_description && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Business Description</label>
-                  <p className="text-gray-900 dark:text-white mt-1 bg-gray-50 dark:bg-slate-700 p-3 rounded-lg">
-                    {selectedPermit.business_description}
-                  </p>
-                </div>
-              )}
-
-              {/* Financial Information */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Capital Investment</label>
-                  <p className="text-xl font-bold text-[#4CAF50] mt-1">
-                    ₱{selectedPermit.capital_investment?.toLocaleString() || "0"}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Permit Fee</label>
-                  <p className="text-xl font-bold text-[#4A90E2] mt-1">
-                    ₱{selectedPermit.total_amount?.toLocaleString() || "0"}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Employees</label>
-                  <p className="text-xl font-bold text-[#FDA811] mt-1">
-                    {selectedPermit.number_of_employees || "0"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Applicant Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Applicant Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Business Information */}
+              <div className="border-t border-[#E9E7E7] pt-6">
+                <h3 className="text-lg font-semibold text-[#4D4A4A] mb-4">Business Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Business Name</label>
+                    <p className="text-xl font-bold text-[#4CAF50] mt-1">
+                      {selectedPermit.business_name || 'N/A'}
+                    </p>
+                    {selectedPermit.trade_name && (
+                      <p className="text-sm text-[#4D4A4A] text-opacity-70 mt-1">
+                        Trading as: {selectedPermit.trade_name}
+                      </p>
+                    )}
+                  </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Full Name</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.applicant?.full_name}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Nature of Business</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.business_nature || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Contact Number</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.applicant?.contact_number || "N/A"}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Building Type</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.building_type || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Email Address</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.applicant?.email_address || "N/A"}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Capital Investment</label>
+                    <p className="text-lg font-bold text-[#4D4A4A] mt-1">
+                      {formatCurrency(selectedPermit.capital_investment)}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Business Address</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
-                      {`${selectedPermit.business_address?.street || ""} ${selectedPermit.business_address?.barangay || ""}, ${selectedPermit.business_address?.city_municipality || ""}`}
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Business Area</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.business_area || '0'} sqm
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Officer Assignment - Only show for For Compliance status */}
-              {selectedPermit.status === "For Compliance" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Assign Inspection Officer
-                  </label>
-                  <div className="flex gap-3">
-                    <input 
-                      value={assignedOfficerInput} 
-                      onChange={(e) => setAssignedOfficerInput(e.target.value)} 
-                      className="flex-1 border border-gray-300 rounded-lg px-4 py-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent"
-                      placeholder="Enter officer name" 
-                    />
-                    <button 
-                      onClick={handleSaveAssignment}
-                      className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/90 transition-colors font-medium"
-                    >
-                      Assign
-                    </button>
+              {/* Business Address */}
+              <div className="border-t border-[#E9E7E7] pt-6">
+                <h3 className="text-lg font-semibold text-[#4D4A4A] mb-4">Business Address</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">House/Building No.</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.house_bldg_no || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Street</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.street || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Barangay</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.barangay || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">City/Municipality</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.city_municipality || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Province</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.province || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Zip Code</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.zip_code || 'N/A'}
+                    </p>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* Review Comment - Only show for For Compliance status */}
-              {selectedPermit.status === "For Compliance" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Review Comments
-                  </label>
-                  <textarea 
-                    value={actionComment} 
-                    onChange={(e) => setActionComment(e.target.value)} 
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent"
-                    rows={4} 
-                    placeholder="Add comments for approval or rejection..." 
-                  />
+              {/* Operations Information */}
+              <div className="border-t border-[#E9E7E7] pt-6">
+                <h3 className="text-lg font-semibold text-[#4D4A4A] mb-4">Operations Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Operation Hours</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {formatTime(selectedPermit.operation_time_from)} - {formatTime(selectedPermit.operation_time_to)}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Operation Type</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.operation_type || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Total Employees</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.total_employees || '0'} ({selectedPermit.male_employees || '0'} male, {selectedPermit.female_employees || '0'} female)
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Employees in QC</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.employees_in_qc || '0'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Delivery Vehicles</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      Vans/Trucks: {selectedPermit.delivery_van_truck || '0'}, Motorcycles: {selectedPermit.delivery_motorcycle || '0'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Total Floor Area</label>
+                    <p className="text-[#4D4A4A] mt-1">
+                      {selectedPermit.total_floor_area || '0'} sqm
+                    </p>
+                  </div>
                 </div>
-              )}
+              </div>
 
-              {/* Submitted Compliance Attachments - Show for "For Compliance" status */}
-              {selectedPermit.status === "For Compliance" && selectedPermit.compliance_files && selectedPermit.compliance_files.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Submitted Compliance Attachments</h3>
-                  <div className="space-y-4">
-                    {selectedPermit.compliance_files.map((file) => (
-                      <div key={file.id} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-gray-50 dark:bg-slate-700/50">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                              <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
+              {/* Documents Section */}
+              <div className="border-t border-[#E9E7E7] pt-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-[#4D4A4A]">Submitted Documents</h3>
+                  {selectedPermit.documents && (
+                    <span className="text-sm text-[#4D4A4A] text-opacity-70">
+                      {selectedPermit.documents.length} document{selectedPermit.documents.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                
+                {selectedPermit.documents && selectedPermit.documents.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedPermit.documents.map((doc, index) => {
+                      const fileIcon = getFileIcon(doc.file_type, doc.document_name);
+                      const FileIconComponent = fileIcon.icon;
+                      const fileTypeName = getFileTypeName(doc.file_type, doc.document_name);
+                      const fileExtension = getFileExtension(doc.document_name);
+                      const isImage = isImageFile(doc.file_type, doc.document_name);
+                      const displayName = doc.document_type ? doc.document_type.replace(/_/g, ' ') : 'Document';
+                      
+                      return (
+                        <div 
+                          key={index} 
+                          className="flex items-center justify-between p-4 border border-[#E9E7E7] rounded-lg hover:bg-[#FBFBFB] transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* File Type Icon */}
+                            <div className={`p-3 rounded-lg ${fileIcon.bgColor} ${fileIcon.textColor}`}>
+                              <FileIconComponent className="w-6 h-6" style={{ color: fileIcon.iconColor }} />
                             </div>
-                            <div>
-                              <h4 className="font-medium text-gray-900 dark:text-white">{file.name}</h4>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {file.size} • Submitted on {new Date(file.submitted_date).toLocaleDateString()}
+                            
+                            {/* Document Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-medium text-[#4D4A4A] truncate">
+                                  {displayName}
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${fileIcon.bgColor} ${fileIcon.textColor}`}>
+                                  {fileExtension}
+                                </span>
+                              </div>
+                              <div className="text-xs text-[#4D4A4A] text-opacity-70 truncate">
+                                {doc.document_name || 'No filename'}
+                              </div>
+                              <div className="text-xs text-[#4D4A4A] text-opacity-50 mt-1">
+                                {fileTypeName} • {(doc.file_size / 1024).toFixed(2)} KB
+                              </div>
+                              <div className="text-xs text-[#4D4A4A] text-opacity-50">
+                                Uploaded: {doc.upload_date ? new Date(doc.upload_date).toLocaleDateString() : 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Action Buttons */}
+                          <div className="flex flex-col gap-2">
+                            {isImage ? (
+                              <>
+                                <button 
+                                  onClick={() => viewFile(doc)}
+                                  className="px-3 py-1.5 text-xs bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px]"
+                                  title="Preview image"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View
+                                </button>
+                                
+                                <a 
+                                  href={doc.file_path ? `${API_BASE}/${doc.file_path}` : '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1.5 text-xs bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px] text-center"
+                                  title="Download image"
+                                  onClick={(e) => {
+                                    if (!doc.file_path) {
+                                      e.preventDefault();
+                                      alert('Download link not available');
+                                    }
+                                  }}
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Download
+                                </a>
+                              </>
+                            ) : (
+                              <a 
+                                href={doc.file_path ? `${API_BASE}/${doc.file_path}` : '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-2 text-xs bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px] text-center"
+                                title="Download document"
+                                onClick={(e) => {
+                                  if (!doc.file_path) {
+                                    e.preventDefault();
+                                    alert('Download link not available');
+                                  }
+                                }}
+                              >
+                                <Download className="w-4 h-4 mr-1" />
+                                Download
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 bg-[#FBFBFB] rounded-lg border border-[#E9E7E7]">
+                    <FileTextIcon className="w-16 h-16 text-[#E9E7E7] mx-auto mb-4" />
+                    <p className="text-[#4D4A4A] text-opacity-70">
+                      No documents submitted for this application.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Review Comments Section */}
+              <div className="border-t border-[#E9E7E7] pt-6">
+                <h3 className="text-lg font-semibold text-[#4D4A4A] mb-4">
+                  Review Comments
+                  {selectedPermit.comments && (
+                    <span className="text-sm font-normal text-[#4D4A4A] text-opacity-70 ml-2">
+                      ({formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''})
+                    </span>
+                  )}
+                </h3>
+                
+                {/* Display all comments */}
+                <div className="space-y-4 mb-6">
+                  {selectedPermit.comments && selectedPermit.comments.trim() ? (
+                    <div className="bg-[#FBFBFB] rounded-lg border border-[#E9E7E7] overflow-hidden">
+                      <div className="max-h-64 overflow-y-auto p-4">
+                        {formatComments(selectedPermit.comments).map((comment, index) => (
+                          <div key={index} className={`mb-4 ${index !== 0 ? 'pt-4 border-t border-[#E9E7E7]' : ''}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center text-sm text-[#4D4A4A] text-opacity-70">
+                                <User className="w-4 h-4 mr-2" />
+                                Admin Comment
+                              </div>
+                              <div className="flex items-center text-xs text-[#4D4A4A] text-opacity-50">
+                                <Clock className="w-3 h-3 mr-1" />
+                                {comment.timestamp}
+                              </div>
+                            </div>
+                            <div className="pl-6">
+                              <p className="text-[#4D4A4A] bg-white p-3 rounded border border-[#E9E7E7]">
+                                {comment.comment}
                               </p>
                             </div>
                           </div>
-                          <span className={`px-3 py-1 text-xs font-medium rounded-full border ${getFileStatusColor(file.status)}`}>
-                            {file.status.replace('_', ' ').toUpperCase()}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center space-x-3 mb-3">
-                          <button
-                            onClick={() => handleFileStatusChange(file.id, 'approved')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                              file.status === 'approved' 
-                                ? 'bg-green-600 text-white' 
-                                : 'bg-green-100 text-green-700 hover:bg-green-200'
-                            }`}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => handleFileStatusChange(file.id, 'rejected')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                              file.status === 'rejected' 
-                                ? 'bg-red-600 text-white' 
-                                : 'bg-red-100 text-red-700 hover:bg-red-200'
-                            }`}
-                          >
-                            Reject
-                          </button>
-                          <button
-                            onClick={() => handleFileStatusChange(file.id, 'pending_review')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                              file.status === 'pending_review' 
-                                ? 'bg-yellow-600 text-white' 
-                                : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-                            }`}
-                          >
-                            Pending
-                          </button>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Review Comments</label>
-                          <textarea
-                            value={file.review_comment || ''}
-                            onChange={(e) => handleFileReview(file.id, e.target.value)}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4CAF50] text-sm"
-                            rows={2}
-                            placeholder="Add comments about this file..."
-                          />
-                        </div>
-
-                        <div className="flex justify-between items-center mt-3">
-                          <button className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center space-x-1">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            <span>Preview</span>
-                          </button>
-                          <button className="text-green-600 hover:text-green-800 text-sm font-medium flex items-center space-x-1">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            <span>Download</span>
-                          </button>
+                        ))}
+                      </div>
+                      <div className="px-4 py-3 bg-[#FBFBFB] border-t border-[#E9E7E7]">
+                        <div className="text-xs text-[#4D4A4A] text-opacity-70">
+                          Total: {formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 bg-[#FBFBFB] rounded-lg border border-[#E9E7E7]">
+                      <AlertCircle className="w-12 h-12 text-[#E9E7E7] mx-auto mb-3" />
+                      <p className="text-[#4D4A4A] text-opacity-70">
+                        No comments yet. Add your first comment below.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
-              {/* Compliance Remarks - Only show for "For Compliance" status */}
-              {selectedPermit.status === "For Compliance" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Compliance Remarks</label>
-                  <textarea
-                    value={complianceRemarks}
-                    onChange={e => setComplianceRemarks(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4CAF50]"
-                    rows={3}
-                    placeholder="Update compliance remarks if needed..."
-                  />
-                </div>
-              )}
+              {/* Action Buttons */}
+              <div className="flex gap-3 justify-end pt-6 border-t border-[#E9E7E7]">
+                <button 
+                  onClick={closeModal}
+                  className="px-6 py-3 bg-[#4D4A4A] text-white rounded-lg hover:bg-opacity-80 transition-colors font-medium"
+                >
+                  Close
+                </button>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-              {/* Original Application Attachments */}
-              {selectedPermit.attachments?.length > 0 && (
-                <div>
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Original Application Attachments</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {selectedPermit.attachments?.map((a, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 border border-gray-200 dark:border-slate-600 rounded-lg">
-                        <a 
-                          className="text-[#4A90E2] hover:text-[#4A90E2]/80 font-medium flex items-center gap-2" 
-                          href={a.url} 
-                          target="_blank" 
-                          rel="noreferrer"
-                        >
-                          📎 {a.name}
-                        </a>
-                        <button 
-                          onClick={() => setPreviewUrl(a.url)} 
-                          className="px-3 py-1 text-xs bg-[#FDA811] text-white rounded hover:bg-[#FDA811]/90 transition-colors"
-                        >
-                          Preview
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+      {/* File Preview Modal */}
+{showFilePreview && selectedFile && (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-0">
+    <div className="relative w-full h-full flex flex-col">
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
+        <div className="flex items-center gap-3 text-white">
+          <div className="flex items-center gap-2">
+            <Eye className="w-5 h-5" />
+            <span className="text-sm font-medium truncate max-w-xs">
+              {selectedFile.name}
+            </span>
+            <span className="text-xs text-gray-300">
+              {getFileTypeName(selectedFile.file_type, selectedFile.name)}
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <a 
+            href={selectedFile.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors"
+            download
+          >
+            <Download className="w-4 h-4" />
+            Download
+          </a>
+          <button 
+            onClick={closeFilePreview}
+            className="ml-2 p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
+            title="Close preview"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+      </div>
 
-              {/* Action Buttons - Only show for For Compliance status */}
-              {selectedPermit.status === "For Compliance" ? (
-                <div className="flex gap-3 justify-end pt-6 border-t border-gray-200 dark:border-slate-700">
-                  <button 
-                    onClick={handleReject}
-                    className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-                  >
-                    Reject Application
-                  </button>
-                  <button 
-                    onClick={handleApprove}
-                    className="px-6 py-3 bg-gradient-to-r from-[#4CAF50] to-[#4A90E2] text-white rounded-lg hover:from-[#4CAF50]/90 hover:to-[#4A90E2]/90 transition-all font-medium shadow-sm"
-                  >
-                    Approve Permit
-                  </button>
+      {/* Image Content */}
+      {isImageFile(selectedFile.file_type, selectedFile.name) ? (
+        <div className="flex-1 flex items-center justify-center p-4">
+          <img 
+            src={selectedFile.url} 
+            alt={selectedFile.name}
+            className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image preview not available</text></svg>';
+            }}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="text-center max-w-md bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
+            {(() => {
+              const fileIcon = getFileIcon(selectedFile.file_type, selectedFile.name);
+              const FileIconComponent = fileIcon.icon;
+              return (
+                <div className="text-gray-300 mb-6">
+                  <FileIconComponent className="w-24 h-24 mx-auto" style={{ color: fileIcon.iconColor }} />
                 </div>
-              ) : (
-                // Close button for Approved/Rejected status
-                <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-slate-700">
-                  <button 
-                    onClick={closeModal}
-                    className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
-                  >
-                    Close
-                  </button>
-                </div>
-              )}
+              );
+            })()}
+            <h3 className="text-xl font-medium text-white mb-3">
+              {getFileTypeName(selectedFile.file_type, selectedFile.name)}
+            </h3>
+            <p className="text-gray-300 mb-6">
+              This file cannot be previewed in browser.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <a 
+                href={selectedFile.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                download
+              >
+                <Download className="w-5 h-5 mr-2" />
+                Download
+              </a>
+              <button 
+                onClick={closeFilePreview}
+                className="inline-flex items-center justify-center px-5 py-2.5 border border-white/30 text-white hover:bg-white/10 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer Info */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 p-4 flex justify-between items-center text-white/60 text-sm">
+        <div>
+          <span className="hidden sm:inline">Press </span>
+          <kbd className="px-2 py-1 bg-black/40 rounded text-xs mx-1">ESC</kbd>
+          <span className="hidden sm:inline"> to close</span>
+        </div>
+      </div>
+
+      {/* Close on background click */}
+      <div 
+        className="absolute inset-0 -z-10 cursor-pointer"
+        onClick={closeFilePreview}
+      />
+    </div>
+  </div>
+)}
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white rounded-xl shadow-2xl p-6 transform transition-all">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <CheckCircle className="h-10 w-10 text-green-600" />
+              </div>
+              
+              <h3 className="text-lg font-semibold text-[#4D4A4A] mb-2">
+                Success!
+              </h3>
+              <p className="text-[#4D4A4A] text-opacity-70 mb-6">
+                {successMessage}
+              </p>
+              
+              <div className="flex justify-center space-x-3">
+                <button
+                  onClick={() => {
+                    setShowSuccessModal(false);
+                    setSuccessMessage('');
+                  }}
+                  className="px-6 py-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-colors font-medium flex items-center"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Continue
+                </button>
+              </div>
             </div>
           </div>
         </div>

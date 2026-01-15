@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   Bar,
   Pie,
@@ -42,7 +42,8 @@ import {
   Wrench,
   Plane,
   Landmark,
-  Shield
+  Shield,
+  Image as ImageIcon
 } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -129,6 +130,63 @@ const PURPOSE_CATEGORIES = [
   { value: "official", label: "Official/Legal", icon: Scale }
 ];
 
+// Helper functions for file preview
+const isImageFile = (fileType, fileName) => {
+  if (fileType) {
+    return fileType.startsWith('image/');
+  }
+  if (fileName) {
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+    return imageExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
+  }
+  return false;
+};
+
+const getFileTypeName = (fileType, fileName) => {
+  if (fileType) {
+    if (fileType === 'application/pdf') return 'PDF Document';
+    if (fileType.startsWith('image/')) {
+      const format = fileType.split('/')[1].toUpperCase();
+      return `${format} Image`;
+    }
+    if (fileType.startsWith('application/')) {
+      if (fileType.includes('word')) return 'Word Document';
+      if (fileType.includes('excel')) return 'Excel Spreadsheet';
+      if (fileType.includes('zip')) return 'ZIP Archive';
+      if (fileType.includes('rar')) return 'RAR Archive';
+    }
+    if (fileType.startsWith('text/')) {
+      if (fileType.includes('csv')) return 'CSV File';
+      return 'Text File';
+    }
+  }
+  
+  // Fallback based on file extension
+  if (fileName) {
+    const ext = fileName.split('.').pop().toLowerCase();
+    switch (ext) {
+      case 'pdf': return 'PDF Document';
+      case 'jpg':
+      case 'jpeg': return 'JPEG Image';
+      case 'png': return 'PNG Image';
+      case 'gif': return 'GIF Image';
+      case 'bmp': return 'BMP Image';
+      case 'webp': return 'WebP Image';
+      case 'doc':
+      case 'docx': return 'Word Document';
+      case 'txt': return 'Text File';
+      case 'csv': return 'CSV File';
+      case 'xls':
+      case 'xlsx': return 'Excel Spreadsheet';
+      case 'zip': return 'ZIP Archive';
+      case 'rar': return 'RAR Archive';
+      default: return 'File';
+    }
+  }
+  
+  return 'File';
+};
+
 export default function BarangayPermitAnalytics() {
   const [permits, setPermits] = useState([]);
   const [filteredPermits, setFilteredPermits] = useState([]);
@@ -146,6 +204,14 @@ export default function BarangayPermitAnalytics() {
   const [actionComment, setActionComment] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [actionLoading, setActionLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showFilePreview, setShowFilePreview] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const imageRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const imagePositionRef = useRef({ x: 0, y: 0 });
+
   const itemsPerPage = 8;
 
   // Fetch permits from API
@@ -241,6 +307,77 @@ export default function BarangayPermitAnalytics() {
     }
   };
 
+  // Parse attachments from permit data
+  const parseAttachments = (attachmentsData) => {
+    if (!attachmentsData) return [];
+    
+    try {
+      let attachments;
+      
+      if (typeof attachmentsData === 'object' && attachmentsData !== null) {
+        attachments = attachmentsData;
+      } else if (typeof attachmentsData === 'string' && attachmentsData.trim() !== '') {
+        attachments = JSON.parse(attachmentsData);
+      } else {
+        console.warn('Invalid attachments format:', attachmentsData);
+        return [];
+      }
+      
+      const fileList = [];
+      
+      Object.entries(attachments).forEach(([key, value]) => {
+        if (value && typeof value === 'string' && value.trim() !== '') {
+          const filename = value.split('/').pop();
+          fileList.push({
+            id: key,
+            name: filename,
+            type: getFileType(filename),
+            url: `${API_BASE}/uploads/${filename}`
+          });
+        } else if (value && typeof value === 'object') {
+          const fileName = value.name || value.filename || key;
+          if (fileName && fileName.trim() !== '') {
+            fileList.push({
+              id: key,
+              name: fileName,
+              type: getFileType(fileName),
+              url: `${API_BASE}/uploads/${fileName}`
+            });
+          }
+        }
+      });
+      
+      return fileList;
+    } catch (e) {
+      console.error('Error parsing attachments:', e, 'Data:', attachmentsData);
+      return [];
+    }
+  };
+
+  const getFileType = (filename) => {
+    if (!filename || typeof filename !== 'string') return 'application/octet-stream';
+    
+    const ext = filename.split('.').pop().toLowerCase();
+    switch (ext) {
+      case 'pdf': return 'application/pdf';
+      case 'jpg':
+      case 'jpeg': return 'image/jpeg';
+      case 'png': return 'image/png';
+      case 'gif': return 'image/gif';
+      case 'bmp': return 'image/bmp';
+      case 'webp': return 'image/webp';
+      case 'doc': return 'application/msword';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'txt': return 'text/plain';
+      case 'csv': return 'text/csv';
+      case 'xls':
+      case 'xlsx': return 'application/vnd.ms-excel';
+      case 'zip': return 'application/zip';
+      case 'rar': return 'application/x-rar-compressed';
+      default: return 'application/octet-stream';
+    }
+  };
+
   const getUIStatus = (dbStatus) => {
     if (!dbStatus) return 'For Compliance';
     switch (dbStatus.toLowerCase()) {
@@ -249,6 +386,165 @@ export default function BarangayPermitAnalytics() {
       case 'pending': return 'For Compliance';
       default: return 'For Compliance';
     }
+  };
+
+  // Update zoom level display
+  const updateZoomLevel = useCallback(() => {
+    if (imageRef.current) {
+      const currentTransform = imageRef.current.style.transform || 'scale(1)';
+      const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+      setZoomLevel(Math.round(currentScale * 100));
+    }
+  }, []);
+
+  // Handle ESC key press to close file preview
+  useEffect(() => {
+    const handleEscKey = (e) => {
+      if (e.key === 'Escape' && showFilePreview) {
+        closeFilePreview();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscKey);
+    return () => {
+      window.removeEventListener('keydown', handleEscKey);
+    };
+  }, [showFilePreview]);
+
+  // Reset image position when file changes
+  useEffect(() => {
+    if (selectedFile && imageRef.current) {
+      imageRef.current.style.transform = 'scale(1)';
+      imageRef.current.style.left = '0px';
+      imageRef.current.style.top = '0px';
+      imageRef.current.style.cursor = 'default';
+      setZoomLevel(100);
+      imagePositionRef.current = { x: 0, y: 0 };
+    }
+  }, [selectedFile]);
+
+  // Handle wheel event for zooming
+  const handleWheel = useCallback((e) => {
+    if (!imageRef.current || !isImageFile(selectedFile?.file_type, selectedFile?.name)) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.deltaY !== 0) {
+      const currentTransform = imageRef.current.style.transform || 'scale(1)';
+      const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      const newScale = Math.max(0.5, Math.min(currentScale + delta, 5));
+      imageRef.current.style.transform = `scale(${newScale})`;
+      imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
+      updateZoomLevel();
+    }
+  }, [selectedFile, updateZoomLevel]);
+
+  // Handle mouse down for dragging
+  const handleMouseDown = useCallback((e) => {
+    if (!imageRef.current || !isImageFile(selectedFile?.file_type, selectedFile?.name)) return;
+    
+    const currentTransform = imageRef.current.style.transform || 'scale(1)';
+    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+    
+    if (currentScale > 1) {
+      e.preventDefault();
+      isDraggingRef.current = true;
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      imageRef.current.style.cursor = 'grabbing';
+      
+      // Add event listeners for dragging
+      const handleMouseMove = (moveEvent) => {
+        if (!isDraggingRef.current || !imageRef.current) return;
+        
+        const deltaX = moveEvent.clientX - dragStartRef.current.x;
+        const deltaY = moveEvent.clientY - dragStartRef.current.y;
+        
+        const newX = imagePositionRef.current.x + deltaX;
+        const newY = imagePositionRef.current.y + deltaY;
+        
+        imageRef.current.style.left = `${newX}px`;
+        imageRef.current.style.top = `${newY}px`;
+      };
+      
+      const handleMouseUp = () => {
+        if (!imageRef.current) return;
+        
+        isDraggingRef.current = false;
+        imageRef.current.style.cursor = 'grab';
+        
+        // Update the stored position
+        if (imageRef.current.style.left && imageRef.current.style.top) {
+          imagePositionRef.current.x = parseFloat(imageRef.current.style.left);
+          imagePositionRef.current.y = parseFloat(imageRef.current.style.top);
+        }
+        
+        // Remove event listeners
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+      
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+  }, [selectedFile]);
+
+  // Handle zoom controls
+  const handleZoomIn = useCallback(() => {
+    if (!imageRef.current) return;
+    
+    const currentTransform = imageRef.current.style.transform || 'scale(1)';
+    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+    const newScale = Math.min(currentScale + 0.25, 5);
+    imageRef.current.style.transform = `scale(${newScale})`;
+    imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
+    updateZoomLevel();
+  }, [updateZoomLevel]);
+
+  const handleZoomOut = useCallback(() => {
+    if (!imageRef.current) return;
+    
+    const currentTransform = imageRef.current.style.transform || 'scale(1)';
+    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+    const newScale = Math.max(currentScale - 0.25, 0.5);
+    imageRef.current.style.transform = `scale(${newScale})`;
+    imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
+    updateZoomLevel();
+  }, [updateZoomLevel]);
+
+  const handleResetZoom = useCallback(() => {
+    if (!imageRef.current) return;
+    
+    imageRef.current.style.transform = 'scale(1)';
+    imageRef.current.style.left = '0px';
+    imageRef.current.style.top = '0px';
+    imageRef.current.style.cursor = 'default';
+    setZoomLevel(100);
+    imagePositionRef.current = { x: 0, y: 0 };
+  }, []);
+
+  // View file function
+  const viewFile = (file) => {
+    console.log('Viewing file:', file);
+    
+    const fileWithType = {
+      ...file,
+      file_type: file.type || getFileType(file.name)
+    };
+    
+    setSelectedFile(fileWithType);
+    setShowFilePreview(true);
+  };
+
+  // Close file preview
+  const closeFilePreview = () => {
+    setSelectedFile(null);
+    setShowFilePreview(false);
+    setZoomLevel(100);
+    isDraggingRef.current = false;
+    dragStartRef.current = { x: 0, y: 0 };
+    imagePositionRef.current = { x: 0, y: 0 };
   };
 
   // Enhanced stats with trends
@@ -1105,20 +1401,6 @@ export default function BarangayPermitAnalytics() {
                         >
                           <Eye className="w-5 h-5" />
                         </button>
-                        {getUIStatus(permit.status) === "For Compliance" && (
-                          <>
-                            <button 
-                              onClick={() => {
-                                openModal(permit);
-                              }}
-                              title="Approve"
-                              className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811]/80 transition-colors"
-                            >
-                              <CheckCircle className="w-5 h-5" />
-                            </button>
-
-                          </>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -1319,6 +1601,45 @@ export default function BarangayPermitAnalytics() {
                 </div>
               </div>
 
+              {/* Submitted Attachments Section */}
+              {parseAttachments(selectedPermit.attachments).length > 0 && (
+                <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Submitted Files</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {parseAttachments(selectedPermit.attachments).map((file) => (
+                      <div key={file.id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                        <div className="flex items-center gap-2">
+                          {isImageFile(file.type, file.name) ? (
+                            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                              <ImageIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            </div>
+                          ) : (
+                            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                              {file.name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {getFileTypeName(file.type, file.name)}
+                            </p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => viewFile(file)}
+                          className="px-3 py-1 text-xs bg-[#4CAF50] text-white rounded hover:bg-[#FDA811] transition-colors flex items-center gap-1"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Review Comments Section */}
               <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -1351,20 +1672,6 @@ export default function BarangayPermitAnalytics() {
                     </p>
                   </div>
                 )}
-
-                {/* Textarea for adding new comments */}
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Add New Comment
-                  </label>
-                  <textarea 
-                    value={actionComment} 
-                    onChange={(e) => setActionComment(e.target.value)} 
-                    className="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-4 py-3 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent"
-                    rows={4} 
-                    placeholder="Enter your review notes here..." 
-                  />
-                </div>
               </div>
 
               {/* Action Buttons */}
@@ -1376,42 +1683,184 @@ export default function BarangayPermitAnalytics() {
                   Close
                 </button>
                 
-                {getUIStatus(selectedPermit.status) === "For Compliance" ? (
-                  <>
-                    <button 
-                      onClick={handleForCompliance}
-                      disabled={!actionComment.trim() || actionLoading}
-                      className="px-6 py-3 bg-[#FDA811] text-white rounded-lg hover:bg-[#FDA811]/80 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {actionLoading ? "Processing..." : "Mark for Compliance"}
-                    </button>
-                    
-                    <button 
-                      onClick={handleReject}
-                      disabled={actionLoading}
-                      className="px-6 py-3 bg-[#E53935] text-white rounded-lg hover:bg-[#E53935]/80 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {actionLoading ? "Processing..." : "Reject Application"}
-                    </button>
-                    
-                    <button 
-                      onClick={handleApprove}
-                      disabled={actionLoading}
-                      className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {actionLoading ? "Processing..." : "Approve Permit"}
-                    </button>
-                  </>
-                ) : (
-                  <button 
-                    onClick={closeModal}
-                    className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-colors font-medium"
-                  >
-                    Close
-                  </button>
-                )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* File Preview Modal - SAME STYLE AS BUSINESS PERMIT */}
+      {showFilePreview && selectedFile && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-0">
+          <div className="relative w-full h-full flex flex-col">
+            {/* Header */}
+            <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
+              <div className="flex items-center gap-3 text-white">
+                <div className="flex items-center gap-2">
+                  {isImageFile(selectedFile.file_type, selectedFile.name) ? (
+                    <ImageIcon className="w-5 h-5" />
+                  ) : (
+                    <FileText className="w-5 h-5" />
+                  )}
+                  <span className="text-sm font-medium truncate max-w-xs">
+                    {selectedFile.name}
+                  </span>
+                  <span className="text-xs text-gray-300">
+                    {getFileTypeName(selectedFile.file_type, selectedFile.name)}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {/* Zoom Controls */}
+                {isImageFile(selectedFile.file_type, selectedFile.name) && (
+                  <div className="flex items-center gap-1 mr-4 bg-black/40 rounded-lg p-1">
+                    <button 
+                      onClick={handleZoomOut}
+                      className="p-2 text-white hover:bg-white/10 rounded transition-colors"
+                      title="Zoom Out"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+                      </svg>
+                    </button>
+                    
+                    <button 
+                      onClick={handleResetZoom}
+                      className="px-3 py-2 text-xs text-white hover:bg-white/10 rounded transition-colors"
+                      title="Reset Zoom"
+                    >
+                      {zoomLevel}%
+                    </button>
+                    
+                    <button 
+                      onClick={handleZoomIn}
+                      className="p-2 text-white hover:bg-white/10 rounded transition-colors"
+                      title="Zoom In"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                
+                <a 
+                  href={selectedFile.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors"
+                  download
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download
+                </a>
+                <button 
+                  onClick={closeFilePreview}
+                  className="ml-2 p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
+                  title="Close preview"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Image Content with Zoom */}
+            {isImageFile(selectedFile.file_type, selectedFile.name) ? (
+              <div 
+                className="flex-1 flex items-center justify-center p-4 overflow-hidden cursor-move"
+                onWheel={handleWheel}
+                onMouseDown={handleMouseDown}
+              >
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <img 
+                    ref={imageRef}
+                    id="preview-image"
+                    src={selectedFile.url} 
+                    alt={selectedFile.name}
+                    className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl transition-transform duration-200 ease-out"
+                    style={{ transform: 'scale(1)', position: 'relative', left: '0px', top: '0px', cursor: 'default' }}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image preview not available</text></svg>';
+                      e.target.className = 'max-w-md mx-auto bg-gray-800 rounded-lg p-8';
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-4">
+                <div className="text-center max-w-md bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
+                  <div className="text-gray-300 mb-6">
+                    {selectedFile.file_type?.includes('pdf') || selectedFile.name?.endsWith('.pdf') ? (
+                      <FileText className="w-24 h-24 mx-auto" />
+                    ) : selectedFile.file_type?.includes('image/') ? (
+                      <ImageIcon className="w-24 h-24 mx-auto" />
+                    ) : (
+                      <svg className="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    )}
+                  </div>
+                  <h3 className="text-xl font-medium text-white mb-3">
+                    {getFileTypeName(selectedFile.file_type, selectedFile.name)}
+                  </h3>
+                  <p className="text-gray-300 mb-6">
+                    This file cannot be previewed in browser.
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                    <a 
+                      href={selectedFile.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                      download
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download
+                    </a>
+                    <button 
+                      onClick={closeFilePreview}
+                      className="inline-flex items-center justify-center px-5 py-2.5 border border-white/30 text-white hover:bg-white/10 rounded-lg transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Footer Info with Zoom Level */}
+            <div className="absolute bottom-0 left-0 right-0 z-20 p-4 flex justify-between items-center text-white/60 text-sm">
+              <div className="flex items-center gap-2">
+                {isImageFile(selectedFile.file_type, selectedFile.name) && (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                    </svg>
+                    <span>{zoomLevel}%</span>
+                    <span className="text-xs ml-4">Drag to pan when zoomed</span>
+                  </>
+                )}
+              </div>
+              <div>
+                <span className="hidden sm:inline">Press </span>
+                <kbd className="px-2 py-1 bg-black/40 rounded text-xs mx-1">ESC</kbd>
+                <span className="hidden sm:inline"> to close</span>
+              </div>
+            </div>
+
+            {/* Close on background click */}
+            <div 
+              className="absolute inset-0 -z-10 cursor-pointer"
+              onClick={closeFilePreview}
+            />
           </div>
         </div>
       )}

@@ -45,8 +45,8 @@ import UserSecuritySettings from "./pages/user/Settings/Security"
 // Admin imports
 import AdminDashboard from "./pages/admin/AdminDashboard";
 
-import BusinessPermit from "./pages/admin/BusinessPermit/Business";
-import BusAppDash from "./pages/admin/BusinessPermit/businessdashboard";
+import BusPermitAnalytics from "./pages/admin/BusinessPermit/Business";
+import BusPermitApplication from "./pages/admin/BusinessPermit/BusPermitApplication";
 import BusinessProcess from "./pages/admin/BusinessPermit/BusinessProcessing";
 
 import Building from "./pages/admin/BuildingPermit/Building";
@@ -57,7 +57,7 @@ import Franchise from "./pages/admin/FranchisePermit/Franchise";
 import FranchiseDashboard from "./pages/admin/FranchisePermit/FranchiseDashboard" 
 
 import BarangayPermit from "./pages/admin/BarangayPermit/Barangay";
-import RequestClearance from "./pages/admin/BarangayPermit/RequestClearance";
+import BrgyPermitApplication from "./pages/admin/BarangayPermit/BrgyPermitApplication";
 
 import Tracker from "./pages/admin/PermitTracker/Tracker";
 
@@ -153,7 +153,7 @@ function App() {
             path="businesspermit" 
             element={
               <ProtectedRoute requiredRole="admin" allowedDepartments={['business', 'super']}>
-                <BusinessPermit />
+                <BusPermitApplication />
               </ProtectedRoute>
             } 
           />
@@ -161,7 +161,7 @@ function App() {
             path="businessdashboard" 
             element={
               <ProtectedRoute requiredRole="admin" allowedDepartments={['business', 'super']}>
-                <BusAppDash />
+                <BusPermitAnalytics />
               </ProtectedRoute>
             } 
           />
@@ -228,10 +228,10 @@ function App() {
   } 
 />
 <Route 
-  path="requestclearance" 
+  path="permitapplication" 
   element={
     <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
-      <RequestClearance />
+      <BrgyPermitApplication />
     </ProtectedRoute>
   } 
 />

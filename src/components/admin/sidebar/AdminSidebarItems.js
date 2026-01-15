@@ -18,7 +18,7 @@ const AdminSidebarItems = [
     label: "Dashboard",
     icon: LayoutDashboard,
     path: "/admin/dashboard",
-    department: ["super", "business", "building", "transport", "barangay"],
+    department: ["super"],
   },
 
   // BUSINESS PERMIT
@@ -54,7 +54,7 @@ const AdminSidebarItems = [
   },
   {
     id: "buildingPermit",
-    label: "Building Permit Applications",
+    label: "Permit Applications",
     icon: Building2,
     path: "/admin/buildingpermit",
     department: ["building", "super"],
@@ -77,7 +77,7 @@ const AdminSidebarItems = [
   },
   {
     id: "franchisePermit",
-    label: "Franchise Permit Application",
+    label: "Permit Application",
     icon: Bus,
     path: "/admin/franchisepermit",
     department: ["transport", "super"],
@@ -95,7 +95,7 @@ const AdminSidebarItems = [
     id: "clearanceRequests",
     label: "Clearance Requests",
     icon: ShieldCheck,
-    path: "/admin/requestclearance",
+    path: "/admin/permitapplication",
     department: ["barangay", "super"],
   },
 ];
