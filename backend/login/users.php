@@ -4,18 +4,14 @@ require_once __DIR__ . '/db.php';
 
 $allowedOrigins = [
     'http://localhost',
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://127.0.0.1',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174',
+    'https://e-plms.goserveph.com/'
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if ($origin && in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: {$origin}");
 } else {
-    header("Access-Control-Allow-Origin: http://localhost");
+    header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/");
 }
 header("Access-Control-Allow-Credentials: true");
 header("Content-Type: application/json");
