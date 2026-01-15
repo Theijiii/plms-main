@@ -7,7 +7,7 @@ header("Access-Control-Allow-Headers: Content-Type");
 // --------------------- Database Connection ---------------------
 $host = "localhost";
 $db   = "eplms_user_management"; // Change to your DB name
-$user = "root";                  // Change if needed
+$user = "eplms_thea";                  // Change if needed
 $pass = "mypassword";            // Change if needed
 
 // Create connection
