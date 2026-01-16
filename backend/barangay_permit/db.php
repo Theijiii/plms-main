@@ -1,10 +1,10 @@
 <?php
-// =======================
-// DATABASE CONFIGURATION
-// =======================
+header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/git");
+header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type");
 define('DB_HOST', 'localhost');         // remove :3306 unless needed         // optional, for clarity
 define('DB_NAME', 'eplms_barangay_permit_db');
-define('DB_USER', 'root');
+define('DB_USER', 'karl');
 define('DB_PASS', 'mypassword');
 
 // =======================

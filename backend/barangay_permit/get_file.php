@@ -1,6 +1,25 @@
 <?php
-// get_file.php
-header("Access-Control-Allow-Origin: *");
+session_start();
+
+$allowedOrigins = [
+    'http://localhost',
+    'https://e-plms.goserveph.com/'
+];
+
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin && in_array($origin, $allowedOrigins, true)) {
+    header("Access-Control-Allow-Origin: {$origin}");
+} else {
+    header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/");
+}
+header("Access-Control-Allow-Credentials: true");
+header("Content-Type: application/json");
+header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
+
+// Handle preflight
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
+
 
 $filename = $_GET['filename'] ?? '';
 if (!$filename) {
