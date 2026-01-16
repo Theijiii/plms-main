@@ -102,6 +102,7 @@ if ($action === 'register') {
 }
 
 // --------------------- LOGIN ---------------------
+// --------------------- LOGIN ---------------------
 if ($action === 'login') {
     $email = $conn->real_escape_string($input['email'] ?? '');
     $password = $input['password'] ?? '';
@@ -130,13 +131,34 @@ if ($action === 'login') {
         exit;
     }
 
+    // Get user profile (first name and last name)
+    $profileResult = $conn->query("
+        SELECT first_name, last_name, middle_name 
+        FROM user_profiles 
+        WHERE user_id = '{$user['id']}'
+    ");
+    
+    $profile = $profileResult->fetch_assoc();
+    $firstName = $profile['first_name'] ?? '';
+    $lastName = $profile['last_name'] ?? '';
+    $fullName = trim("$firstName $lastName");
+
     // Generate session token
     $token = bin2hex(random_bytes(16));
     $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
     $conn->query("INSERT INTO login_sessions (user_id, session_token, expires_at) 
                   VALUES ('{$user['id']}', '$token', '$expiresAt')");
 
-    echo json_encode(['success' => true, 'message' => 'Login successful', 'token' => $token]);
+    echo json_encode([
+        'success' => true, 
+        'message' => 'Login successful', 
+        'token' => $token,
+        'user_id' => $user['id'],
+        'first_name' => $firstName,
+        'last_name' => $lastName,
+        'full_name' => $fullName,
+        'email' => $email
+    ]);
     exit;
 }
 

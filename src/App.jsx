@@ -4,6 +4,7 @@ import UserLayout from "./layouts/UserLayout"
 import AdminLayout from "./layouts/AdminLayout"
 import ProtectedRoute from "./components/ProtectedRoute";
 import UserDashboard from "./pages/user/UserDashboard"
+import Plms from "./pages/plms";
 import Login from "./pages/user/Login"
 import Register from "./pages/user/Register"
 
@@ -68,6 +69,7 @@ function App() {
     <AuthProvider> {/* Wrap entire app with AuthProvider */}
       <Routes>
         {/* Public routes (no authentication required) */}
+        <Route path="/plms" element={<Plms />} />
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/register" element={<Register />} />

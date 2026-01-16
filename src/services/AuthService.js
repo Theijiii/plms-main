@@ -1,8 +1,8 @@
 const API_LOGIN = "/backend/login/users.php";
 const OTP_API = "/backend/login/otp-admin.php";
 const GET_PROFILE_API = "/backend/login/get_profile.php?action=get";
-// --------------------- USERS ---------------------
 
+// --------------------- USERS ---------------------
 export const loginUser = async ({ email, password }) => {
   try {
     const res = await fetch(`${API_LOGIN}?action=login`, {
@@ -20,6 +20,33 @@ export const loginUser = async ({ email, password }) => {
     if (data.token) {
       localStorage.setItem("auth_token", data.token);
       localStorage.setItem("email", email);
+      
+      // ✅ ADDED: Store user profile data from login response
+      // This eliminates the need for an additional API call to get first name
+      if (data.first_name) {
+        localStorage.setItem("first_name", data.first_name);
+      }
+      if (data.last_name) {
+        localStorage.setItem("last_name", data.last_name);
+      }
+      if (data.full_name) {
+        localStorage.setItem("full_name", data.full_name);
+        localStorage.setItem("display_name", data.full_name); // For compatibility
+      } else if (data.first_name && data.last_name) {
+        // Construct full name if not provided
+        const fullName = `${data.first_name} ${data.last_name}`;
+        localStorage.setItem("full_name", fullName);
+        localStorage.setItem("display_name", fullName);
+      }
+      if (data.user_id) {
+        localStorage.setItem("user_id", data.user_id);
+      }
+      
+      // ✅ ADDED: For backward compatibility with existing code
+      localStorage.setItem("user_name", data.first_name || data.full_name || email.split('@')[0]);
+      
+      // ✅ ADDED: Trigger custom event to update UserHeader component
+      window.dispatchEvent(new Event('user-data-updated'));
     }
 
     // Admin detected? start OTP flow
@@ -59,7 +86,41 @@ export const registerUser = async (userData) => {
     });
 
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    return await res.json();
+    
+    const data = await res.json();
+    
+    // ✅ ADDED: Store user profile data from registration response too
+    if (data.success && data.token) {
+      localStorage.setItem("auth_token", data.token);
+      localStorage.setItem("email", userData.email);
+      
+      if (data.first_name) {
+        localStorage.setItem("first_name", data.first_name);
+      }
+      if (data.last_name) {
+        localStorage.setItem("last_name", data.last_name);
+      }
+      if (data.full_name) {
+        localStorage.setItem("full_name", data.full_name);
+        localStorage.setItem("display_name", data.full_name);
+      } else if (userData.firstName && userData.lastName) {
+        const fullName = `${userData.firstName} ${userData.lastName}`;
+        localStorage.setItem("full_name", fullName);
+        localStorage.setItem("display_name", fullName);
+      }
+      if (data.user_id) {
+        localStorage.setItem("user_id", data.user_id);
+      }
+      
+      // For backward compatibility
+      localStorage.setItem("user_name", data.first_name || userData.firstName || userData.email.split('@')[0]);
+      
+      // ✅ ADDED: Trigger custom event
+      window.dispatchEvent(new Event('user-data-updated'));
+    }
+    
+    return data;
+    
   } catch (err) {
     console.error("Register error:", err);
     return { success: false, message: "Network error" };
@@ -90,7 +151,26 @@ export const verifyOtp = async (email, otp, purpose = "login") => {
       credentials: "include",
       body: JSON.stringify({ email, otp, purpose }),
     });
-    return await res.json();
+    const data = await res.json();
+    
+    // ✅ ADDED: If OTP verification is successful for admin login,
+    // store any additional user data that might be returned
+    if (data.success && data.user_data) {
+      if (data.user_data.first_name) {
+        localStorage.setItem("first_name", data.user_data.first_name);
+      }
+      if (data.user_data.last_name) {
+        localStorage.setItem("last_name", data.user_data.last_name);
+      }
+      if (data.user_data.full_name) {
+        localStorage.setItem("full_name", data.user_data.full_name);
+        localStorage.setItem("display_name", data.user_data.full_name);
+      }
+      
+      window.dispatchEvent(new Event('user-data-updated'));
+    }
+    
+    return data;
   } catch (error) {
     console.error("Verify OTP error:", error);
     return { success: false, message: "Network error (verify OTP)" };
@@ -107,12 +187,28 @@ export const getUserProfile = async () => {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`, // ✅ send token to backend
+        Authorization: `Bearer ${token}`,
       },
       credentials: "include",
     });
 
-    return await res.json();
+    const data = await res.json();
+    
+    // ✅ ADDED: Update localStorage with fresh profile data when explicitly fetched
+    if (data.success && data.profile) {
+      localStorage.setItem("first_name", data.profile.first_name || '');
+      localStorage.setItem("last_name", data.profile.last_name || '');
+      if (data.profile.first_name && data.profile.last_name) {
+        const fullName = `${data.profile.first_name} ${data.profile.last_name}`;
+        localStorage.setItem("full_name", fullName);
+        localStorage.setItem("display_name", fullName);
+      }
+      localStorage.setItem("user_name", data.profile.first_name || '');
+      
+      window.dispatchEvent(new Event('user-data-updated'));
+    }
+    
+    return data;
   } catch (error) {
     console.error("Get profile error:", error);
     return { success: false, message: "Network error (get profile)" };

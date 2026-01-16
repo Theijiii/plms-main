@@ -7,7 +7,8 @@ export default function UserHeader() {
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [open, setOpen] = useState(false);
-  const [userName, setUserName] = useState("Loading...");
+  const [userFirstName, setUserFirstName] = useState("Loading...");
+  const [userFullName, setUserFullName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [userRole, setUserRole] = useState("");
   const navigate = useNavigate();
@@ -33,13 +34,15 @@ export default function UserHeader() {
   const getUserFromStorage = () => {
     console.log("🔍 UserHeader: Getting user data from localStorage...");
     
-    // Get ALL possible name sources
-    const nameSources = [
-      localStorage.getItem("goserveph_name"),
-      localStorage.getItem("user_name"),
-      localStorage.getItem("username"),
-      localStorage.getItem("display_name")
-    ];
+    // Get first name (priority order)
+    const firstName = localStorage.getItem("first_name") || 
+                     localStorage.getItem("user_name") ||
+                     localStorage.getItem("goserveph_name");
+    
+    // Get full name
+    const fullName = localStorage.getItem("full_name") ||
+                    localStorage.getItem("display_name") ||
+                    localStorage.getItem("goserveph_name");
     
     // Get email
     const email = localStorage.getItem("email") || 
@@ -50,28 +53,31 @@ export default function UserHeader() {
                  localStorage.getItem("goserveph_role") || 
                  "user";
     
-    // Find the first non-empty name
-    let displayName = nameSources.find(name => name && name.trim() !== "");
+    // Use first name if available, otherwise extract from full name
+    let displayFirstName = firstName;
     
-    // If no name found, create from email
-    if (!displayName && email) {
+    if (!displayFirstName && fullName) {
+      // Extract first name from full name
+      const nameParts = fullName.split(' ');
+      displayFirstName = nameParts[0] || "User";
+    } else if (!displayFirstName && email) {
+      // Extract from email as last resort
       const emailName = email.split('@')[0];
-      displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-    }
-    
-    // Final fallback
-    if (!displayName) {
-      displayName = "User";
+      displayFirstName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+    } else if (!displayFirstName) {
+      displayFirstName = "User";
     }
     
     console.log("✅ User data:", {
-      name: displayName,
+      firstName: displayFirstName,
+      fullName: fullName || displayFirstName,
       email: email || "No email",
       role: role
     });
     
     return {
-      name: displayName,
+      firstName: displayFirstName,
+      fullName: fullName || displayFirstName,
       email: email || "",
       role: role
     };
@@ -81,11 +87,13 @@ export default function UserHeader() {
   useEffect(() => {
     const updateUserInfo = () => {
       const userData = getUserFromStorage();
-      setUserName(userData.name);
+      setUserFirstName(userData.firstName);
+      setUserFullName(userData.fullName);
       setUserEmail(userData.email);
       setUserRole(userData.role);
     };
     
+    // Initial update
     updateUserInfo();
     
     // Listen for storage changes
@@ -95,8 +103,6 @@ export default function UserHeader() {
     };
     
     window.addEventListener('storage', handleStorageChange);
-    
-    // Also listen for custom events from same tab
     window.addEventListener('user-data-updated', handleStorageChange);
     
     return () => {
@@ -128,6 +134,9 @@ export default function UserHeader() {
         "auth_token",
         "email",
         "user_id",
+        "first_name",
+        "last_name",
+        "full_name",
         "user_name",
         "username",
         "role",
@@ -160,15 +169,6 @@ export default function UserHeader() {
     }
   };
 
-  // ================= MANUAL REFRESH (for debugging) =================
-  const refreshUserInfo = () => {
-    console.log(" Manually refreshing user info");
-    const userData = getUserFromStorage();
-    setUserName(userData.name);
-    setUserEmail(userData.email);
-    setUserRole(userData.role);
-  };
-
   return (
     <header
       className={`sticky top-0 z-50 bg-white shadow-sm border-b-3 border-[#FDA811] transition-transform duration-300 ${
@@ -191,9 +191,6 @@ export default function UserHeader() {
 
         {/* RIGHT */}
         <div className="flex items-center gap-6">
-          {/* DEBUG BUTTON (remove in production) */}
-
-          
           <div className="text-right text-xs">
             <div className="font-semibold">{time.toLocaleTimeString()}</div>
             <div>
@@ -213,7 +210,7 @@ export default function UserHeader() {
               className="flex items-center space-x-2 px-3 py-1 rounded hover:bg-gray-100"
             >
               <User size={20} />
-              <span className="font-medium">{userName}</span>
+              <span className="font-medium">{userFirstName}</span>
               {userRole && (
                 <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded capitalize">
                   {userRole}
@@ -224,7 +221,7 @@ export default function UserHeader() {
             {open && (
               <div className="absolute right-0 mt-2 w-56 bg-white shadow-lg rounded-lg border z-50">
                 <div className="px-4 py-3 border-b">
-                  <div className="font-medium">{userName}</div>
+                  <div className="font-medium">{userFullName}</div>
                   <div className="text-xs text-gray-500 mt-1">
                     {userEmail || "No email"}
                   </div>
