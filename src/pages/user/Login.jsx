@@ -179,6 +179,7 @@ const handleLoginSubmit = async (e) => {
       middleName: e.target.checked ? "N/A" : ""
     }));
   };// create this service
+// create this service
 const handleRegisterSubmit = async (e) => {
   e.preventDefault();
 
@@ -228,7 +229,7 @@ const handleRegisterSubmit = async (e) => {
       house_number: registerForm.houseNumber,
       street: registerForm.street,
       barangay: registerForm.barangay,
-      city_municipality: "Default City",
+      city_municipality: "Default City", // You might want to make these dynamic
       province: "Default Province",
       region: "Default Region",
       zip_code: null
@@ -296,7 +297,6 @@ const finalizeLogin = () => {
   navigate("/user/dashboard");
 };
 
-// In your handleOtpSubmit function in Login.jsx
 const handleOtpSubmit = async (e) => {
   e.preventDefault();
   setOtpError("");
@@ -315,7 +315,7 @@ const handleOtpSubmit = async (e) => {
   }
 
   try {
-    // Call your OTP verification API
+    // Call OTP verification API
     const response = await verifyOtp(otpTargetEmail, otpString, otpContext);
     
     console.log("🔐 [OTP API Response]:", response);
@@ -327,59 +327,112 @@ const handleOtpSubmit = async (e) => {
 
     setOtpSuccess("OTP verified successfully!");
     
-    // CRITICAL: Save department for admin routing
-    console.log("✅ Saving department data:", response.department);
-    
-    // Store ALL authentication data
-    localStorage.setItem("auth_token", response.token || "dummy_token");
-    localStorage.setItem("goserveph_role", response.role || "user");
-    localStorage.setItem("goserveph_email", otpTargetEmail);
-    localStorage.setItem("email", otpTargetEmail);
-    
-    // THIS IS THE KEY: Save department if it exists
-    if (response.department) {
-      localStorage.setItem("goserveph_department", response.department);
-      console.log("✅ Department saved:", response.department);
-    } else if (response.isAdmin) {
-      // If isAdmin is true but department is not set, assign based on email
-      const department = getDepartmentFromEmail(otpTargetEmail);
-      if (department) {
-        localStorage.setItem("goserveph_department", department);
-        console.log("✅ Department assigned from email:", department);
+    // ✅ CRITICAL: If this is registration, complete the registration process
+    if (otpContext === "register" && pendingRegistration) {
+      console.log("📝 Starting registration process with data:", pendingRegistration);
+      
+      // Call the registerUser function to save data to database
+      const registerResponse = await registerUser(pendingRegistration);
+      
+      console.log("📝 [Registration API Response]:", registerResponse);
+      
+      if (!registerResponse.success) {
+        setOtpError(registerResponse.message || "Registration failed after OTP verification");
+        return;
       }
-    }
-    
-    if (response.user_id) {
-      localStorage.setItem("goserveph_user_id", response.user_id);
-    }
-    
-    if (response.name) {
-      localStorage.setItem("goserveph_name", response.name);
-      sessionStorage.setItem("admin_name", response.name);
-    }
-    
-    // Also store department in sessionStorage for AdminSidebar
-    if (response.department) {
-      sessionStorage.setItem("admin_department", response.department);
-    }
-    
-    // Debug what was saved
-    console.log("🔍 After login - localStorage:", {
-      role: localStorage.getItem("goserveph_role"),
-      department: localStorage.getItem("goserveph_department"),
-      email: localStorage.getItem("goserveph_email")
-    });
-    
-    closeOtpModal();
-    
-    // Redirect based on role
-    setTimeout(() => {
-      if (response.role === "admin") {
-        navigate("/admin/dashboard");
-      } else {
+      
+      // Registration successful - save auth data
+      localStorage.setItem("auth_token", registerResponse.token || response.token || "dummy_token");
+      localStorage.setItem("goserveph_role", "user");
+      localStorage.setItem("goserveph_email", otpTargetEmail);
+      localStorage.setItem("email", otpTargetEmail);
+      
+      // Save user profile data if returned
+      if (registerResponse.first_name) {
+        localStorage.setItem("first_name", registerResponse.first_name);
+      }
+      if (registerResponse.last_name) {
+        localStorage.setItem("last_name", registerResponse.last_name);
+      }
+      if (registerResponse.full_name) {
+        localStorage.setItem("full_name", registerResponse.full_name);
+        localStorage.setItem("display_name", registerResponse.full_name);
+      }
+      
+      if (registerResponse.user_id) {
+        localStorage.setItem("goserveph_user_id", registerResponse.user_id);
+      }
+      
+      setOtpSuccess("Registration successful! Redirecting to dashboard...");
+      
+      closeOtpModal();
+      
+      // Redirect to user dashboard
+      setTimeout(() => {
         navigate("/user/dashboard");
+      }, 1000);
+      
+      return;
+    }
+    
+    // If it's login OTP verification, continue with existing logic
+    if (otpContext === "login") {
+      // ... existing login logic ...
+      
+      // CRITICAL: Save department for admin routing
+      console.log("✅ Saving department data:", response.department);
+      
+      // Store ALL authentication data
+      localStorage.setItem("auth_token", response.token || "dummy_token");
+      localStorage.setItem("goserveph_role", response.role || "user");
+      localStorage.setItem("goserveph_email", otpTargetEmail);
+      localStorage.setItem("email", otpTargetEmail);
+      
+      // THIS IS THE KEY: Save department if it exists
+      if (response.department) {
+        localStorage.setItem("goserveph_department", response.department);
+        console.log("✅ Department saved:", response.department);
+      } else if (response.isAdmin) {
+        // If isAdmin is true but department is not set, assign based on email
+        const department = getDepartmentFromEmail(otpTargetEmail);
+        if (department) {
+          localStorage.setItem("goserveph_department", department);
+          console.log("✅ Department assigned from email:", department);
+        }
       }
-    }, 300);
+      
+      if (response.user_id) {
+        localStorage.setItem("goserveph_user_id", response.user_id);
+      }
+      
+      if (response.name) {
+        localStorage.setItem("goserveph_name", response.name);
+        sessionStorage.setItem("admin_name", response.name);
+      }
+      
+      // Also store department in sessionStorage for AdminSidebar
+      if (response.department) {
+        sessionStorage.setItem("admin_department", response.department);
+      }
+      
+      // Debug what was saved
+      console.log("🔍 After login - localStorage:", {
+        role: localStorage.getItem("goserveph_role"),
+        department: localStorage.getItem("goserveph_department"),
+        email: localStorage.getItem("goserveph_email")
+      });
+      
+      closeOtpModal();
+      
+      // Redirect based on role
+      setTimeout(() => {
+        if (response.role === "admin") {
+          navigate("/admin/dashboard");
+        } else {
+          navigate("/user/dashboard");
+        }
+      }, 300);
+    }
     
   } catch (err) {
     console.error(err);

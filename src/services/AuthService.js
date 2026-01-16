@@ -78,6 +78,8 @@ export const loginUser = async ({ email, password }) => {
 // --------------------- REGISTER ---------------------
 export const registerUser = async (userData) => {
   try {
+    console.log("📤 Sending registration data:", userData);
+    
     const res = await fetch(`${API_LOGIN}?action=register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -85,11 +87,15 @@ export const registerUser = async (userData) => {
       credentials: "include",
     });
 
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    if (!res.ok) {
+      console.error("Registration HTTP error:", res.status, res.statusText);
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     
     const data = await res.json();
+    console.log("📥 Registration response:", data);
     
-    // ✅ ADDED: Store user profile data from registration response too
+    // Store user profile data from registration response
     if (data.success && data.token) {
       localStorage.setItem("auth_token", data.token);
       localStorage.setItem("email", userData.email);
@@ -115,7 +121,7 @@ export const registerUser = async (userData) => {
       // For backward compatibility
       localStorage.setItem("user_name", data.first_name || userData.firstName || userData.email.split('@')[0]);
       
-      // ✅ ADDED: Trigger custom event
+      // Trigger custom event
       window.dispatchEvent(new Event('user-data-updated'));
     }
     
@@ -123,7 +129,10 @@ export const registerUser = async (userData) => {
     
   } catch (err) {
     console.error("Register error:", err);
-    return { success: false, message: "Network error" };
+    return { 
+      success: false, 
+      message: err.message || "Network error during registration" 
+    };
   }
 };
 
