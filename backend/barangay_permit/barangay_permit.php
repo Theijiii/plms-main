@@ -47,7 +47,7 @@ if (isset($_SESSION['user_id'])) {
 // If no user_id found, check for user in database by email
 if ($user_id === 0 && isset($_POST['email']) && !empty($_POST['email'])) {
     $email = sanitize($_POST['email']);
-    $checkUser = "SELECT user_id FROM users WHERE email = ? LIMIT 1";
+    $checkUser = "SELECT user_id FROM barangay_permit WHERE email = ? LIMIT 1";
     $stmtCheck = $conn->prepare($checkUser);
     $stmtCheck->bind_param("s", $email);
     $stmtCheck->execute();
@@ -147,7 +147,7 @@ if ($user_id > 0) {
     $applicant_id = $user_id;
     
     // Also update user's information if needed
-    $updateUser = "UPDATE users SET 
+    $updateUser = "UPDATE barangay_permit SET 
                    first_name = ?, last_name = ?, email = ?, mobile_number = ?
                    WHERE user_id = ?";
     $stmtUpdate = $conn->prepare($updateUser);
