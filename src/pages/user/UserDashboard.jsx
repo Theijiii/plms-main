@@ -322,7 +322,9 @@ export default function UserDashboard() {
         )}
       </section>
 
-      {/* 🧩 Footer stays at bottom */}
+    
+        <Footer />
+   
     </div>
   );
 }
