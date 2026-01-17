@@ -20,6 +20,7 @@ export default function BusinessRenewal() {
   const location = useLocation();
   const navigate = useNavigate();
   const application_type = location.state?.application_type || 'RENEWAL';
+  const permitType = location.state?.permit_type || 'NEW_BUSINESS_PERMIT';
 
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -109,6 +110,13 @@ export default function BusinessRenewal() {
       setFormData(prev => ({
         ...prev,
         [name]: onlyNums
+      }));
+    } else if (name === "gross_sales" || name === "total_employees" || 
+               name === "capital_investment" || name === "business_area" || 
+               name === "total_floor_area") {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value === '' ? '' : Number(value)
       }));
     } else {
       setFormData(prev => ({
@@ -295,6 +303,28 @@ export default function BusinessRenewal() {
             <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Renewal Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Permit Type</label>
+                <input
+                  type="text"
+                  name="permit_type"
+                  value={formData.permit_type}
+                  readOnly
+                  className="w-full p-3 border border-black rounded-lg bg-gray-100"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                />
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Application Date</label>
+                <input
+                  type="date"
+                  name="application_date"
+                  value={formData.application_date}
+                  readOnly
+                  className="w-full p-3 border border-black rounded-lg bg-gray-100"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                />
+              </div>
+              <div>
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Permit Number *</label>
                 <input
                   type="text"
@@ -324,28 +354,6 @@ export default function BusinessRenewal() {
                   <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>Permit expiry date is required</p>
                 )}
               </div>
-              <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Application Date</label>
-                <input
-                  type="date"
-                  name="application_date"
-                  value={formData.application_date}
-                  readOnly
-                  className="w-full p-3 border border-black rounded-lg bg-gray-100"
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                />
-              </div>
-              <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Application Type</label>
-                <input
-                  type="text"
-                  name="application_type"
-                  value={formData.application_type}
-                  readOnly
-                  className="w-full p-3 border border-black rounded-lg bg-gray-100"
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                />
-              </div>
             </div>
           </div>
         );
@@ -357,7 +365,9 @@ export default function BusinessRenewal() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {['first_name', 'middle_name', 'last_name', 'suffix', 'contact_no', 'email'].map(field => (
                 <div key={field}>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>{formatLabel(field)} *</label>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
+                    {formatLabel(field)} {['first_name', 'last_name', 'contact_no', 'email'].includes(field) ? '*' : ''}
+                  </label>
                   <input
                     type={field === 'email' ? 'email' : 'text'}
                     name={field}
@@ -365,9 +375,9 @@ export default function BusinessRenewal() {
                     onChange={handleChange}
                     className="w-full p-3 border border-black rounded-lg"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    required
+                    required={['first_name', 'last_name', 'contact_no', 'email'].includes(field)}
                   />
-                  {submitStatus?.type === 'error' && !formData[field] && field !== 'middle_name' && field !== 'suffix' && (
+                  {submitStatus?.type === 'error' && !formData[field] && ['first_name', 'last_name', 'contact_no', 'email'].includes(field) && (
                     <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{formatLabel(field)} is required</p>
                   )}
                 </div>
@@ -542,6 +552,32 @@ export default function BusinessRenewal() {
                 </div>
                 
                 <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Gross Sales (₱)</label>
+                  <input
+                    type="number"
+                    name="gross_sales"
+                    value={formData.gross_sales}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    min="0"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Total Employees</label>
+                  <input
+                    type="number"
+                    name="total_employees"
+                    value={formData.total_employees}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    min="0"
+                  />
+                </div>
+                
+                <div>
                   <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Nature of Business *</label>
                   <select
                     name="business_nature"
@@ -605,30 +641,7 @@ export default function BusinessRenewal() {
                     onChange={handleChange}
                     className="w-full p-3 border border-black rounded-lg"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Gross Sales (₱)</label>
-                  <input
-                    type="number"
-                    name="gross_sales"
-                    value={formData.gross_sales}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Total Employees</label>
-                  <input
-                    type="number"
-                    name="total_employees"
-                    value={formData.total_employees}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    min="0"
                   />
                 </div>
               </div>
@@ -723,6 +736,7 @@ export default function BusinessRenewal() {
                     onChange={handleChange}
                     className="w-full p-3 border border-black rounded-lg"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    min="0"
                     required
                   />
                 </div>
@@ -733,6 +747,33 @@ export default function BusinessRenewal() {
                     type="number"
                     name="total_floor_area"
                     value={formData.total_floor_area}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    min="0"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Operation Time From *</label>
+                  <input
+                    type="time"
+                    name="operation_time_from"
+                    value={formData.operation_time_from}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-black rounded-lg"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Operation Time To *</label>
+                  <input
+                    type="time"
+                    name="operation_time_to"
+                    value={formData.operation_time_to}
                     onChange={handleChange}
                     className="w-full p-3 border border-black rounded-lg"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
@@ -765,32 +806,6 @@ export default function BusinessRenewal() {
                     required
                   />
                 </div>
-                
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Operation Time From *</label>
-                  <input
-                    type="time"
-                    name="operation_time_from"
-                    value={formData.operation_time_from}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Operation Time To *</label>
-                  <input
-                    type="time"
-                    name="operation_time_to"
-                    value={formData.operation_time_to}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    required
-                  />
-                </div>
               </div>
             </div>
           </div>
@@ -809,7 +824,9 @@ export default function BusinessRenewal() {
                 { name: 'fsic_file', label: 'Fire Safety Inspection Certificate (FSIC) *', required: true },
                 { name: 'owner_valid_id_file', label: 'Owner Valid ID *', required: true },
                 { name: 'id_picture_file', label: '2x2 ID Picture *', required: true, accept: '.jpg,.jpeg,.png' },
-                { name: 'official_receipt_file', label: 'Official Receipt of Payment', required: false }
+                { name: 'official_receipt_file', label: 'Official Receipt of Payment', required: false },
+                { name: 'dti_registration', label: 'DTI Registration', required: false },
+                { name: 'sec_registration', label: 'SEC Registration', required: false }
               ].map(doc => (
                 <div key={doc.name}>
                   <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary }}>

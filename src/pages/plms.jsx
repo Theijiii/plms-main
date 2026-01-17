@@ -178,7 +178,7 @@ export default function LandingPage() {
             <div className="space-y-4">
               {/* Permit & Licensing Management System Title */}
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold leading-tight text-white">
-                Permit & Licensing Management System
+                Welcome to Permit & Licensing Management System
               </h1>
               <p className="text-lg text-white leading-relaxed font-medium max-w-2xl mx-auto">
                 Streamline your permit applications and licensing processes through our 
