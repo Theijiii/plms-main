@@ -117,7 +117,7 @@ export default function UserHeader() {
       const token = localStorage.getItem("auth_token");
       
       if (token) {
-        await fetch("http://localhost/plms-latest/backend/login/users.php?action=logout", {
+        await fetch("/backend/login/users.php?action=logout", {
           method: "POST",
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -175,7 +175,7 @@ export default function UserHeader() {
         isVisible ? "translate-y-0" : "-translate-y-full"
       }`}
     >
-      <div className="container mx-auto px-6 py-2 flex justify-between items-center h-18">
+      <div className="container mx-auto px-4 py-2 flex justify-between items-center h-18">
         {/* LEFT */}
         <Link to="/user/dashboard" className="flex items-center gap-3">
           <img src="/GSM_logo.png" alt="Logo" className="w-12 h-12" />
