@@ -69,8 +69,8 @@ function App() {
     <AuthProvider> {/* Wrap entire app with AuthProvider */}
       <Routes>
         {/* Public routes (no authentication required) */}
-        <Route path="/" element={<Navigate to="/plms" replace />} />
-        <Route path="/plms" element={<Plms />} />
+        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="/home" element={<Plms />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
@@ -156,6 +156,7 @@ function App() {
               </ProtectedRoute>
             } 
           />
+
           <Route 
             path="businessdashboard" 
             element={
@@ -164,6 +165,7 @@ function App() {
               </ProtectedRoute>
             } 
           />
+
           <Route 
             path="businessprocessing" 
             element={
@@ -173,7 +175,6 @@ function App() {
             } 
           />
           
-          {/* Building Department Routes - Only accessible by Building Admin and Super Admin */}
           <Route 
             path="buildingpermit" 
             element={
@@ -217,7 +218,6 @@ function App() {
             } 
           />
           
-          {/* Barangay Department Routes - Only accessible by Barangay Admin and Super Admin */}
          <Route 
   path="barangaypermit" 
   element={
@@ -235,7 +235,7 @@ function App() {
   } 
 />
           
-          {/* Universal Admin Routes - Accessible by all admins */}
+
           <Route 
             path="permittracker" 
             element={

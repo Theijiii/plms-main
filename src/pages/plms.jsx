@@ -68,7 +68,7 @@ export default function LandingPage() {
       icon: <Car className="w-8 h-8 text-[#4CAF50]" />,
       color: "bg-white border-green-200 hover:bg-green-100",
       textColor: "text-[#4CAF50]",
-      features: ["Vehicle Registration", "Franchise", "Renewal", "Permits"],
+      features: ["Registration", "Franchise", "Renewal"],
       stats: "24/7 Online Application",
       height: "h-64"
     },
@@ -79,7 +79,7 @@ export default function LandingPage() {
       icon: <Building className="w-8 h-8 text-[#FDA811]" />,
       color: "bg-white border-orange-200 hover:bg-orange-100",
       textColor: "text-[#FDA811]",
-      features: ["Building Plans", "Permits", "Inspections", "Clearances"],
+      features: ["Building Plans", "Permits", "Clearances"],
       stats: "Digital Plan Submission",
       height: "h-72"
     },

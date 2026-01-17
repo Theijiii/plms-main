@@ -39,7 +39,6 @@ export default function BusinessRenewal() {
     permit_number: '',
     permit_expiry: '',
 
-    // Step 2: Applicant Info
     first_name: '',
     last_name: '',
     middle_name: '',
@@ -47,7 +46,6 @@ export default function BusinessRenewal() {
     contact_no: '',
     email: '',
     
-    // Step 2 Extended: Personal Details
     date_of_birth: '',
     gender: '',
     civil_status: '',
@@ -56,13 +54,11 @@ export default function BusinessRenewal() {
     valid_id_type: '',
     valid_id_number: '',
 
-    // Step 3: Business Info
     business_name: '',
     trade_name: '',
     gross_sales: '',
     total_employees: '',
     
-    // Step 3 Extended: Business Details
     business_nature: '',
     building_type: '',
     capital_investment: 0,
@@ -76,7 +72,6 @@ export default function BusinessRenewal() {
     zoning_permit_id: '',
     sanitation_permit_id: '',
     
-    // Step 4: Documents
     barangay_clearance_file: null,
     bir_certificate_file: null,
     lease_or_title_file: null,
@@ -84,8 +79,9 @@ export default function BusinessRenewal() {
     owner_valid_id_file: null,
     id_picture_file: null,
     official_receipt_file: null,
+    dti_registration: null,
+    sec_registration: null,
     
-    // Declaration
     owner_type_declaration: 'Business Owner',
     owner_representative_name: '',
     date_submitted: '',
