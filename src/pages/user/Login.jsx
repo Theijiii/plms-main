@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import Footer from '../../components/user/Footer';
 import { sendOtp, verifyOtp, registerUser, loginUser, getUserProfile } from "../../services/AuthService";
-
 
 export default function Login() {
   const [pendingRegistration, setPendingRegistration] = useState(null);
@@ -86,49 +86,48 @@ export default function Login() {
     return () => window.removeEventListener("scroll", updateScrollDirection);
   }, []);
 
-const handleLoginSubmit = async (e) => {
-  e.preventDefault();
-  setError("");
-  setSuccess("");
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
 
-  if (!username || !password) {
-    setError("Please enter both username/email and password.");
-    return;
-  }
-
-  try {
-    const response = await loginUser({ email: username, password });
-
-    if (response.success) {
-      setSuccess("Login successful! Sending OTP...");
-      setLoginData({ username, token: response.token });
-
-      const otpResponse = await sendOtp(username, "login");
-
-      if (!otpResponse.success) {
-        setLoginData(null);
-        setError(otpResponse.message || "Failed to send OTP. Please try again.");
-        setSuccess("");
-        return;
-      }
-
-      setOtpContext("login");
-      setOtpTargetEmail(username);
-      setOtp(["", "", "", "", "", ""]);
-      setOtpError("");
-      setOtpSuccess("");
-      setShowOtpModal(true);
-      setCountdown(30);
-      setSuccess("");
-    } else {
-      setError(response.message || "Invalid username/email or password.");
+    if (!username || !password) {
+      setError("Please enter both username/email and password.");
+      return;
     }
-  } catch (err) {
-    console.error(err);
-    setError("An error occurred while logging in. Please try again.");
-  }
-};
 
+    try {
+      const response = await loginUser({ email: username, password });
+
+      if (response.success) {
+        setSuccess("Login successful! Sending OTP...");
+        setLoginData({ username, token: response.token });
+
+        const otpResponse = await sendOtp(username, "login");
+
+        if (!otpResponse.success) {
+          setLoginData(null);
+          setError(otpResponse.message || "Failed to send OTP. Please try again.");
+          setSuccess("");
+          return;
+        }
+
+        setOtpContext("login");
+        setOtpTargetEmail(username);
+        setOtp(["", "", "", "", "", ""]);
+        setOtpError("");
+        setOtpSuccess("");
+        setShowOtpModal(true);
+        setCountdown(30);
+        setSuccess("");
+      } else {
+        setError(response.message || "Invalid username/email or password.");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("An error occurred while logging in. Please try again.");
+    }
+  };
 
   const handleGoogleLogin = () => {
     // Implement Google OAuth logic here
@@ -178,69 +177,67 @@ const handleLoginSubmit = async (e) => {
       ...prev,
       middleName: e.target.checked ? "N/A" : ""
     }));
-  };// create this service
-// create this service
-const handleRegisterSubmit = async (e) => {
-  e.preventDefault();
+  };
 
-  if (!agreeTerms || !agreePrivacy) {
-    alert("Please agree to both Terms of Service and Privacy Policy");
-    return;
-  }
+  const handleRegisterSubmit = async (e) => {
+    e.preventDefault();
 
-  if (!registerForm.firstName || !registerForm.lastName || !registerForm.regEmail || !registerForm.regPassword) {
-    alert("Please fill in all required fields");
-    return;
-  }
-
-  if (registerForm.regPassword !== registerForm.confirmPassword) {
-    alert("Passwords do not match");
-    return;
-  }
-
-  try {
-    // SEND OTP
-    const otpResponse = await sendOtp(registerForm.regEmail, "register");
-
-    if (!otpResponse.success) {
-      alert(otpResponse.message || "Failed to send OTP");
+    if (!agreeTerms || !agreePrivacy) {
+      alert("Please agree to both Terms of Service and Privacy Policy");
       return;
     }
 
-    // Open OTP modal and track context
-    setOtpContext("register");
-    setOtpTargetEmail(registerForm.regEmail);
-    setOtp(["", "", "", "", "", ""]);
-    setOtpError("");
-    setOtpSuccess("");
-    setShowOtpModal(true);
-    setCountdown(30);
+    if (!registerForm.firstName || !registerForm.lastName || !registerForm.regEmail || !registerForm.regPassword) {
+      alert("Please fill in all required fields");
+      return;
+    }
 
-    // Save registration data temporarily until OTP is verified
-    setPendingRegistration({
-      email: registerForm.regEmail,
-      password: registerForm.regPassword,
-      firstName: registerForm.firstName,
-      lastName: registerForm.lastName,
-      middleName: noMiddleName ? "N/A" : registerForm.middleName,
-      suffix: registerForm.suffix,
-      birthdate: registerForm.birthdate,
-      mobile_number: registerForm.mobile,
-      house_number: registerForm.houseNumber,
-      street: registerForm.street,
-      barangay: registerForm.barangay,
-      city_municipality: "Default City", // You might want to make these dynamic
-      province: "Default Province",
-      region: "Default Region",
-      zip_code: null
-    });
-  } catch (err) {
-    console.error(err);
-    alert("An error occurred while sending OTP");
-  }
-};
+    if (registerForm.regPassword !== registerForm.confirmPassword) {
+      alert("Passwords do not match");
+      return;
+    }
 
+    try {
+      // SEND OTP
+      const otpResponse = await sendOtp(registerForm.regEmail, "register");
 
+      if (!otpResponse.success) {
+        alert(otpResponse.message || "Failed to send OTP");
+        return;
+      }
+
+      // Open OTP modal and track context
+      setOtpContext("register");
+      setOtpTargetEmail(registerForm.regEmail);
+      setOtp(["", "", "", "", "", ""]);
+      setOtpError("");
+      setOtpSuccess("");
+      setShowOtpModal(true);
+      setCountdown(30);
+
+      // Save registration data temporarily until OTP is verified
+      setPendingRegistration({
+        email: registerForm.regEmail,
+        password: registerForm.regPassword,
+        firstName: registerForm.firstName,
+        lastName: registerForm.lastName,
+        middleName: noMiddleName ? "N/A" : registerForm.middleName,
+        suffix: registerForm.suffix,
+        birthdate: registerForm.birthdate,
+        mobile_number: registerForm.mobile,
+        house_number: registerForm.houseNumber,
+        street: registerForm.street,
+        barangay: registerForm.barangay,
+        city_municipality: "Default City", // You might want to make these dynamic
+        province: "Default Province",
+        region: "Default Region",
+        zip_code: null
+      });
+    } catch (err) {
+      console.error(err);
+      alert("An error occurred while sending OTP");
+    }
+  };
 
   // OTP Input Handlers
   const handleOtpChange = (index, value) => {
@@ -281,202 +278,203 @@ const handleRegisterSubmit = async (e) => {
       if (lastInput) lastInput.focus();
     }
   };
-const finalizeLogin = () => {
-  if (!loginData?.token) {
-    setOtpError("Login session expired. Please login again.");
-    return;
-  }
 
-  const { token, username: loginEmail } = loginData;
-
-  // Store under the key your header expects
-  localStorage.setItem("auth_token", token); // <-- must match UserHeader
-  localStorage.setItem("email", loginEmail);
-
-  closeOtpModal();
-  navigate("/user/dashboard");
-};
-
-const handleOtpSubmit = async (e) => {
-  e.preventDefault();
-  setOtpError("");
-  setOtpSuccess("");
-
-  const otpString = otp.join("");
-
-  if (otpString.length !== 6) {
-    setOtpError("Please enter the complete 6-digit OTP.");
-    return;
-  }
-
-  if (!otpContext || !otpTargetEmail) {
-    setOtpError("No OTP request in progress. Please try again.");
-    return;
-  }
-
-  try {
-    // Call OTP verification API
-    const response = await verifyOtp(otpTargetEmail, otpString, otpContext);
-    
-    console.log("🔐 [OTP API Response]:", response);
-    
-    if (!response.success) {
-      setOtpError(response.message || "Invalid OTP");
+  const finalizeLogin = () => {
+    if (!loginData?.token) {
+      setOtpError("Login session expired. Please login again.");
       return;
     }
 
-    setOtpSuccess("OTP verified successfully!");
-    
-    // ✅ CRITICAL: If this is registration, complete the registration process
-    if (otpContext === "register" && pendingRegistration) {
-      console.log("📝 Starting registration process with data:", pendingRegistration);
+    const { token, username: loginEmail } = loginData;
+
+    // Store under the key your header expects
+    localStorage.setItem("auth_token", token); // <-- must match UserHeader
+    localStorage.setItem("email", loginEmail);
+
+    closeOtpModal();
+    navigate("/user/dashboard");
+  };
+
+  const handleOtpSubmit = async (e) => {
+    e.preventDefault();
+    setOtpError("");
+    setOtpSuccess("");
+
+    const otpString = otp.join("");
+
+    if (otpString.length !== 6) {
+      setOtpError("Please enter the complete 6-digit OTP.");
+      return;
+    }
+
+    if (!otpContext || !otpTargetEmail) {
+      setOtpError("No OTP request in progress. Please try again.");
+      return;
+    }
+
+    try {
+      // Call OTP verification API
+      const response = await verifyOtp(otpTargetEmail, otpString, otpContext);
       
-      // Call the registerUser function to save data to database
-      const registerResponse = await registerUser(pendingRegistration);
+      console.log("🔐 [OTP API Response]:", response);
       
-      console.log("📝 [Registration API Response]:", registerResponse);
+      if (!response.success) {
+        setOtpError(response.message || "Invalid OTP");
+        return;
+      }
+
+      setOtpSuccess("OTP verified successfully!");
       
-      if (!registerResponse.success) {
-        setOtpError(registerResponse.message || "Registration failed after OTP verification");
+      // ✅ CRITICAL: If this is registration, complete the registration process
+      if (otpContext === "register" && pendingRegistration) {
+        console.log("📝 Starting registration process with data:", pendingRegistration);
+        
+        // Call the registerUser function to save data to database
+        const registerResponse = await registerUser(pendingRegistration);
+        
+        console.log("📝 [Registration API Response]:", registerResponse);
+        
+        if (!registerResponse.success) {
+          setOtpError(registerResponse.message || "Registration failed after OTP verification");
+          return;
+        }
+        
+        // Registration successful - save auth data
+        localStorage.setItem("auth_token", registerResponse.token || response.token || "dummy_token");
+        localStorage.setItem("goserveph_role", "user");
+        localStorage.setItem("goserveph_email", otpTargetEmail);
+        localStorage.setItem("email", otpTargetEmail);
+        
+        // Save user profile data if returned
+        if (registerResponse.first_name) {
+          localStorage.setItem("first_name", registerResponse.first_name);
+        }
+        if (registerResponse.last_name) {
+          localStorage.setItem("last_name", registerResponse.last_name);
+        }
+        if (registerResponse.full_name) {
+          localStorage.setItem("full_name", registerResponse.full_name);
+          localStorage.setItem("display_name", registerResponse.full_name);
+        }
+        
+        if (registerResponse.user_id) {
+          localStorage.setItem("goserveph_user_id", registerResponse.user_id);
+        }
+        
+        setOtpSuccess("Registration successful! Redirecting to dashboard...");
+        
+        closeOtpModal();
+        
+        // Redirect to user dashboard
+        setTimeout(() => {
+          navigate("/user/dashboard");
+        }, 1000);
+        
         return;
       }
       
-      // Registration successful - save auth data
-      localStorage.setItem("auth_token", registerResponse.token || response.token || "dummy_token");
-      localStorage.setItem("goserveph_role", "user");
-      localStorage.setItem("goserveph_email", otpTargetEmail);
-      localStorage.setItem("email", otpTargetEmail);
-      
-      // Save user profile data if returned
-      if (registerResponse.first_name) {
-        localStorage.setItem("first_name", registerResponse.first_name);
-      }
-      if (registerResponse.last_name) {
-        localStorage.setItem("last_name", registerResponse.last_name);
-      }
-      if (registerResponse.full_name) {
-        localStorage.setItem("full_name", registerResponse.full_name);
-        localStorage.setItem("display_name", registerResponse.full_name);
-      }
-      
-      if (registerResponse.user_id) {
-        localStorage.setItem("goserveph_user_id", registerResponse.user_id);
-      }
-      
-      setOtpSuccess("Registration successful! Redirecting to dashboard...");
-      
-      closeOtpModal();
-      
-      // Redirect to user dashboard
-      setTimeout(() => {
-        navigate("/user/dashboard");
-      }, 1000);
-      
-      return;
-    }
-    
-    // If it's login OTP verification, continue with existing logic
-    if (otpContext === "login") {
-      // ... existing login logic ...
-      
-      // CRITICAL: Save department for admin routing
-      console.log("✅ Saving department data:", response.department);
-      
-      // Store ALL authentication data
-      localStorage.setItem("auth_token", response.token || "dummy_token");
-      localStorage.setItem("goserveph_role", response.role || "user");
-      localStorage.setItem("goserveph_email", otpTargetEmail);
-      localStorage.setItem("email", otpTargetEmail);
-      
-      // THIS IS THE KEY: Save department if it exists
-      if (response.department) {
-        localStorage.setItem("goserveph_department", response.department);
-        console.log("✅ Department saved:", response.department);
-      } else if (response.isAdmin) {
-        // If isAdmin is true but department is not set, assign based on email
-        const department = getDepartmentFromEmail(otpTargetEmail);
-        if (department) {
-          localStorage.setItem("goserveph_department", department);
-          console.log("✅ Department assigned from email:", department);
+      // If it's login OTP verification, continue with existing logic
+      if (otpContext === "login") {
+        // ... existing login logic ...
+        
+        // CRITICAL: Save department for admin routing
+        console.log("✅ Saving department data:", response.department);
+        
+        // Store ALL authentication data
+        localStorage.setItem("auth_token", response.token || "dummy_token");
+        localStorage.setItem("goserveph_role", response.role || "user");
+        localStorage.setItem("goserveph_email", otpTargetEmail);
+        localStorage.setItem("email", otpTargetEmail);
+        
+        // THIS IS THE KEY: Save department if it exists
+        if (response.department) {
+          localStorage.setItem("goserveph_department", response.department);
+          console.log("✅ Department saved:", response.department);
+        } else if (response.isAdmin) {
+          // If isAdmin is true but department is not set, assign based on email
+          const department = getDepartmentFromEmail(otpTargetEmail);
+          if (department) {
+            localStorage.setItem("goserveph_department", department);
+            console.log("✅ Department assigned from email:", department);
+          }
         }
-      }
-      
-      if (response.user_id) {
-        localStorage.setItem("goserveph_user_id", response.user_id);
-      }
-      
-      if (response.name) {
-        localStorage.setItem("goserveph_name", response.name);
-        sessionStorage.setItem("admin_name", response.name);
-      }
-      
-      // Also store department in sessionStorage for AdminSidebar
-      if (response.department) {
-        sessionStorage.setItem("admin_department", response.department);
-      }
-      
-      // Debug what was saved
-      console.log("🔍 After login - localStorage:", {
-        role: localStorage.getItem("goserveph_role"),
-        department: localStorage.getItem("goserveph_department"),
-        email: localStorage.getItem("goserveph_email")
-      });
-      
-      closeOtpModal();
-      
-      // Redirect based on role
-      setTimeout(() => {
-        if (response.role === "admin") {
-          navigate("/admin/dashboard");
-        } else {
-          navigate("/user/dashboard");
+        
+        if (response.user_id) {
+          localStorage.setItem("goserveph_user_id", response.user_id);
         }
-      }, 300);
+        
+        if (response.name) {
+          localStorage.setItem("goserveph_name", response.name);
+          sessionStorage.setItem("admin_name", response.name);
+        }
+        
+        // Also store department in sessionStorage for AdminSidebar
+        if (response.department) {
+          sessionStorage.setItem("admin_department", response.department);
+        }
+        
+        // Debug what was saved
+        console.log("🔍 After login - localStorage:", {
+          role: localStorage.getItem("goserveph_role"),
+          department: localStorage.getItem("goserveph_department"),
+          email: localStorage.getItem("goserveph_email")
+        });
+        
+        closeOtpModal();
+        
+        // Redirect based on role
+        setTimeout(() => {
+          if (response.role === "admin") {
+            navigate("/admin/dashboard");
+          } else {
+            navigate("/user/dashboard");
+          }
+        }, 300);
+      }
+      
+    } catch (err) {
+      console.error(err);
+      setOtpError("Network error while verifying OTP");
     }
-    
-  } catch (err) {
-    console.error(err);
-    setOtpError("Network error while verifying OTP");
-  }
-};
-
-// Helper function to get department from email
-function getDepartmentFromEmail(email) {
-  const emailToDepartment = {
-    'superadmin@eplms.com': 'super',
-    'businessadmin@eplms.com': 'business',
-    'buildingadmin@eplms.com': 'building',
-    'barangaystaff@eplms.com': 'barangay',
-    'transportadmin@eplms.com': 'transport',
-    'admin@eplms.com': 'super'
   };
-  return emailToDepartment[email.toLowerCase()] || null;
-}
 
- const handleResendOtp = async () => {
-  if (countdown > 0 || !otpTargetEmail || !otpContext) return;
-  if (otpContext === "register" && !pendingRegistration?.email) return;
-
-  setIsResending(true);
-  setOtpError("");
-  setOtpSuccess("Resending OTP...");
-
-  try {
-    const otpResponse = await sendOtp(otpTargetEmail, otpContext);
-
-    if (!otpResponse.success) {
-      setOtpError(otpResponse.message || "Failed to resend OTP");
-    } else {
-      setOtpSuccess("New OTP has been sent to your email.");
-      setOtp(["", "", "", "", "", ""]);
-      setCountdown(30);
-    }
-  } catch (err) {
-    setOtpError("Network error while resending OTP");
+  // Helper function to get department from email
+  function getDepartmentFromEmail(email) {
+    const emailToDepartment = {
+      'superadmin@eplms.com': 'super',
+      'businessadmin@eplms.com': 'business',
+      'buildingadmin@eplms.com': 'building',
+      'barangaystaff@eplms.com': 'barangay',
+      'transportadmin@eplms.com': 'transport',
+      'admin@eplms.com': 'super'
+    };
+    return emailToDepartment[email.toLowerCase()] || null;
   }
 
-  setIsResending(false);
-};
+  const handleResendOtp = async () => {
+    if (countdown > 0 || !otpTargetEmail || !otpContext) return;
+    if (otpContext === "register" && !pendingRegistration?.email) return;
+
+    setIsResending(true);
+    setOtpError("");
+    setOtpSuccess("Resending OTP...");
+
+    try {
+      const otpResponse = await sendOtp(otpTargetEmail, otpContext);
+
+      if (!otpResponse.success) {
+        setOtpError(otpResponse.message || "Failed to resend OTP");
+      } else {
+        setOtpSuccess("New OTP has been sent to your email.");
+        setOtp(["", "", "", "", "", ""]);
+        setCountdown(30);
+      }
+    } catch (err) {
+      setOtpError("Network error while resending OTP");
+    }
+
+    setIsResending(false);
+  };
 
   const closeOtpModal = () => {
     setShowOtpModal(false);
@@ -508,8 +506,9 @@ function getDepartmentFromEmail(email) {
         }`}
       >
         <div className="container mx-auto px-6 py-3 flex justify-between items-center">
-          {/* LEFT: Logo + Title + Tagline */}
+          {/* LEFT: Logo + Title + Tagline + Back Button */}
           <div className="flex items-center gap-3">
+            
             <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
               <img
                 src="/GSM_logo.png"
@@ -546,7 +545,17 @@ function getDepartmentFromEmail(email) {
 
       {/* Main Content */}
       <main className="relative z-10 container mx-auto px-6 py-8 flex-1">
+                            {/* Back Button */}
+<button
+  onClick={() => navigate(-1)}
+  className="px-4 py-2 bg-[#4CAF50] text-white rounded-md hover:bg-[#45a049] transition-colors duration-300 border border-[#3d8b40] shadow-sm hover:shadow-md mr-2 flex items-center gap-2"
+  aria-label="Go back"
+>
+  <ArrowLeft className="w-5 h-5" />
+  <span>Back</span>
+</button>
         <div className="grid lg:grid-cols-2 gap-12 items-center max-w-7xl mx-auto">
+          
           {/* Left Section - Features */}
           <div className="text-center lg:text-left space-y-6">
             <h2 className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-600 via-green-600 to-blue-600 bg-clip-text text-transparent bg-size-600 animate-gradient">
@@ -701,298 +710,294 @@ function getDepartmentFromEmail(email) {
         </div>
       </main>
 
-
-    
-
       {/* Registration Modal */}
-{showRegisterModal && (
-  <div className="fixed inset-0 bg-black/40 flex items-start justify-center pt-20 px-4 z-50 overflow-y-auto">
-    <div className="bg-white rounded-[10px] shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+      {showRegisterModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-start justify-center pt-20 px-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-[10px] shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
 
-      {/* HEADER – fixed, full-width, clean */}
-      <div className="sticky top-0 w-full bg-white/95 backdrop-blur border-b border-gray-200 px-6 py-4 text-center z-10">
-        <h2 className="text-xl md:text-2xl font-semibold text-green-600">
-          Create your GoServePH account
-        </h2>
-      </div>
-
-      {/* FORM AREA */}
-      <form 
-        id="registerForm" 
-        className="space-y-5 p-6 overflow-y-auto max-h-[calc(80vh-60px)]" 
-        onSubmit={handleRegisterSubmit}
-      >
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm mb-1">First Name<span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
-              name="firstName" 
-              required 
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.firstName}
-              onChange={handleRegisterInputChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Last Name<span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
-              name="lastName" 
-              required 
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.lastName}
-              onChange={handleRegisterInputChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Middle Name<span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
-              id="middleName" 
-              name="middleName" 
-              required 
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.middleName}
-              onChange={handleRegisterInputChange}
-              disabled={noMiddleName}
-            />
-            <label className="inline-flex items-center mt-2 text-sm">
-              <input 
-                type="checkbox" 
-                id="noMiddleName" 
-                className="mr-2"
-                checked={noMiddleName}
-                onChange={handleNoMiddleNameChange}
-              /> 
-              No middle name
-            </label>
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Suffix</label>
-            <input 
-              type="text" 
-              name="suffix" 
-              placeholder="Jr., Sr., III (optional)" 
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.suffix}
-              onChange={handleRegisterInputChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Birthdate<span className="text-red-500">*</span></label>
-            <input 
-              type="date" 
-              name="birthdate" 
-              required 
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.birthdate}
-              onChange={handleRegisterInputChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Email Address<span className="text-red-500">*</span></label>
-            <input 
-              type="email" 
-              name="regEmail" 
-              required 
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.regEmail}
-              onChange={handleRegisterInputChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Mobile Number<span className="text-red-500">*</span></label>
-            <input 
-              type="tel" 
-              name="mobile" 
-              required 
-              placeholder="09XXXXXXXXX"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.mobile}
-              onChange={handleRegisterInputChange}
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm mb-1">Address<span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
-              name="address" 
-              required 
-              placeholder="Lot/Unit, Building, Subdivision"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.address}
-              onChange={handleRegisterInputChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">House #<span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
-              name="houseNumber" 
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.houseNumber}
-              onChange={handleRegisterInputChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Street<span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
-              name="street" 
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.street}
-              onChange={handleRegisterInputChange}
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm mb-1">Barangay<span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
-              name="barangay" 
-              required 
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              value={registerForm.barangay}
-              onChange={handleRegisterInputChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Password<span className="text-red-500">*</span></label>
-            <div className="relative">
-              <input 
-                type="password" 
-                id="regPassword" 
-                name="regPassword" 
-                minLength="10" 
-                required 
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg pr-10"
-                value={registerForm.regPassword}
-                onChange={handleRegisterInputChange}
-              />
-              <button 
-                type="button" 
-                className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
-                onClick={() => {
-                  const input = document.getElementById('regPassword');
-                  input.type = input.type === 'password' ? 'text' : 'password';
-                }}
-              >
-                <i className="far fa-eye"></i>
-              </button>
+            {/* HEADER – fixed, full-width, clean */}
+            <div className="sticky top-0 w-full bg-white/95 backdrop-blur border-b border-gray-200 px-6 py-4 text-center z-10">
+              <h2 className="text-xl md:text-2xl font-semibold text-green-600">
+                Create your GoServePH account
+              </h2>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm mb-1">Confirm Password<span className="text-red-500">*</span></label>
-            <div className="relative">
-              <input 
-                type="password" 
-                id="confirmPassword" 
-                name="confirmPassword" 
-                minLength="10" 
-                required 
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg pr-10"
-                value={registerForm.confirmPassword}
-                onChange={handleRegisterInputChange}
-              />
-              <button 
-                type="button" 
-                className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
-                onClick={() => {
-                  const input = document.getElementById('confirmPassword');
-                  input.type = input.type === 'password' ? 'text' : 'password';
-                }}
-              >
-                <i className="far fa-eye"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Terms & Privacy */}
-        <div className="space-y-2">
-          <div className="flex items-center text-sm">
-            <label className="inline-flex items-center">
-              <input 
-                type="checkbox" 
-                id="agreeTerms" 
-                className="mr-2" 
-                required
-                checked={agreeTerms}
-                onChange={(e) => setAgreeTerms(e.target.checked)}
-              />
-              <span>I have read, understood, and agreed to the</span>
-            </label>
-            <button 
-              type="button" 
-              className="ml-2 text-green-600 hover:underline"
-              onClick={handleOpenTerms}
+            {/* FORM AREA */}
+            <form 
+              id="registerForm" 
+              className="space-y-5 p-6 overflow-y-auto max-h-[calc(80vh-60px)]" 
+              onSubmit={handleRegisterSubmit}
             >
-              Terms of Use
-            </button>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm mb-1">First Name<span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    name="firstName" 
+                    required 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.firstName}
+                    onChange={handleRegisterInputChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Last Name<span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    name="lastName" 
+                    required 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.lastName}
+                    onChange={handleRegisterInputChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Middle Name<span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    id="middleName" 
+                    name="middleName" 
+                    required 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.middleName}
+                    onChange={handleRegisterInputChange}
+                    disabled={noMiddleName}
+                  />
+                  <label className="inline-flex items-center mt-2 text-sm">
+                    <input 
+                      type="checkbox" 
+                      id="noMiddleName" 
+                      className="mr-2"
+                      checked={noMiddleName}
+                      onChange={handleNoMiddleNameChange}
+                    /> 
+                    No middle name
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Suffix</label>
+                  <input 
+                    type="text" 
+                    name="suffix" 
+                    placeholder="Jr., Sr., III (optional)" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.suffix}
+                    onChange={handleRegisterInputChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Birthdate<span className="text-red-500">*</span></label>
+                  <input 
+                    type="date" 
+                    name="birthdate" 
+                    required 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.birthdate}
+                    onChange={handleRegisterInputChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Email Address<span className="text-red-500">*</span></label>
+                  <input 
+                    type="email" 
+                    name="regEmail" 
+                    required 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.regEmail}
+                    onChange={handleRegisterInputChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Mobile Number<span className="text-red-500">*</span></label>
+                  <input 
+                    type="tel" 
+                    name="mobile" 
+                    required 
+                    placeholder="09XXXXXXXXX"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.mobile}
+                    onChange={handleRegisterInputChange}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm mb-1">Address<span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    name="address" 
+                    required 
+                    placeholder="Lot/Unit, Building, Subdivision"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.address}
+                    onChange={handleRegisterInputChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">House #<span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    name="houseNumber" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.houseNumber}
+                    onChange={handleRegisterInputChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Street<span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    name="street" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.street}
+                    onChange={handleRegisterInputChange}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm mb-1">Barangay<span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    name="barangay" 
+                    required 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={registerForm.barangay}
+                    onChange={handleRegisterInputChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Password<span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <input 
+                      type="password" 
+                      id="regPassword" 
+                      name="regPassword" 
+                      minLength="10" 
+                      required 
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg pr-10"
+                      value={registerForm.regPassword}
+                      onChange={handleRegisterInputChange}
+                    />
+                    <button 
+                      type="button" 
+                      className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                      onClick={() => {
+                        const input = document.getElementById('regPassword');
+                        input.type = input.type === 'password' ? 'text' : 'password';
+                      }}
+                    >
+                      <i className="far fa-eye"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Confirm Password<span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <input 
+                      type="password" 
+                      id="confirmPassword" 
+                      name="confirmPassword" 
+                      minLength="10" 
+                      required 
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg pr-10"
+                      value={registerForm.confirmPassword}
+                      onChange={handleRegisterInputChange}
+                    />
+                    <button 
+                      type="button" 
+                      className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                      onClick={() => {
+                        const input = document.getElementById('confirmPassword');
+                        input.type = input.type === 'password' ? 'text' : 'password';
+                      }}
+                    >
+                      <i className="far fa-eye"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms & Privacy */}
+              <div className="space-y-2">
+                <div className="flex items-center text-sm">
+                  <label className="inline-flex items-center">
+                    <input 
+                      type="checkbox" 
+                      id="agreeTerms" 
+                      className="mr-2" 
+                      required
+                      checked={agreeTerms}
+                      onChange={(e) => setAgreeTerms(e.target.checked)}
+                    />
+                    <span>I have read, understood, and agreed to the</span>
+                  </label>
+                  <button 
+                    type="button" 
+                    className="ml-2 text-green-600 hover:underline"
+                    onClick={handleOpenTerms}
+                  >
+                    Terms of Use
+                  </button>
+                </div>
+
+                <div className="flex items-center text-sm">
+                  <label className="inline-flex items-center">
+                    <input 
+                      type="checkbox" 
+                      id="agreePrivacy" 
+                      className="mr-2" 
+                      required
+                      checked={agreePrivacy}
+                      onChange={(e) => setAgreePrivacy(e.target.checked)}
+                    />
+                    <span>I have read, understood, and agreed to the</span>
+                  </label>
+                  <button 
+                    type="button" 
+                    className="ml-2 text-green-600 hover:underline"
+                    onClick={handleOpenPrivacy}
+                  >
+                    Data Privacy Policy
+                  </button>
+                </div>
+
+                <p className="text-xs text-gray-600">
+                  By clicking on the register button below, I hereby agree to both the Terms of Use and Data Privacy Policy
+                </p>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex justify-end space-x-3 pt-2">
+                <button 
+                  type="button" 
+                  className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+                  onClick={handleCloseRegisterModal}
+                >
+                  Cancel
+                </button>
+
+                <button 
+                  type="submit" 
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Register
+                </button>
+              </div>
+
+            </form>
           </div>
-
-          <div className="flex items-center text-sm">
-            <label className="inline-flex items-center">
-              <input 
-                type="checkbox" 
-                id="agreePrivacy" 
-                className="mr-2" 
-                required
-                checked={agreePrivacy}
-                onChange={(e) => setAgreePrivacy(e.target.checked)}
-              />
-              <span>I have read, understood, and agreed to the</span>
-            </label>
-            <button 
-              type="button" 
-              className="ml-2 text-green-600 hover:underline"
-              onClick={handleOpenPrivacy}
-            >
-              Data Privacy Policy
-            </button>
-          </div>
-
-          <p className="text-xs text-gray-600">
-            By clicking on the register button below, I hereby agree to both the Terms of Use and Data Privacy Policy
-          </p>
         </div>
-
-        {/* Buttons */}
-        <div className="flex justify-end space-x-3 pt-2">
-          <button 
-            type="button" 
-            className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
-            onClick={handleCloseRegisterModal}
-          >
-            Cancel
-          </button>
-
-          <button 
-            type="submit" 
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-          >
-            Register
-          </button>
-        </div>
-
-      </form>
-    </div>
-  </div>
-)}
-
+      )}
 
       {/* Terms of Service Modal */}
       {showTermsModal && (
@@ -1125,7 +1130,7 @@ function getDepartmentFromEmail(email) {
                     <li>You will not use the Services for fraudulent or illegal purposes.</li>
                 </ul>
                 <p><strong>5. No Warranties</strong></p>
-                <p>We provide the Services and GoServePH IP “AS IS” and “AS AVAILABLE,” without any express, implied, or statutory warranties of title, merchantability, fitness for a particular purpose, or non-infringement.</p>
+                <p>We provide the Services and GoServePH IP "AS IS" and "AS AVAILABLE," without any express, implied, or statutory warranties of title, merchantability, fitness for a particular purpose, or non-infringement.</p>
                 <p><strong>6. Limitation of Liability</strong></p>
                 <p>We shall not be responsible or liable to you for any indirect, punitive, incidental, special, consequential, or exemplary damages resulting from your use or inability to use the Services, lost profits, personal injury, or property damage. We are not liable for damages arising from:</p>
                 <ul className="list-disc pl-5">
@@ -1168,7 +1173,7 @@ function getDepartmentFromEmail(email) {
            <div className="px-6 py-4 space-y-4 text-sm leading-6">
               <h3 className="text-lg font-semibold">GoServePH Data Privacy Policy</h3>
                 <p><strong>Protecting the information you and your users handle through our system is our highest priority.</strong> This policy outlines how GoServePH manages, secures, and uses your data.</p>
-                <h4 class="font-semibold">1. How We Define and Use Data</h4>
+                <h4 className="font-semibold">1. How We Define and Use Data</h4>
                 <p>In this policy, we define the types of data that flow through the GoServePH system:</p>
                 <table className="w-full text-left text-xs">
                     <thead>
@@ -1351,7 +1356,9 @@ function getDepartmentFromEmail(email) {
           </div>
         </div>
       )}
- <Footer />
+      
+      <Footer />
+
       {/* Custom Animations */}
       <style>{`
         @keyframes gradient {

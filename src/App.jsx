@@ -69,9 +69,9 @@ function App() {
     <AuthProvider> {/* Wrap entire app with AuthProvider */}
       <Routes>
         {/* Public routes (no authentication required) */}
+        <Route path="/" element={<Navigate to="/plms" replace />} />
         <Route path="/plms" element={<Plms />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/register" element={<Register />} />
 
 

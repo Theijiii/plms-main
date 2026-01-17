@@ -12,8 +12,7 @@ import {
 
 export default function Footer() {
   return (
-    <footer className="w-full bg-[#FBFBFB] text-[#333] font-[Montserrat,Arial,sans-serif] border-t border-gray-200">
-      {/* Top Section */}
+    <footer className="w-full bg-white text-[#333] font-[Montserrat,Arial,sans-serif] border-t border-gray-200">
       <div className="max-w-[1800px] mx-auto px-6 md:px-12 py-10 grid grid-cols-1 md:grid-cols-3 gap-10 text-left">
         {/* LEFT COLUMN: Logo + tagline + Socials */}
         <div className="space-y-4 mx-auto w-fit">
