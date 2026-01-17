@@ -1,7 +1,25 @@
-// debug_table.php
 <?php
-header("Content-Type: text/html; charset=UTF-8");
-$conn = new mysqli('localhost', 'root', 'mypassword', 'eplms_business_permit_db');
+session_start();
+
+
+$allowedOrigins = [
+    'http://localhost',
+    'https://e-plms.goserveph.com/'
+];
+
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin && in_array($origin, $allowedOrigins, true)) {
+    header("Access-Control-Allow-Origin: {$origin}");
+} else {
+    header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/");
+}
+header("Access-Control-Allow-Credentials: true");
+header("Content-Type: application/json");
+header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
+
+// Handle preflight
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);

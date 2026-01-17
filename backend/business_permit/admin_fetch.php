@@ -1,13 +1,27 @@
 <?php
-// admin_fetch.php - Fetch business permit applications for admin panel
-header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
+session_start();
 
+
+$allowedOrigins = [
+    'http://localhost',
+    'https://e-plms.goserveph.com/'
+];
+
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin && in_array($origin, $allowedOrigins, true)) {
+    header("Access-Control-Allow-Origin: {$origin}");
+} else {
+    header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/");
+}
+header("Access-Control-Allow-Credentials: true");
+header("Content-Type: application/json");
+header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
+
+// Handle preflight
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 // Database Connection
-$conn = new mysqli('localhost', 'root', 'mypassword', 'eplms_business_permit_db');
-
+require_once __DIR__ . '/db.php';
 if ($conn->connect_error) {
     echo json_encode([
         'success' => false,

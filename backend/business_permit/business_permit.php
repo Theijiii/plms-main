@@ -1,18 +1,26 @@
 <?php
-// business_permit_final.php - Updated with file upload and document table support
-header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
+session_start();
 
-ob_start();
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
+$allowedOrigins = [
+    'http://localhost',
+    'https://e-plms.goserveph.com/'
+];
+
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin && in_array($origin, $allowedOrigins, true)) {
+    header("Access-Control-Allow-Origin: {$origin}");
+} else {
+    header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/");
 }
+header("Access-Control-Allow-Credentials: true");
+header("Content-Type: application/json");
+header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
-// Configuration
+// Handle preflight
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
+require_once __DIR__ . '/db.php';
 $uploadDir = __DIR__ . '/uploads/';
 $allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
 $maxFileSize = 10 * 1024 * 1024; // 10MB
@@ -25,8 +33,6 @@ if (!file_exists($uploadDir)) {
 }
 
 // Database Connection
-$conn = new mysqli('localhost', 'root', 'mypassword', 'eplms_business_permit_db');
-
 if ($conn->connect_error) {
     ob_clean();
     echo json_encode([
