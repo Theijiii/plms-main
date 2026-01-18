@@ -234,76 +234,82 @@ const confirmDeclaration = async () => {
   try {
     const formDataToSend = new FormData();
     
-    // Debug: Log all form data
-    console.log('=== Form Data to Send ===');
-    
-    // Add ALL form data using ORIGINAL field names
+    // Add ALL form data using the original field names (not db field names)
     Object.keys(formData).forEach((fieldName) => {
       const value = formData[fieldName];
       
-      // Skip null/undefined values for strings, but keep 0 for numbers
-      if (value !== null && value !== undefined) {
+      // Skip null/undefined/empty string values
+      if (value !== null && value !== undefined && value !== '') {
+        // For numbers, convert to string
         if (typeof value === 'number') {
           formDataToSend.append(fieldName, value.toString());
-          console.log(`${fieldName}: ${value} (number)`);
         } else if (value instanceof File) {
+          // Files are handled separately below
           formDataToSend.append(fieldName, value);
-          console.log(`${fieldName}: ${value.name} (file)`);
-        } else if (typeof value === 'string' && value.trim() !== '') {
-          formDataToSend.append(fieldName, value);
-          console.log(`${fieldName}: ${value}`);
-        } else if (typeof value === 'string' && value.trim() === '') {
-          // Send empty string for required fields
-          formDataToSend.append(fieldName, '');
+        } else {
+          formDataToSend.append(fieldName, String(value));
         }
-      } else {
-        // For null/undefined, send empty string for string fields
-        formDataToSend.append(fieldName, '');
       }
     });
 
     // Add boolean flags for document attachments
-    const documentFlags = {
-      has_barangay_clearance: formData.barangay_clearance || formData.barangay_clearance_id,
-      has_bir_certificate: !!formData.bir_certificate,
-      has_lease_or_title: !!formData.lease_or_title,
-      has_fsic: !!formData.fsic,
-      has_owner_valid_id: !!formData.owner_valid_id,
-      has_id_picture: !!formData.id_picture,
-      has_official_receipt: !!formData.official_receipt_file,
-      has_owner_scanned_id: !!formData.owner_scanned_id,
-      has_dti_registration: !!formData.dti_registration,
-      has_sec_registration: !!formData.sec_registration,
-      has_representative_scanned_id: !!formData.representative_scanned_id
-    };
+    const documentFlags = [
+      'has_barangay_clearance', 'has_bir_certificate', 'has_lease_or_title',
+      'has_fsic', 'has_owner_valid_id', 'has_id_picture', 'has_official_receipt',
+      'has_owner_scanned_id', 'has_dti_registration', 'has_sec_registration',
+      'has_representative_scanned_id'
+    ];
     
-    Object.keys(documentFlags).forEach(flag => {
-      formDataToSend.append(flag, documentFlags[flag] ? '1' : '0');
+    // Calculate and add document flags based on actual file presence
+    documentFlags.forEach(flag => {
+      let hasFile = false;
+      
+      switch(flag) {
+        case 'has_barangay_clearance':
+          hasFile = !!formData.barangay_clearance || !!formData.barangay_clearance_id;
+          break;
+        case 'has_bir_certificate':
+          hasFile = !!formData.bir_certificate;
+          break;
+        case 'has_lease_or_title':
+          hasFile = !!formData.lease_or_title;
+          break;
+        case 'has_fsic':
+          hasFile = !!formData.fsic;
+          break;
+        case 'has_owner_valid_id':
+          hasFile = !!formData.owner_valid_id;
+          break;
+        case 'has_id_picture':
+          hasFile = !!formData.id_picture;
+          break;
+        case 'has_official_receipt':
+          hasFile = !!formData.official_receipt_file;
+          break;
+        case 'has_owner_scanned_id':
+          hasFile = !!formData.owner_scanned_id;
+          break;
+        case 'has_dti_registration':
+          hasFile = !!formData.dti_registration;
+          break;
+        case 'has_sec_registration':
+          hasFile = !!formData.sec_registration;
+          break;
+        case 'has_representative_scanned_id':
+          hasFile = !!formData.representative_scanned_id;
+          break;
+      }
+      
+      formDataToSend.append(flag, hasFile ? '1' : '0');
     });
 
     // Add barangay clearance status
     const barangayClearanceStatus = formData.barangay_clearance || formData.barangay_clearance_id ? 'ID_PROVIDED' : 'PENDING';
     formDataToSend.append('barangay_clearance_status', barangayClearanceStatus);
 
-    // Add required fields that might be missing
-    if (!formDataToSend.has('owner_last_name') && formData.last_name) {
-      formDataToSend.append('owner_last_name', formData.last_name);
-    }
-    if (!formDataToSend.has('owner_first_name') && formData.first_name) {
-      formDataToSend.append('owner_first_name', formData.first_name);
-    }
-    if (!formDataToSend.has('owner_middle_name') && formData.middle_name) {
-      formDataToSend.append('owner_middle_name', formData.middle_name || '');
-    }
-
-    // Log FormData entries for debugging
     console.log('FormData entries:');
     for (let [key, value] of formDataToSend.entries()) {
-      if (value instanceof File) {
-        console.log(`${key}: [File] ${value.name} (${value.size} bytes)`);
-      } else {
-        console.log(`${key}: ${value}`);
-      }
+      console.log(`${key}:`, value);
     }
 
     // Test connection
@@ -319,7 +325,7 @@ const confirmDeclaration = async () => {
     const response = await fetch(API_BUS, {
       method: "POST",
       body: formDataToSend,
-      credentials: 'include'
+      credentials: 'include' // Important for sessions/cookies
     });
 
     console.log('Response status:', response.status);

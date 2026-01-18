@@ -327,194 +327,162 @@ export default function BusinessNew() {
     }
   };
 
-  const confirmDeclaration = async () => {
-    if (!agreeDeclaration) {
-      setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
-      setShowDeclarationModal(false);
-      return;
+ const confirmDeclaration = async () => {
+  if (!agreeDeclaration) {
+    setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
+    setShowDeclarationModal(false);
+    return;
+  }
+  
+  setIsSubmitting(true);
+  setShowDeclarationModal(false);
+
+  try {
+    const formDataToSend = new FormData();
+    
+    // Add ALL form data using the original field names (not db field names)
+    Object.keys(formData).forEach((fieldName) => {
+      const value = formData[fieldName];
+      
+      // Skip null/undefined/empty string values
+      if (value !== null && value !== undefined && value !== '') {
+        // For numbers, convert to string
+        if (typeof value === 'number') {
+          formDataToSend.append(fieldName, value.toString());
+        } else if (value instanceof File) {
+          // Files are handled separately below
+          formDataToSend.append(fieldName, value);
+        } else {
+          formDataToSend.append(fieldName, String(value));
+        }
+      }
+    });
+
+    // Add boolean flags for document attachments
+    const documentFlags = [
+      'has_barangay_clearance', 'has_bir_certificate', 'has_lease_or_title',
+      'has_fsic', 'has_owner_valid_id', 'has_id_picture', 'has_official_receipt',
+      'has_owner_scanned_id', 'has_dti_registration', 'has_sec_registration',
+      'has_representative_scanned_id'
+    ];
+    
+    // Calculate and add document flags based on actual file presence
+    documentFlags.forEach(flag => {
+      let hasFile = false;
+      
+      switch(flag) {
+        case 'has_barangay_clearance':
+          hasFile = !!formData.barangay_clearance || !!formData.barangay_clearance_id;
+          break;
+        case 'has_bir_certificate':
+          hasFile = !!formData.bir_certificate;
+          break;
+        case 'has_lease_or_title':
+          hasFile = !!formData.lease_or_title;
+          break;
+        case 'has_fsic':
+          hasFile = !!formData.fsic;
+          break;
+        case 'has_owner_valid_id':
+          hasFile = !!formData.owner_valid_id;
+          break;
+        case 'has_id_picture':
+          hasFile = !!formData.id_picture;
+          break;
+        case 'has_official_receipt':
+          hasFile = !!formData.official_receipt_file;
+          break;
+        case 'has_owner_scanned_id':
+          hasFile = !!formData.owner_scanned_id;
+          break;
+        case 'has_dti_registration':
+          hasFile = !!formData.dti_registration;
+          break;
+        case 'has_sec_registration':
+          hasFile = !!formData.sec_registration;
+          break;
+        case 'has_representative_scanned_id':
+          hasFile = !!formData.representative_scanned_id;
+          break;
+      }
+      
+      formDataToSend.append(flag, hasFile ? '1' : '0');
+    });
+
+    // Add barangay clearance status
+    const barangayClearanceStatus = formData.barangay_clearance || formData.barangay_clearance_id ? 'ID_PROVIDED' : 'PENDING';
+    formDataToSend.append('barangay_clearance_status', barangayClearanceStatus);
+
+    console.log('FormData entries:');
+    for (let [key, value] of formDataToSend.entries()) {
+      console.log(`${key}:`, value);
+    }
+
+    // Test connection
+    try {
+      const testResponse = await fetch(API_BUS, { method: 'GET' });
+      console.log('Connection test:', testResponse.status);
+    } catch (testError) {
+      console.error('Connection error:', testError);
+      throw new Error('Cannot connect to server. Please ensure backend is running.');
+    }
+
+    // Submit the form
+    const response = await fetch(API_BUS, {
+      method: "POST",
+      body: formDataToSend,
+      credentials: 'include' // Important for sessions/cookies
+    });
+
+    console.log('Response status:', response.status);
+
+    const raw = await response.text();
+    console.log('Raw response:', raw);
+    
+    if (!raw.trim()) {
+      throw new Error('Server returned an empty response');
     }
     
-    setIsSubmitting(true);
-    setShowDeclarationModal(false);
-
+    let data;
     try {
-      const formDataToSend = new FormData();
+      data = JSON.parse(raw);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.log('Raw response that failed to parse:', raw);
       
-      // Field mapping from frontend names to database column names
-      const fieldMapping = {
-        // Owner Information
-        'first_name': 'owner_first_name',
-        'last_name': 'owner_last_name',
-        'middle_name': 'owner_middle_name',
-        'owner_type': 'owner_type',
-        'citizenship': 'citizenship',
-        'corp_filipino_percent': 'corp_filipino_percent',
-        'corp_foreign_percent': 'corp_foreign_percent',
-        'date_of_birth': 'date_of_birth',
-        'contact_number': 'contact_number',
-        'email_address': 'email_address',
-        'home_address': 'home_address',
-        'valid_id_type': 'valid_id_type',
-        'valid_id_number': 'valid_id_number',
-        
-        // Business Information
-        'business_name': 'business_name',
-        'trade_name': 'trade_name',
-        'business_nature': 'business_nature',
-        'building_type': 'building_type',
-        'capital_investment': 'capital_investment',
-        
-        // Business Address
-        'house_bldg_no': 'house_bldg_no',
-        'building_name': 'building_name',
-        'block_no': 'block_no',
-        'lot_no': 'lot_no',
-        'street': 'street',
-        'subdivision': 'subdivision',
-        'province': 'province',
-        'city_municipality': 'city_municipality',
-        'barangay': 'barangay',
-        'zip_code': 'zip_code',
-        'district': 'district',
-        
-        // Operations Details
-        'zoning_permit_id': 'zoning_permit_id',
-        'sanitation_permit_id': 'sanitation_permit_id',
-        'business_area': 'business_area',
-        'total_floor_area': 'total_floor_area',
-        'operation_time_from': 'operation_time_from',
-        'operation_time_to': 'operation_time_to',
-        'operation_type': 'operation_type',
-        'total_employees': 'total_employees',
-        'male_employees': 'male_employees',
-        'female_employees': 'female_employees',
-        'employees_in_qc': 'employees_in_qc',
-        'delivery_van_truck': 'delivery_van_truck',
-        'delivery_motorcycle': 'delivery_motorcycle',
-        'barangay_clearance_id': 'barangay_clearance_id',
-        
-        // Declaration
-        'owner_type_declaration': 'owner_type_declaration',
-        'owner_representative_name': 'owner_representative_name',
-        'date_submitted': 'date_submitted',
-        'permit_type': 'permit_type',
-        'application_date': 'application_date'
-      };
-
-      // Add all mapped form data
-      Object.keys(fieldMapping).forEach((frontendField) => {
-        const dbField = fieldMapping[frontendField];
-        const value = formData[frontendField];
-        
-        if (value !== null && value !== undefined && value !== '') {
-          formDataToSend.append(dbField, String(value));
-        }
-      });
-
-      // Add boolean flags for document attachments
-      formDataToSend.append('has_barangay_clearance', formData.barangay_clearance ? '1' : '0');
-      formDataToSend.append('has_bir_certificate', formData.bir_certificate ? '1' : '0');
-      formDataToSend.append('has_lease_or_title', formData.lease_or_title ? '1' : '0');
-      formDataToSend.append('has_fsic', formData.fsic ? '1' : '0');
-      formDataToSend.append('has_owner_valid_id', formData.owner_valid_id ? '1' : '0');
-      formDataToSend.append('has_id_picture', formData.id_picture ? '1' : '0');
-      formDataToSend.append('has_official_receipt', formData.official_receipt_file ? '1' : '0');
-      formDataToSend.append('has_owner_scanned_id', formData.owner_scanned_id ? '1' : '0');
-      
-      // Owner type specific flags
-      if (formData.owner_type === "Individual") {
-        formDataToSend.append('has_dti_registration', formData.dti_registration ? '1' : '0');
-      } else if (formData.owner_type === "Partnership") {
-        formDataToSend.append('has_sec_registration', formData.sec_registration ? '1' : '0');
+      if (raw.includes('<?php') || raw.includes('Fatal error') || raw.includes('Parse error')) {
+        throw new Error('PHP error detected. Please check server logs.');
       }
       
-      if (formData.owner_type_declaration === "Representative") {
-        formDataToSend.append('has_representative_scanned_id', formData.representative_scanned_id ? '1' : '0');
-      }
-
-      // Add file attachments
-      const fileFields = [
-        'barangay_clearance', 'bir_certificate', 'lease_or_title', 'fsic',
-        'owner_valid_id', 'id_picture', 'official_receipt_file',
-        'dti_registration', 'sec_registration', 'owner_scanned_id', 'representative_scanned_id'
-      ];
-      
-      fileFields.forEach(fieldName => {
-        if (formData[fieldName] instanceof File) {
-          formDataToSend.append(fieldName, formData[fieldName]);
-        }
-      });
-
-      console.log('Submitting to:', API_BUS);
-
-      // Test connection first
-      try {
-        const testResponse = await fetch(API_BUS, {
-          method: 'OPTIONS',
-        });
-        console.log('OPTIONS test response:', testResponse.status);
-      } catch (testError) {
-        console.error('Cannot reach PHP file:', testError);
-        throw new Error(`Cannot connect to server. Please check:
-          1. XAMPP Apache is running
-          2. PHP file exists at: ${API_BUS}
-          3. Check browser console for details`);
-      }
-
-      const response = await fetch(API_BUS, {
-        method: "POST",
-        body: formDataToSend,
-      });
-
-      console.log('Response status:', response.status);
-
-      const raw = await response.text();
-      console.log('Raw response:', raw);
-      
-      if (!raw.trim()) {
-        throw new Error('Server returned an empty response');
-      }
-      
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch (parseError) {
-        console.error('JSON parse error. Raw response:', raw);
-        
-        if (raw.includes('<?php') || raw.includes('Fatal error') || raw.includes('Parse error')) {
-          throw new Error('PHP error detected. Check server logs.');
-        }
-        
-        throw new Error('Server returned invalid JSON: ' + parseError.message);
-      }
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || `Submission failed with status: ${response.status}`);
-      }
-
-      showSuccessMessage(data.message || "Business permit application submitted successfully!");
-      
-      setTimeout(() => {
-        navigate("/user/permittracker");
-      }, 3000);
-
-    } catch (err) {
-      console.error("Submission error:", err);
-      
-      let userMessage = err.message;
-      
-      if (err.message.includes('Failed to fetch') || err.message.includes('Network error')) {
-        userMessage = `Network error. Please check:
-          1. XAMPP Control Panel → Start Apache
-          2. Open browser and go to: ${API_BUS}
-          3. If you see JSON response, the API is working`;
-      }
-      
-      showErrorMessage(userMessage);
-    } finally {
-      setIsSubmitting(false);
+      throw new Error('Server returned invalid JSON. Check console for details.');
     }
-  };
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || data.errors?.join(', ') || `Submission failed with status: ${response.status}`);
+    }
+
+    showSuccessMessage(data.message || "Business permit application submitted successfully!");
+    
+    setTimeout(() => {
+      navigate("/user/permittracker");
+    }, 3000);
+
+  } catch (err) {
+    console.error("Submission error:", err);
+    
+    let userMessage = err.message;
+    if (err.message.includes('Failed to fetch') || err.message.includes('Network error')) {
+      userMessage = `Network error. Please check:
+        1. Server is running
+        2. API endpoint is correct: ${API_BUS}
+        3. No CORS issues`;
+    }
+    
+    showErrorMessage(userMessage);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const renderStepContent = () => {
     switch (currentStep) {
