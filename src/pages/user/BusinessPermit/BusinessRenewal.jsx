@@ -189,7 +189,11 @@ export default function BusinessRenewal() {
     
     return newErrors;
   };
-
+const isEmpty = (val) => {
+  if (val instanceof File) return false; // File is not empty
+  return val === undefined || val === null || 
+         (typeof val === "string" && val.trim() === "");
+};
   const nextStep = () => {
     const errors = validateStep(currentStep);
     if (Object.keys(errors).length > 0) {
@@ -218,54 +222,160 @@ export default function BusinessRenewal() {
   };
 
 const confirmDeclaration = async () => {
-    if (!agreeDeclaration) {
-        setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
-        setShowConfirmModal(false);
-        return;
+  if (!agreeDeclaration) {
+    setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
+    setShowDeclarationModal(false);
+    return;
+  }
+  
+  setIsSubmitting(true);
+  setShowDeclarationModal(false);
+
+  try {
+    const formDataToSend = new FormData();
+    
+    // Add ALL form data using the original field names (not db field names)
+    Object.keys(formData).forEach((fieldName) => {
+      const value = formData[fieldName];
+      
+      // Skip null/undefined/empty string values
+      if (value !== null && value !== undefined && value !== '') {
+        // For numbers, convert to string
+        if (typeof value === 'number') {
+          formDataToSend.append(fieldName, value.toString());
+        } else if (value instanceof File) {
+          // Files are handled separately below
+          formDataToSend.append(fieldName, value);
+        } else {
+          formDataToSend.append(fieldName, String(value));
+        }
+      }
+    });
+
+    // Add boolean flags for document attachments
+    const documentFlags = [
+      'has_barangay_clearance', 'has_bir_certificate', 'has_lease_or_title',
+      'has_fsic', 'has_owner_valid_id', 'has_id_picture', 'has_official_receipt',
+      'has_owner_scanned_id', 'has_dti_registration', 'has_sec_registration',
+      'has_representative_scanned_id'
+    ];
+    
+    // Calculate and add document flags based on actual file presence
+    documentFlags.forEach(flag => {
+      let hasFile = false;
+      
+      switch(flag) {
+        case 'has_barangay_clearance':
+          hasFile = !!formData.barangay_clearance || !!formData.barangay_clearance_id;
+          break;
+        case 'has_bir_certificate':
+          hasFile = !!formData.bir_certificate;
+          break;
+        case 'has_lease_or_title':
+          hasFile = !!formData.lease_or_title;
+          break;
+        case 'has_fsic':
+          hasFile = !!formData.fsic;
+          break;
+        case 'has_owner_valid_id':
+          hasFile = !!formData.owner_valid_id;
+          break;
+        case 'has_id_picture':
+          hasFile = !!formData.id_picture;
+          break;
+        case 'has_official_receipt':
+          hasFile = !!formData.official_receipt_file;
+          break;
+        case 'has_owner_scanned_id':
+          hasFile = !!formData.owner_scanned_id;
+          break;
+        case 'has_dti_registration':
+          hasFile = !!formData.dti_registration;
+          break;
+        case 'has_sec_registration':
+          hasFile = !!formData.sec_registration;
+          break;
+        case 'has_representative_scanned_id':
+          hasFile = !!formData.representative_scanned_id;
+          break;
+      }
+      
+      formDataToSend.append(flag, hasFile ? '1' : '0');
+    });
+
+    // Add barangay clearance status
+    const barangayClearanceStatus = formData.barangay_clearance || formData.barangay_clearance_id ? 'ID_PROVIDED' : 'PENDING';
+    formDataToSend.append('barangay_clearance_status', barangayClearanceStatus);
+
+    console.log('FormData entries:');
+    for (let [key, value] of formDataToSend.entries()) {
+      console.log(`${key}:`, value);
+    }
+
+    // Test connection
+    try {
+      const testResponse = await fetch(API_BUS, { method: 'GET' });
+      console.log('Connection test:', testResponse.status);
+    } catch (testError) {
+      console.error('Connection error:', testError);
+      throw new Error('Cannot connect to server. Please ensure backend is running.');
+    }
+
+    // Submit the form
+    const response = await fetch(API_BUS, {
+      method: "POST",
+      body: formDataToSend,
+      credentials: 'include' // Important for sessions/cookies
+    });
+
+    console.log('Response status:', response.status);
+
+    const raw = await response.text();
+    console.log('Raw response:', raw);
+    
+    if (!raw.trim()) {
+      throw new Error('Server returned an empty response');
     }
     
-    setIsSubmitting(true);
-    setShowConfirmModal(false);
-
+    let data;
     try {
-        const formDataToSend = new FormData();
-        
-        // Append all form data
-        Object.entries(formData).forEach(([key, value]) => {
-            if (value instanceof File) {
-                formDataToSend.append(key, value);
-            } else if (value !== null && value !== undefined) {
-                formDataToSend.append(key, String(value));
-            }
-        });
-
-        // Add application_type to identify this as a renewal
-        formDataToSend.append('application_type', 'RENEWAL');
-        
-        // Map file field names to what backend expects
-        // No need to rename fields since backend now handles both
-        
-        const response = await fetch(`backend/business_permit/business_permit.php`, {
-            method: 'POST',
-            body: formDataToSend,
-        });
-
-        const data = await response.json();
-        if (data.success) {
-            showSuccessMessage(data.message || 'Renewal application submitted successfully!');
-            
-            setTimeout(() => {
-                navigate('/user/permittracker');
-            }, 3000);
-        } else {
-            showErrorMessage(data.message || 'Failed to submit renewal application');
-        }
-    } catch (error) {
-        console.error('Submission error:', error);
-        showErrorMessage('Network error: ' + error.message);
-    } finally {
-        setIsSubmitting(false);
+      data = JSON.parse(raw);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.log('Raw response that failed to parse:', raw);
+      
+      if (raw.includes('<?php') || raw.includes('Fatal error') || raw.includes('Parse error')) {
+        throw new Error('PHP error detected. Please check server logs.');
+      }
+      
+      throw new Error('Server returned invalid JSON. Check console for details.');
     }
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || data.errors?.join(', ') || `Submission failed with status: ${response.status}`);
+    }
+
+    showSuccessMessage(data.message || "Business permit application submitted successfully!");
+    
+    setTimeout(() => {
+      navigate("/user/permittracker");
+    }, 3000);
+
+  } catch (err) {
+    console.error("Submission error:", err);
+    
+    let userMessage = err.message;
+    if (err.message.includes('Failed to fetch') || err.message.includes('Network error')) {
+      userMessage = `Network error. Please check:
+        1. Server is running
+        2. API endpoint is correct: ${API_BUS}
+        3. No CORS issues`;
+    }
+    
+    showErrorMessage(userMessage);
+  } finally {
+    setIsSubmitting(false);
+  }
 };
 
   const isStepValid = (step) => {
