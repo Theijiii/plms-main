@@ -3,14 +3,14 @@ session_start();
 
 $allowedOrigins = [
     'http://localhost',
-    'https://e-plms.goserveph.com/'
+    'https://e-plms.goserveph.com'
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if ($origin && in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: {$origin}");
 } else {
-    header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/");
+    header("Access-Control-Allow-Origin: https://e-plms.goserveph.com");
 }
 header("Access-Control-Allow-Credentials: true");
 header("Content-Type: application/json");
@@ -19,19 +19,28 @@ header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
 // Handle preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
+
+// Start output buffering
+ob_start();
+
 require_once __DIR__ . '/db.php';
+
 $uploadDir = __DIR__ . '/uploads/';
-$allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
 $maxFileSize = 10 * 1024 * 1024; // 10MB
 
 // Create uploads directory if it doesn't exist
 if (!file_exists($uploadDir)) {
     if (!mkdir($uploadDir, 0777, true)) {
         error_log("Failed to create upload directory: $uploadDir");
+        echo json_encode([
+            'success' => false,
+            'message' => 'Server configuration error: Could not create upload directory.'
+        ]);
+        exit;
     }
 }
 
-// Database Connection
+// Database Connection check
 if ($conn->connect_error) {
     ob_clean();
     echo json_encode([
@@ -41,8 +50,15 @@ if ($conn->connect_error) {
     exit;
 }
 
+function generateUniqueFilename($originalName, $permitId, $documentType) {
+    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    $timestamp = time();
+    $random = bin2hex(random_bytes(8));
+    return "{$permitId}_{$documentType}_{$timestamp}_{$random}.{$extension}";
+}
+
 function saveDocumentFile($conn, $permitId, $fileField, $documentType, $uploadDir) {
-    global $allowedTypes, $maxFileSize;
+    global $maxFileSize;
     
     if (!isset($_FILES[$fileField]) || $_FILES[$fileField]['error'] !== UPLOAD_ERR_OK) {
         error_log("No file uploaded or upload error for $fileField");
@@ -61,7 +77,7 @@ function saveDocumentFile($conn, $permitId, $fileField, $documentType, $uploadDi
     $fileExt = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     error_log("  - Extension: $fileExt");
     
-    // Allowed extensions (more comprehensive)
+    // Allowed extensions
     $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'];
     $allowedMimeTypes = [
         'image/jpeg', 'image/png', 'image/gif', 'image/jpg',
@@ -74,11 +90,10 @@ function saveDocumentFile($conn, $permitId, $fileField, $documentType, $uploadDi
     if (!in_array($fileExt, $allowedExtensions)) {
         $errorMsg = "Invalid file extension for $documentType. Allowed: " . implode(', ', $allowedExtensions);
         error_log("  - ERROR: $errorMsg");
-        // For now, log but don't block - you can change this based on your requirements
-        // throw new Exception($errorMsg);
+        return false;
     }
     
-    // Check MIME type using finfo (more accurate than browser-reported type)
+    // Check MIME type using finfo
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
     $actualMimeType = finfo_file($finfo, $file['tmp_name']);
     finfo_close($finfo);
@@ -88,32 +103,30 @@ function saveDocumentFile($conn, $permitId, $fileField, $documentType, $uploadDi
     if (!in_array($actualMimeType, $allowedMimeTypes)) {
         $errorMsg = "Invalid file type for $documentType. Got: $actualMimeType";
         error_log("  - WARNING: $errorMsg");
-        // Uncomment to block uploads with wrong MIME types:
-        // throw new Exception($errorMsg);
+        return false;
     }
     
     // Validate file size
     if ($file['size'] > $maxFileSize) {
         $errorMsg = "File $documentType is too large. Maximum size: 10MB";
         error_log("  - ERROR: $errorMsg");
-        throw new Exception($errorMsg);
+        return false;
     }
     
     // Validate file is actually uploaded
     if (!is_uploaded_file($file['tmp_name'])) {
         $errorMsg = "Potential file upload attack for $documentType";
         error_log("  - ERROR: $errorMsg");
-        throw new Exception($errorMsg);
+        return false;
     }
     
     // Generate unique filename
-    $fileName = 'DOC_' . $permitId . '_' . $documentType . '_' . time() . '.' . $fileExt;
+    $fileName = generateUniqueFilename($file['name'], $permitId, $documentType);
     $filePath = $uploadDir . $fileName;
     
     // Move uploaded file
     if (!move_uploaded_file($file['tmp_name'], $filePath)) {
         error_log("Failed to move uploaded file: $fileField to $filePath");
-        // Check directory permissions
         if (!is_writable($uploadDir)) {
             error_log("Upload directory is not writable: $uploadDir");
         }
@@ -123,7 +136,7 @@ function saveDocumentFile($conn, $permitId, $fileField, $documentType, $uploadDi
     error_log("  - Saved to: $filePath");
     
     // Prepare document data for insertion
-    $docName = $_POST[$fileField . '_name'] ?? $file['name'];
+    $docName = $file['name'];
     $docType = $documentType;
     $relativePath = 'uploads/' . $fileName;
     $fileType = $actualMimeType;
@@ -168,81 +181,8 @@ try {
     error_log("POST keys received: " . implode(', ', array_keys($postData)));
     error_log("FILES keys received: " . implode(', ', array_keys($_FILES)));
     
-    // ============================================
-    // STEP 1: VALIDATE REQUIRED FIELDS
-    // ============================================
-    $requiredFields = [
-        // Personal Information
-        'last_name' => 'Owner Last Name',
-        'first_name' => 'Owner First Name',
-        'owner_type' => 'Owner Type',
-        'citizenship' => 'Citizenship',
-        'contact_number' => 'Contact Number',
-        'email_address' => 'Email Address',
-        'home_address' => 'Home Address',
-        'valid_id_type' => 'Valid ID Type',
-        'valid_id_number' => 'Valid ID Number',
-        'date_of_birth' => 'Date of Birth',
-        
-        // Business Information
-        'business_name' => 'Business Name',
-        'business_nature' => 'Nature of Business',
-        'building_type' => 'Building Type',
-        
-        // Business Address
-        'house_bldg_no' => 'House/Building Number',
-        'street' => 'Street',
-        'barangay' => 'Barangay',
-    ];
-    
-    $validationErrors = [];
-    
-    // Check for missing required fields
-    foreach ($requiredFields as $field => $label) {
-        if (empty(trim($postData[$field] ?? ''))) {
-            $validationErrors[] = "$label is required";
-        }
-    }
-    
-    // Email validation
-    $email = trim($postData['email_address'] ?? '');
-    if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $validationErrors[] = "Email Address must be valid";
-    }
-    
-    // Phone validation (basic)
-    $phone = trim($postData['contact_number'] ?? '');
-    if ($phone && !preg_match('/^[0-9+\-\s()]{7,20}$/', $phone)) {
-        $validationErrors[] = "Contact Number must be a valid phone number";
-    }
-    
-    // Date validation
-    $dob = trim($postData['date_of_birth'] ?? '');
-    if ($dob && !strtotime($dob)) {
-        $validationErrors[] = "Date of Birth must be a valid date";
-    }
-    
-    // If validation errors, return them early
-    if (!empty($validationErrors)) {
-        ob_clean();
-        echo json_encode([
-            'success' => false,
-            'message' => 'Please fix the following errors:',
-            'errors' => $validationErrors,
-            'debug' => [
-                'fields_received' => array_keys($postData),
-                'required_fields' => array_keys($requiredFields)
-            ]
-        ]);
-        exit;
-    }
-    
-    // ============================================
-    // STEP 2: PREPARE DATA FOR DATABASE
-    // ============================================
-    
-    // Generate IDs
-    $applicant_id = 'BUS' . date('Y') . mt_rand(100, 999);
+    // Generate applicant ID
+    $applicant_id = 'BUS' . date('Y') . str_pad(mt_rand(1, 999), 3, '0', STR_PAD_LEFT);
     $application_date = date('Y-m-d');
     $status = 'PENDING';
     
@@ -318,59 +258,80 @@ try {
         'has_representative_scanned_id' => ['db' => 'has_representative_scanned_id', 'type' => 'i'],
     ];
     
-    // ============================================
-    // STEP 3: BUILD SQL QUERY
-    // ============================================
+    // Required fields validation
+    $requiredFields = [
+        'first_name', 'last_name', 'owner_type', 'citizenship',
+        'date_of_birth', 'contact_number', 'email_address', 'home_address',
+        'valid_id_type', 'valid_id_number', 'business_name', 'business_nature',
+        'building_type', 'capital_investment', 'house_bldg_no', 'street',
+        'barangay', 'zoning_permit_id', 'sanitation_permit_id', 'business_area',
+        'total_floor_area', 'operation_time_from', 'operation_time_to',
+        'operation_type', 'total_employees', 'owner_representative_name',
+        'date_submitted', 'owner_scanned_id'
+    ];
     
-    // Start with core columns
+    $missingFields = [];
+    foreach ($requiredFields as $field) {
+        if (empty($postData[$field]) && $field !== 'owner_scanned_id') {
+            $missingFields[] = $field;
+        }
+        // Check owner_scanned_id from files
+        if ($field === 'owner_scanned_id' && (!isset($_FILES['owner_scanned_id']) || $_FILES['owner_scanned_id']['error'] !== UPLOAD_ERR_OK)) {
+            $missingFields[] = $field;
+        }
+    }
+    
+    // Check representative_scanned_id if representative is selected
+    if (isset($postData['owner_type_declaration']) && $postData['owner_type_declaration'] === 'Representative') {
+        if (!isset($_FILES['representative_scanned_id']) || $_FILES['representative_scanned_id']['error'] !== UPLOAD_ERR_OK) {
+            $missingFields[] = 'representative_scanned_id';
+        }
+    }
+    
+    if (!empty($missingFields)) {
+        throw new Exception("Missing required fields: " . implode(', ', $missingFields));
+    }
+    
+    // Build the SQL dynamically
     $columns = ['applicant_id', 'application_date', 'permit_type', 'status'];
     $placeholders = ['?', '?', '?', '?'];
     $values = [$applicant_id, $application_date, ($postData['permit_type'] ?? 'NEW'), $status];
     $types = 'ssss';
     
-    // Add ALL fields from fieldMap with proper defaults
+    // Add fields that exist in POST data
     foreach ($fieldMap as $formField => $config) {
-        $dbField = $config['db'];
-        $fieldType = $config['type'];
-        
-        $columns[] = $dbField;
-        $placeholders[] = '?';
-        
-        // Get value from POST or use appropriate default
-        if (isset($postData[$formField]) && trim($postData[$formField]) !== '') {
+        if (isset($postData[$formField]) && $postData[$formField] !== '') {
+            $columns[] = $config['db'];
+            $placeholders[] = '?';
             $values[] = $postData[$formField];
-        } else {
-            // Use appropriate default based on field type
-            switch ($fieldType) {
-                case 'i': // integer
-                case 'd': // decimal/double
-                    $values[] = 0;
-                    break;
-                case 's': // string
-                default:
-                    $values[] = '';
-                    break;
-            }
+            $types .= $config['type'];
         }
-        
-        $types .= $fieldType;
+    }
+    
+    // Add default values for required database fields that might not be in the form
+    $defaultValues = [
+        'gross_sale' => '0.00',
+        'official_receipt_no' => 'N/A'
+    ];
+    
+    foreach ($defaultValues as $field => $value) {
+        $columns[] = $field;
+        $placeholders[] = '?';
+        $values[] = $value;
+        $types .= 's';
     }
     
     // Add barangay_clearance_status
-    $barangay_clearance_status = isset($postData['barangay_clearance_id']) && !empty($postData['barangay_clearance_id']) ? 'ID_PROVIDED' : 'PENDING';
+    $barangayClearanceStatus = !empty($postData['barangay_clearance_id']) ? 'ID_PROVIDED' : 'PENDING';
     $columns[] = 'barangay_clearance_status';
     $placeholders[] = '?';
-    $values[] = $barangay_clearance_status;
+    $values[] = $barangayClearanceStatus;
     $types .= 's';
     
     // Debug: Log what we're inserting
     error_log("Columns to insert (" . count($columns) . "): " . implode(', ', $columns));
     error_log("Values count: " . count($values));
     error_log("Type string length: " . strlen($types));
-    
-    // ============================================
-    // STEP 4: EXECUTE DATABASE INSERT
-    // ============================================
     
     // Build SQL
     $sql = "INSERT INTO business_permit_applications (" . 
@@ -396,20 +357,10 @@ try {
     
     $permit_id = $conn->insert_id;
     
-    // Validate that we got a valid permit_id
-    if ($permit_id <= 0) {
-        throw new Exception("Failed to get valid permit ID from database insert");
-    }
-    
-    error_log("Main application inserted with permit_id: " . $permit_id);
-    
-    // ============================================
-    // STEP 5: HANDLE FILE UPLOADS
-    // ============================================
+    error_log("Application inserted successfully. Permit ID: $permit_id");
     
     // Map file fields to document types
     $fileDocumentMap = [
-        // File field name => Document type
         'bir_certificate' => 'BIR_CERTIFICATE',
         'lease_or_title' => 'LEASE_TITLE',
         'fsic' => 'FSIC',
@@ -442,9 +393,26 @@ try {
     
     $stmt->close();
     
-    // ============================================
-    // STEP 6: RETURN SUCCESS RESPONSE
-    // ============================================
+    // Insert into application_overview for tracking
+    $overviewSql = "INSERT INTO application_overview 
+                    (permit_id, applicant_id, application_date, permit_type, status, 
+                     business_name, owner_last_name, owner_first_name, barangay, contact_number, submission_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+    
+    $overviewStmt = $conn->prepare($overviewSql);
+    if ($overviewStmt) {
+        $overviewStmt->bind_param("isssssssss", 
+            $permit_id, $applicant_id, $application_date, 
+            ($postData['permit_type'] ?? 'NEW'), $status,
+            ($postData['business_name'] ?? ''), 
+            ($postData['last_name'] ?? ''), 
+            ($postData['first_name'] ?? ''),
+            ($postData['barangay'] ?? ''),
+            ($postData['contact_number'] ?? '')
+        );
+        $overviewStmt->execute();
+        $overviewStmt->close();
+    }
     
     ob_clean();
     echo json_encode([
@@ -454,11 +422,6 @@ try {
         'applicant_id' => $applicant_id,
         'status' => $status,
         'documents_uploaded' => $uploadedDocuments,
-        'validation_info' => [
-            'required_fields_checked' => count($requiredFields),
-            'fields_inserted' => count($columns),
-            'documents_uploaded_count' => count($uploadedDocuments)
-        ],
         'debug' => [
             'columns_inserted' => count($columns),
             'values_inserted' => count($values),

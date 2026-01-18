@@ -274,19 +274,25 @@ export default function BusinessNew() {
       return { ok: true };
     }
 
-    if (step === 5) {
-      const missing = [];
-      if (isEmpty(formData.owner_type_declaration)) missing.push("Owner / Representative");
-      if (isEmpty(formData.owner_representative_name)) missing.push("Owner / Representative Name");
-      if (isEmpty(formData.date_submitted)) missing.push("Date Submitted");
+if (step === 5) {
+  const missing = [];
+  
+  // Always required
+  if (isEmpty(formData.owner_type_declaration)) missing.push("Owner / Representative");
+  if (isEmpty(formData.owner_representative_name)) missing.push("Owner / Representative Name");
+  if (isEmpty(formData.date_submitted)) missing.push("Date Submitted");
+  
+  // Owner scanned ID is always required
+  if (isEmpty(formData.owner_scanned_id)) missing.push("Owner's Scanned ID");
+  
+  // Representative scanned ID only required if representative is selected
+  if (formData.owner_type_declaration === "Representative" && isEmpty(formData.representative_scanned_id)) {
+    missing.push("Representative's Scanned ID");
+  }
 
-      if (formData.owner_type_declaration === "Representative") {
-        if (isEmpty(formData.representative_scanned_id)) missing.push("Representative's Scanned ID");
-      }
-
-      if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
-      return { ok: true };
-    }
+  if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
+  return { ok: true };
+}
 
     return { ok: true };
   };
@@ -1736,131 +1742,178 @@ export default function BusinessNew() {
             </div>
           </div>
         );
+case 5:
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+          Declaration & Submission
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">{steps[4].description}</p>
+      </div>
 
-      case 5:
-        return (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                Declaration & Submission
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">{steps[4].description}</p>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="md:col-span-2">
+          <div className="flex items-center gap-4 mb-4">
+            <label className="flex items-center gap-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+              <input
+                type="radio"
+                name="owner_type_declaration"
+                value="Business Owner"
+                checked={formData.owner_type_declaration === "Business Owner"}
+                onChange={handleChange}
+                className="accent-blue-600"
+              />
+              Business Owner
+            </label>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <div className="flex items-center gap-4 mb-4">
-                  <label className="flex items-center gap-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    <input
-                      type="radio"
-                      name="owner_type_declaration"
-                      value="Business Owner"
-                      checked={formData.owner_type_declaration === "Business Owner"}
-                      onChange={handleChange}
-                      className="accent-blue-600"
-                    />
-                    Business Owner
-                  </label>
+            <label className="flex items-center gap-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+              <input
+                type="radio"
+                name="owner_type_declaration"
+                value="Representative"
+                checked={formData.owner_type_declaration === "Representative"}
+                onChange={handleChange}
+                className="accent-blue-600"
+              />
+              Representative
+            </label>
+          </div>
 
-                  <label className="flex items-center gap-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    <input
-                      type="radio"
-                      name="owner_type_declaration"
-                      value="Representative"
-                      checked={formData.owner_type_declaration === "Representative"}
-                      onChange={handleChange}
-                      className="accent-blue-600"
-                    />
-                    Representative
-                  </label>
+          <div className="mb-4">
+            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+              Name: <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="owner_representative_name"
+              value={formData.owner_representative_name}
+              onChange={handleChange}
+              placeholder={
+                formData.owner_type_declaration === "Business Owner" 
+                  ? "Enter full name of business owner" 
+                  : "Enter full name of representative"
+              }
+              className="w-full p-3 border border-black rounded-lg"
+              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+              required
+            />
+          </div>
+
+          {/* Owner Scanned ID - Required for both Business Owner and Representative */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+              <div className="flex items-center">
+                {formData.owner_scanned_id ? (
+                  <Check className="w-5 h-5 text-green-600 mr-3" />
+                ) : (
+                  <X className="w-5 h-5 text-red-600 mr-3" />
+                )}
+                <div>
+                  <span className="font-medium">Scanned ID of Business Owner: <span className="text-red-500">*</span></span>
+                  <p className="text-sm text-gray-600">
+                    {formData.owner_scanned_id ? formData.owner_scanned_id.name : 'Required'}
+                  </p>
+                  <p className="text-xs text-gray-500">Scanned ID of the actual business owner (required for both options)</p>
                 </div>
-
-                <div className="mb-4">
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    Name: <span className="text-red-500">*</span>
-                  </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer">
                   <input
-                    type="text"
-                    name="owner_representative_name"
-                    value={formData.owner_representative_name}
-                    onChange={handleChange}
-                    placeholder={
-                      formData.owner_type_declaration === "Business Owner" 
-                        ? "Enter full name of business owner" 
-                        : "Enter full name of representative"
-                    }
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    type="file"
+                    name="owner_scanned_id"
+                    onChange={handleFile}
+                    accept=".jpg,.jpeg,.png,.pdf"
+                    className="hidden"
                     required
                   />
-                </div>
-
-                {formData.owner_type_declaration === "Representative" && (
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
-                      <div className="flex items-center">
-                        {formData.representative_scanned_id ? (
-                          <Check className="w-5 h-5 text-green-600 mr-3" />
-                        ) : (
-                          <X className="w-5 h-5 text-red-600 mr-3" />
-                        )}
-                        <div>
-                          <span className="font-medium">Scanned ID of Representative:</span>
-                          <p className="text-sm text-gray-600">
-                            {formData.representative_scanned_id ? formData.representative_scanned_id.name : 'Required'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="cursor-pointer">
-                          <input
-                            type="file"
-                            name="representative_scanned_id"
-                            onChange={handleFile}
-                            accept=".jpg,.jpeg,.png,.pdf"
-                            className="hidden"
-                          />
-                          <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.representative_scanned_id ? 'border-gray-300' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
-                            <Upload className="w-4 h-4" />
-                            {formData.representative_scanned_id ? 'Change' : 'Upload'}
-                          </div>
-                        </label>
-                        {formData.representative_scanned_id && (
-                          <button
-                            type="button"
-                            onClick={() => previewFile(formData.representative_scanned_id)}
-                            className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                            style={{ color: COLORS.secondary }}
-                          >
-                            <Eye className="w-4 h-4" />
-                            Preview
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-sm mt-1" style={{ color: COLORS.danger, fontFamily: COLORS.font }}>Required for representatives only</p>
+                  <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.owner_scanned_id ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
+                    <Upload className="w-4 h-4" />
+                    {formData.owner_scanned_id ? 'Change' : 'Upload'}
                   </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  Date Submitted: <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="date"
-                  name="date_submitted"
-                  value={formData.date_submitted}
-                  onChange={handleChange}
-                  className="p-3 border border-black rounded-lg w-full"
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  required
-                />
+                {formData.owner_scanned_id && (
+                  <button
+                    type="button"
+                    onClick={() => previewFile(formData.owner_scanned_id)}
+                    className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                    style={{ color: COLORS.secondary }}
+                  >
+                    <Eye className="w-4 h-4" />
+                    Preview
+                  </button>
+                )}
               </div>
             </div>
           </div>
-        );
 
+          {/* Representative Scanned ID - Required only for Representative */}
+          {formData.owner_type_declaration === "Representative" && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                <div className="flex items-center">
+                  {formData.representative_scanned_id ? (
+                    <Check className="w-5 h-5 text-green-600 mr-3" />
+                  ) : (
+                    <X className="w-5 h-5 text-red-600 mr-3" />
+                  )}
+                  <div>
+                    <span className="font-medium">Scanned ID of Representative: <span className="text-red-500">*</span></span>
+                    <p className="text-sm text-gray-600">
+                      {formData.representative_scanned_id ? formData.representative_scanned_id.name : 'Required'}
+                    </p>
+                    <p className="text-xs text-gray-500">Scanned ID of the person submitting on behalf of the owner</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      name="representative_scanned_id"
+                      onChange={handleFile}
+                      accept=".jpg,.jpeg,.png,.pdf"
+                      className="hidden"
+                      required={formData.owner_type_declaration === "Representative"}
+                    />
+                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.representative_scanned_id ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
+                      <Upload className="w-4 h-4" />
+                      {formData.representative_scanned_id ? 'Change' : 'Upload'}
+                    </div>
+                  </label>
+                  {formData.representative_scanned_id && (
+                    <button
+                      type="button"
+                      onClick={() => previewFile(formData.representative_scanned_id)}
+                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                      style={{ color: COLORS.secondary }}
+                    >
+                      <Eye className="w-4 h-4" />
+                      Preview
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+            Date Submitted: <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="date"
+            name="date_submitted"
+            value={formData.date_submitted}
+            onChange={handleChange}
+            className="p-3 border border-black rounded-lg w-full"
+            style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+            required
+          />
+        </div>
+      </div>
+    </div>
+  );
       case 6:
         return (
           <div className="space-y-6">
@@ -2219,26 +2272,49 @@ export default function BusinessNew() {
                     )}
 
                     {/* Representative Scanned ID if applicable */}
-                    {formData.owner_type_declaration === "Representative" && formData.representative_scanned_id && (
-                      <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
-                        <div className="flex items-center">
-                          <Check className="w-5 h-5 text-green-600 mr-3" />
-                          <div>
-                            <span className="font-medium">Representative's Scanned ID:</span>
-                            <p className="text-sm text-gray-600">{formData.representative_scanned_id.name}</p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => previewFile(formData.representative_scanned_id)}
-                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                          style={{ color: COLORS.secondary }}
-                        >
-                          <Eye className="w-4 h-4" />
-                          Preview
-                        </button>
-                      </div>
-                    )}
+{/* Owner Scanned ID - Always required */}
+{formData.owner_scanned_id && (
+  <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+    <div className="flex items-center">
+      <Check className="w-5 h-5 text-green-600 mr-3" />
+      <div>
+        <span className="font-medium">Owner's Scanned ID:</span>
+        <p className="text-sm text-gray-600">{formData.owner_scanned_id.name}</p>
+      </div>
+    </div>
+    <button
+      type="button"
+      onClick={() => previewFile(formData.owner_scanned_id)}
+      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+      style={{ color: COLORS.secondary }}
+    >
+      <Eye className="w-4 h-4" />
+      Preview
+    </button>
+  </div>
+)}
+
+{/* Representative Scanned ID if applicable */}
+{formData.owner_type_declaration === "Representative" && formData.representative_scanned_id && (
+  <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+    <div className="flex items-center">
+      <Check className="w-5 h-5 text-green-600 mr-3" />
+      <div>
+        <span className="font-medium">Representative's Scanned ID:</span>
+        <p className="text-sm text-gray-600">{formData.representative_scanned_id.name}</p>
+      </div>
+    </div>
+    <button
+      type="button"
+      onClick={() => previewFile(formData.representative_scanned_id)}
+      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+      style={{ color: COLORS.secondary }}
+    >
+      <Eye className="w-4 h-4" />
+      Preview
+    </button>
+  </div>
+)}
 
                     {/* Missing documents warning */}
                     {!formData.barangay_clearance && !formData.barangay_clearance_id && (
