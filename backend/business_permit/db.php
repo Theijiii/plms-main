@@ -1,6 +1,6 @@
 <?php
 $servername = "localhost";
-$username = "root";
+$username = "paul";
 $password = "mypassword";
 $dbname = "eplms_business_permit_db";
 
