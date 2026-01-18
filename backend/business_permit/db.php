@@ -3,7 +3,7 @@ header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/git");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 $servername = "localhost";
-$username = "paul";
+$username = "epmls_paul";
 $password = "mypassword";
 $dbname = "eplms_business_permit_db";
 
