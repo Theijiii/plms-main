@@ -267,18 +267,19 @@ try {
         'barangay', 'zoning_permit_id', 'sanitation_permit_id', 'business_area',
         'total_floor_area', 'operation_time_from', 'operation_time_to',
         'operation_type', 'total_employees', 'owner_representative_name',
-        'date_submitted', 'owner_scanned_id'
+        'date_submitted'
     ];
     
     $missingFields = [];
     foreach ($requiredFields as $field) {
-        if (empty($postData[$field]) && $field !== 'owner_scanned_id') {
+        if (empty($postData[$field])) {
             $missingFields[] = $field;
         }
-        // Check owner_scanned_id from files
-        if ($field === 'owner_scanned_id' && (!isset($_FILES['owner_scanned_id']) || $_FILES['owner_scanned_id']['error'] !== UPLOAD_ERR_OK)) {
-            $missingFields[] = $field;
-        }
+    }
+    
+    // Check owner_scanned_id from files
+    if (!isset($_FILES['owner_scanned_id']) || $_FILES['owner_scanned_id']['error'] !== UPLOAD_ERR_OK) {
+        $missingFields[] = 'owner_scanned_id';
     }
     
     // Check representative_scanned_id if representative is selected
@@ -308,7 +309,7 @@ try {
         }
     }
     
-    // Add default values for required database fields that might not be in the form
+    // Add default values for required database fields
     $defaultValues = [
         'gross_sale' => '0.00',
         'official_receipt_no' => 'N/A'
@@ -348,7 +349,19 @@ try {
     
     // Bind parameters
     if (!empty($values)) {
-        $stmt->bind_param($types, ...$values);
+        // Convert values to variables that can be passed by reference
+        $refValues = [];
+        foreach ($values as $key => $value) {
+            $refValues[$key] = $value;
+        }
+        
+        // Bind parameters properly
+        $bindParams = [$types];
+        foreach ($refValues as $key => $value) {
+            $bindParams[] = &$refValues[$key];
+        }
+        
+        call_user_func_array([$stmt, 'bind_param'], $bindParams);
     }
     
     if (!$stmt->execute()) {
@@ -394,6 +407,12 @@ try {
     $stmt->close();
     
     // Insert into application_overview for tracking
+    $businessName = $postData['business_name'] ?? '';
+    $lastName = $postData['last_name'] ?? '';
+    $firstName = $postData['first_name'] ?? '';
+    $barangayValue = $postData['barangay'] ?? '';
+    $contactNumber = $postData['contact_number'] ?? '';
+    
     $overviewSql = "INSERT INTO application_overview 
                     (permit_id, applicant_id, application_date, permit_type, status, 
                      business_name, owner_last_name, owner_first_name, barangay, contact_number, submission_date)
@@ -401,14 +420,18 @@ try {
     
     $overviewStmt = $conn->prepare($overviewSql);
     if ($overviewStmt) {
-        $overviewStmt->bind_param("isssssssss", 
-            $permit_id, $applicant_id, $application_date, 
-            ($postData['permit_type'] ?? 'NEW'), $status,
-            ($postData['business_name'] ?? ''), 
-            ($postData['last_name'] ?? ''), 
-            ($postData['first_name'] ?? ''),
-            ($postData['barangay'] ?? ''),
-            ($postData['contact_number'] ?? '')
+        $overviewStmt->bind_param(
+            "isssssssss", 
+            $permit_id, 
+            $applicant_id, 
+            $application_date, 
+            ($postData['permit_type'] ?? 'NEW'), 
+            $status,
+            $businessName,
+            $lastName,
+            $firstName,
+            $barangayValue,
+            $contactNumber
         );
         $overviewStmt->execute();
         $overviewStmt->close();
