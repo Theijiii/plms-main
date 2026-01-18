@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-
 $allowedOrigins = [
     'http://localhost',
     'https://e-plms.goserveph.com/'
@@ -42,7 +41,7 @@ if ($conn->connect_error) {
     exit;
 }
 
-function saveDocumentFile($conn, $permitId, $fileField, $documentType, $uploadDir) {
+function saveDocumentFile($conn, $permitId, $fileField, $documentType, $uploadDir, $isRenewal = false) {
     global $allowedTypes, $maxFileSize;
     
     if (!isset($_FILES[$fileField]) || $_FILES[$fileField]['error'] !== UPLOAD_ERR_OK) {
@@ -75,7 +74,7 @@ function saveDocumentFile($conn, $permitId, $fileField, $documentType, $uploadDi
     if (!in_array($fileExt, $allowedExtensions)) {
         $errorMsg = "Invalid file extension for $documentType. Allowed: " . implode(', ', $allowedExtensions);
         error_log("  - ERROR: $errorMsg");
-
+        return false;
     }
     
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
@@ -87,32 +86,30 @@ function saveDocumentFile($conn, $permitId, $fileField, $documentType, $uploadDi
     if (!in_array($actualMimeType, $allowedMimeTypes)) {
         $errorMsg = "Invalid file type for $documentType. Got: $actualMimeType";
         error_log("  - WARNING: $errorMsg");
-        // Uncomment to block uploads with wrong MIME types:
-        // throw new Exception($errorMsg);
     }
     
     // Validate file size
     if ($file['size'] > $maxFileSize) {
         $errorMsg = "File $documentType is too large. Maximum size: 10MB";
         error_log("  - ERROR: $errorMsg");
-        throw new Exception($errorMsg);
+        return false;
     }
     
     // Validate file is actually uploaded
     if (!is_uploaded_file($file['tmp_name'])) {
         $errorMsg = "Potential file upload attack for $documentType";
         error_log("  - ERROR: $errorMsg");
-        throw new Exception($errorMsg);
+        return false;
     }
     
     // Generate unique filename
-    $fileName = 'DOC_' . $permitId . '_' . $documentType . '_' . time() . '.' . $fileExt;
+    $prefix = $isRenewal ? 'RENEWAL_' : 'DOC_';
+    $fileName = $prefix . $permitId . '_' . $documentType . '_' . time() . '.' . $fileExt;
     $filePath = $uploadDir . $fileName;
     
     // Move uploaded file
     if (!move_uploaded_file($file['tmp_name'], $filePath)) {
         error_log("Failed to move uploaded file: $fileField to $filePath");
-        // Check directory permissions
         if (!is_writable($uploadDir)) {
             error_log("Upload directory is not writable: $uploadDir");
         }
@@ -163,109 +160,181 @@ try {
     $postData = $_POST;
     
     // Debug log
-    error_log("=== BUSINESS PERMIT SUBMISSION START ===");
+    error_log("=== BUSINESS PERMIT APPLICATION START ===");
+    error_log("Application Type: " . ($postData['application_type'] ?? 'NEW'));
     error_log("POST keys received: " . implode(', ', array_keys($postData)));
     error_log("FILES keys received: " . implode(', ', array_keys($_FILES)));
     
-    // Generate IDs
-    $applicant_id = 'BUS' . date('Y') . mt_rand(100, 999);
-    $application_date = date('Y-m-d');
-    $status = 'PENDING';
+    // Check if this is a renewal
+    $isRenewal = isset($postData['application_type']) && $postData['application_type'] === 'RENEWAL';
     
-    // Map form fields to database columns
-    $fieldMap = [
-        // Personal Information
-        'last_name' => ['db' => 'owner_last_name', 'type' => 's'],
-        'first_name' => ['db' => 'owner_first_name', 'type' => 's'],
-        'middle_name' => ['db' => 'owner_middle_name', 'type' => 's'],
-        'owner_type' => ['db' => 'owner_type', 'type' => 's'],
-        'citizenship' => ['db' => 'citizenship', 'type' => 's'],
-        'corp_filipino_percent' => ['db' => 'corp_filipino_percent', 'type' => 'd'],
-        'corp_foreign_percent' => ['db' => 'corp_foreign_percent', 'type' => 'd'],
-        'date_of_birth' => ['db' => 'date_of_birth', 'type' => 's'],
-        'contact_number' => ['db' => 'contact_number', 'type' => 's'],
-        'email_address' => ['db' => 'email_address', 'type' => 's'],
-        'home_address' => ['db' => 'home_address', 'type' => 's'],
-        'valid_id_type' => ['db' => 'valid_id_type', 'type' => 's'],
-        'valid_id_number' => ['db' => 'valid_id_number', 'type' => 's'],
+    if ($isRenewal) {
+        // Handle renewal differently - fewer fields required
+        $applicant_id = 'REN' . date('Y') . mt_rand(100, 999);
         
-        // Business Information
-        'business_name' => ['db' => 'business_name', 'type' => 's'],
-        'trade_name' => ['db' => 'trade_name', 'type' => 's'],
-        'business_nature' => ['db' => 'business_nature', 'type' => 's'],
-        'building_type' => ['db' => 'building_type', 'type' => 's'],
-        'capital_investment' => ['db' => 'capital_investment', 'type' => 'd'],
-        
-        // Business Address
-        'house_bldg_no' => ['db' => 'house_bldg_no', 'type' => 's'],
-        'building_name' => ['db' => 'building_name', 'type' => 's'],
-        'block_no' => ['db' => 'block_no', 'type' => 's'],
-        'lot_no' => ['db' => 'lot_no', 'type' => 's'],
-        'street' => ['db' => 'street', 'type' => 's'],
-        'subdivision' => ['db' => 'subdivision', 'type' => 's'],
-        'province' => ['db' => 'province', 'type' => 's'],
-        'city_municipality' => ['db' => 'city_municipality', 'type' => 's'],
-        'barangay' => ['db' => 'barangay', 'type' => 's'],
-        'zip_code' => ['db' => 'zip_code', 'type' => 's'],
-        'district' => ['db' => 'district', 'type' => 's'],
-        
-        // Operations
-        'zoning_permit_id' => ['db' => 'zoning_permit_id', 'type' => 's'],
-        'sanitation_permit_id' => ['db' => 'sanitation_permit_id', 'type' => 's'],
-        'business_area' => ['db' => 'business_area', 'type' => 'd'],
-        'total_floor_area' => ['db' => 'total_floor_area', 'type' => 'd'],
-        'operation_time_from' => ['db' => 'operation_time_from', 'type' => 's'],
-        'operation_time_to' => ['db' => 'operation_time_to', 'type' => 's'],
-        'operation_type' => ['db' => 'operation_type', 'type' => 's'],
-        'total_employees' => ['db' => 'total_employees', 'type' => 'i'],
-        'male_employees' => ['db' => 'male_employees', 'type' => 'i'],
-        'female_employees' => ['db' => 'female_employees', 'type' => 'i'],
-        'employees_in_qc' => ['db' => 'employees_in_qc', 'type' => 'i'],
-        'delivery_van_truck' => ['db' => 'delivery_van_truck', 'type' => 'i'],
-        'delivery_motorcycle' => ['db' => 'delivery_motorcycle', 'type' => 'i'],
-        'barangay_clearance_id' => ['db' => 'barangay_clearance_id', 'type' => 's'],
-        
-        // Declaration
-        'owner_type_declaration' => ['db' => 'owner_type_declaration', 'type' => 's'],
-        'owner_representative_name' => ['db' => 'owner_representative_name', 'type' => 's'],
-        'date_submitted' => ['db' => 'date_submitted', 'type' => 's'],
-        
-        // Boolean flags for document attachments
-        'has_barangay_clearance' => ['db' => 'has_barangay_clearance', 'type' => 'i'],
-        'has_bir_certificate' => ['db' => 'has_bir_certificate', 'type' => 'i'],
-        'has_lease_or_title' => ['db' => 'has_lease_or_title', 'type' => 'i'],
-        'has_fsic' => ['db' => 'has_fsic', 'type' => 'i'],
-        'has_owner_valid_id' => ['db' => 'has_owner_valid_id', 'type' => 'i'],
-        'has_id_picture' => ['db' => 'has_id_picture', 'type' => 'i'],
-        'has_official_receipt' => ['db' => 'has_official_receipt', 'type' => 'i'],
-        'has_owner_scanned_id' => ['db' => 'has_owner_scanned_id', 'type' => 'i'],
-        'has_dti_registration' => ['db' => 'has_dti_registration', 'type' => 'i'],
-        'has_sec_registration' => ['db' => 'has_sec_registration', 'type' => 'i'],
-        'has_representative_scanned_id' => ['db' => 'has_representative_scanned_id', 'type' => 'i'],
-    ];
-    
-    // Build the SQL dynamically based on what we receive
-    $columns = ['applicant_id', 'application_date', 'permit_type', 'status'];
-    $placeholders = ['?', '?', '?', '?'];
-    $values = [$applicant_id, $application_date, ($postData['permit_type'] ?? 'NEW'), $status];
-    $types = 'ssss';
-    
-    // Add fields that exist in POST data
-    foreach ($fieldMap as $formField => $config) {
-        if (isset($postData[$formField]) && $postData[$formField] !== '') {
-            $columns[] = $config['db'];
-            $placeholders[] = '?';
-            $values[] = $postData[$formField];
-            $types .= $config['type'];
+        // For renewals, we need to check if the permit number exists
+        if (isset($postData['permit_number']) && !empty($postData['permit_number'])) {
+            // Check if this permit exists in the system
+            $checkSql = "SELECT permit_id, business_name FROM business_permit_applications 
+                         WHERE applicant_id = ? OR permit_number = ? LIMIT 1";
+            $checkStmt = $conn->prepare($checkSql);
+            $permitNumber = $postData['permit_number'];
+            $checkStmt->bind_param("ss", $permitNumber, $permitNumber);
+            $checkStmt->execute();
+            $checkResult = $checkStmt->get_result();
+            
+            if ($checkResult->num_rows > 0) {
+                $existingPermit = $checkResult->fetch_assoc();
+                $previous_permit_id = $existingPermit['permit_id'];
+                // Use existing business name if not provided
+                if (!isset($postData['business_name']) || empty($postData['business_name'])) {
+                    $postData['business_name'] = $existingPermit['business_name'];
+                }
+            }
+            $checkStmt->close();
         }
+        
+        // Renewals have different field requirements
+        $renewalFieldMap = [
+            'permit_number' => ['db' => 'permit_number', 'type' => 's'],
+            'permit_expiry' => ['db' => 'permit_expiry', 'type' => 's'],
+            'official_receipt_no' => ['db' => 'official_receipt_no', 'type' => 's'],
+            'owner_type' => ['db' => 'owner_type', 'type' => 's'],
+            'business_name' => ['db' => 'business_name', 'type' => 's'],
+            'trade_name' => ['db' => 'trade_name', 'type' => 's'],
+            'gross_sales' => ['db' => 'gross_sales', 'type' => 'd'],
+            'total_employees' => ['db' => 'total_employees', 'type' => 'i'],
+            'business_nature' => ['db' => 'business_nature', 'type' => 's'],
+        ];
+        
+        $application_date = date('Y-m-d');
+        $status = 'PENDING';
+        
+        // Build columns for renewal
+        $columns = ['applicant_id', 'application_date', 'permit_type', 'status', 'application_type'];
+        $placeholders = ['?', '?', '?', '?', '?'];
+        $values = [$applicant_id, $application_date, ($postData['permit_type'] ?? 'RENEWAL'), $status, 'RENEWAL'];
+        $types = 'sssss';
+        
+        // Add renewal-specific fields
+        foreach ($renewalFieldMap as $formField => $config) {
+            if (isset($postData[$formField]) && $postData[$formField] !== '') {
+                $columns[] = $config['db'];
+                $placeholders[] = '?';
+                $values[] = $postData[$formField];
+                $types .= $config['type'];
+            }
+        }
+        
+        // Add previous permit ID if found
+        if (isset($previous_permit_id)) {
+            $columns[] = 'previous_permit_id';
+            $placeholders[] = '?';
+            $values[] = $previous_permit_id;
+            $types .= 'i';
+        }
+        
+    } else {
+        // Original NEW application handling (your existing code)
+        $applicant_id = 'BUS' . date('Y') . mt_rand(100, 999);
+        $application_date = date('Y-m-d');
+        $status = 'PENDING';
+        
+        // Original field map (your existing code)
+        $fieldMap = [
+            // Personal Information
+            'last_name' => ['db' => 'owner_last_name', 'type' => 's'],
+            'first_name' => ['db' => 'owner_first_name', 'type' => 's'],
+            'middle_name' => ['db' => 'owner_middle_name', 'type' => 's'],
+            'owner_type' => ['db' => 'owner_type', 'type' => 's'],
+            'citizenship' => ['db' => 'citizenship', 'type' => 's'],
+            'corp_filipino_percent' => ['db' => 'corp_filipino_percent', 'type' => 'd'],
+            'corp_foreign_percent' => ['db' => 'corp_foreign_percent', 'type' => 'd'],
+            'date_of_birth' => ['db' => 'date_of_birth', 'type' => 's'],
+            'contact_number' => ['db' => 'contact_number', 'type' => 's'],
+            'email_address' => ['db' => 'email_address', 'type' => 's'],
+            'home_address' => ['db' => 'home_address', 'type' => 's'],
+            'valid_id_type' => ['db' => 'valid_id_type', 'type' => 's'],
+            'valid_id_number' => ['db' => 'valid_id_number', 'type' => 's'],
+            
+            // Business Information
+            'business_name' => ['db' => 'business_name', 'type' => 's'],
+            'trade_name' => ['db' => 'trade_name', 'type' => 's'],
+            'business_nature' => ['db' => 'business_nature', 'type' => 's'],
+            'building_type' => ['db' => 'building_type', 'type' => 's'],
+            'capital_investment' => ['db' => 'capital_investment', 'type' => 'd'],
+            
+            // Business Address
+            'house_bldg_no' => ['db' => 'house_bldg_no', 'type' => 's'],
+            'building_name' => ['db' => 'building_name', 'type' => 's'],
+            'block_no' => ['db' => 'block_no', 'type' => 's'],
+            'lot_no' => ['db' => 'lot_no', 'type' => 's'],
+            'street' => ['db' => 'street', 'type' => 's'],
+            'subdivision' => ['db' => 'subdivision', 'type' => 's'],
+            'province' => ['db' => 'province', 'type' => 's'],
+            'city_municipality' => ['db' => 'city_municipality', 'type' => 's'],
+            'barangay' => ['db' => 'barangay', 'type' => 's'],
+            'zip_code' => ['db' => 'zip_code', 'type' => 's'],
+            'district' => ['db' => 'district', 'type' => 's'],
+            
+            // Operations
+            'zoning_permit_id' => ['db' => 'zoning_permit_id', 'type' => 's'],
+            'sanitation_permit_id' => ['db' => 'sanitation_permit_id', 'type' => 's'],
+            'business_area' => ['db' => 'business_area', 'type' => 'd'],
+            'total_floor_area' => ['db' => 'total_floor_area', 'type' => 'd'],
+            'operation_time_from' => ['db' => 'operation_time_from', 'type' => 's'],
+            'operation_time_to' => ['db' => 'operation_time_to', 'type' => 's'],
+            'operation_type' => ['db' => 'operation_type', 'type' => 's'],
+            'total_employees' => ['db' => 'total_employees', 'type' => 'i'],
+            'male_employees' => ['db' => 'male_employees', 'type' => 'i'],
+            'female_employees' => ['db' => 'female_employees', 'type' => 'i'],
+            'employees_in_qc' => ['db' => 'employees_in_qc', 'type' => 'i'],
+            'delivery_van_truck' => ['db' => 'delivery_van_truck', 'type' => 'i'],
+            'delivery_motorcycle' => ['db' => 'delivery_motorcycle', 'type' => 'i'],
+            'barangay_clearance_id' => ['db' => 'barangay_clearance_id', 'type' => 's'],
+            
+            // Declaration
+            'owner_type_declaration' => ['db' => 'owner_type_declaration', 'type' => 's'],
+            'owner_representative_name' => ['db' => 'owner_representative_name', 'type' => 's'],
+            'date_submitted' => ['db' => 'date_submitted', 'type' => 's'],
+            
+            // Boolean flags for document attachments
+            'has_barangay_clearance' => ['db' => 'has_barangay_clearance', 'type' => 'i'],
+            'has_bir_certificate' => ['db' => 'has_bir_certificate', 'type' => 'i'],
+            'has_lease_or_title' => ['db' => 'has_lease_or_title', 'type' => 'i'],
+            'has_fsic' => ['db' => 'has_fsic', 'type' => 'i'],
+            'has_owner_valid_id' => ['db' => 'has_owner_valid_id', 'type' => 'i'],
+            'has_id_picture' => ['db' => 'has_id_picture', 'type' => 'i'],
+            'has_official_receipt' => ['db' => 'has_official_receipt', 'type' => 'i'],
+            'has_owner_scanned_id' => ['db' => 'has_owner_scanned_id', 'type' => 'i'],
+            'has_dti_registration' => ['db' => 'has_dti_registration', 'type' => 'i'],
+            'has_sec_registration' => ['db' => 'has_sec_registration', 'type' => 'i'],
+            'has_representative_scanned_id' => ['db' => 'has_representative_scanned_id', 'type' => 'i'],
+        ];
+        
+        // Build the SQL dynamically based on what we receive
+        $columns = ['applicant_id', 'application_date', 'permit_type', 'status', 'application_type'];
+        $placeholders = ['?', '?', '?', '?', '?'];
+        $values = [$applicant_id, $application_date, ($postData['permit_type'] ?? 'NEW'), $status, 'NEW'];
+        $types = 'sssss';
+        
+        // Add fields that exist in POST data
+        foreach ($fieldMap as $formField => $config) {
+            if (isset($postData[$formField]) && $postData[$formField] !== '') {
+                $columns[] = $config['db'];
+                $placeholders[] = '?';
+                $values[] = $postData[$formField];
+                $types .= $config['type'];
+            }
+        }
+        
+        // Add barangay_clearance_status based on barangay_clearance_id
+        $barangay_clearance_status = isset($postData['barangay_clearance_id']) && !empty($postData['barangay_clearance_id']) ? 'ID_PROVIDED' : 'PENDING';
+        $columns[] = 'barangay_clearance_status';
+        $placeholders[] = '?';
+        $values[] = $barangay_clearance_status;
+        $types .= 's';
     }
-    
-    // Add barangay_clearance_status based on barangay_clearance_id
-    $barangay_clearance_status = isset($postData['barangay_clearance_id']) && !empty($postData['barangay_clearance_id']) ? 'ID_PROVIDED' : 'PENDING';
-    $columns[] = 'barangay_clearance_status';
-    $placeholders[] = '?';
-    $values[] = $barangay_clearance_status;
-    $types .= 's';
     
     // Debug: Log what we're inserting
     error_log("Columns to insert (" . count($columns) . "): " . implode(', ', $columns));
@@ -296,34 +365,43 @@ try {
     
     $permit_id = $conn->insert_id;
     
-    // Map file fields to document types
-    $fileDocumentMap = [
-        // File field name => Document type
-        'bir_certificate' => 'BIR_CERTIFICATE',
-        'lease_or_title' => 'LEASE_TITLE',
-        'fsic' => 'FSIC',
-        'owner_valid_id' => 'OWNER_VALID_ID',
-        'id_picture' => 'ID_PICTURE',
-        'official_receipt_file' => 'OFFICIAL_RECEIPT',
-        'dti_registration' => 'DTI_REGISTRATION',
-        'sec_registration' => 'SEC_REGISTRATION',
-        'owner_scanned_id' => 'OWNER_SCANNED_ID',
-        'representative_scanned_id' => 'REPRESENTATIVE_SCANNED_ID'
-    ];
+    // Map file fields to document types (for both NEW and RENEWAL)
+    if ($isRenewal) {
+        $fileDocumentMap = [
+            // Renewal file fields
+            'barangay_clearance_file' => 'BARANGAY_CLEARANCE',
+            'owner_valid_id_file' => 'OWNER_VALID_ID',
+            'official_receipt_file' => 'OFFICIAL_RECEIPT'
+        ];
+    } else {
+        // Original file mapping
+        $fileDocumentMap = [
+            'bir_certificate' => 'BIR_CERTIFICATE',
+            'lease_or_title' => 'LEASE_TITLE',
+            'fsic' => 'FSIC',
+            'owner_valid_id' => 'OWNER_VALID_ID',
+            'id_picture' => 'ID_PICTURE',
+            'official_receipt_file' => 'OFFICIAL_RECEIPT',
+            'dti_registration' => 'DTI_REGISTRATION',
+            'sec_registration' => 'SEC_REGISTRATION',
+            'owner_scanned_id' => 'OWNER_SCANNED_ID',
+            'representative_scanned_id' => 'REPRESENTATIVE_SCANNED_ID'
+        ];
+    }
     
     // Process file uploads and save to documents table
     $uploadedDocuments = [];
     foreach ($fileDocumentMap as $fileField => $documentType) {
         if (isset($_FILES[$fileField]) && $_FILES[$fileField]['error'] === UPLOAD_ERR_OK) {
-            if (saveDocumentFile($conn, $permit_id, $fileField, $documentType, $uploadDir)) {
+            if (saveDocumentFile($conn, $permit_id, $fileField, $documentType, $uploadDir, $isRenewal)) {
                 $uploadedDocuments[] = $documentType;
                 error_log("Successfully uploaded and saved document: $documentType");
             }
         }
     }
     
-    // Handle barangay clearance separately if needed
-    if (isset($_FILES['barangay_clearance']) && $_FILES['barangay_clearance']['error'] === UPLOAD_ERR_OK) {
+    // Handle barangay clearance separately if needed (for NEW applications)
+    if (!$isRenewal && isset($_FILES['barangay_clearance']) && $_FILES['barangay_clearance']['error'] === UPLOAD_ERR_OK) {
         if (saveDocumentFile($conn, $permit_id, 'barangay_clearance', 'BARANGAY_CLEARANCE', $uploadDir)) {
             $uploadedDocuments[] = 'BARANGAY_CLEARANCE';
         }
@@ -334,10 +412,13 @@ try {
     ob_clean();
     echo json_encode([
         'success' => true,
-        'message' => 'Business permit application submitted successfully!',
+        'message' => $isRenewal ? 
+            'Business permit renewal application submitted successfully!' :
+            'Business permit application submitted successfully!',
         'permit_id' => $permit_id,
         'applicant_id' => $applicant_id,
         'status' => $status,
+        'application_type' => $isRenewal ? 'RENEWAL' : 'NEW',
         'documents_uploaded' => $uploadedDocuments,
         'debug' => [
             'columns_inserted' => count($columns),

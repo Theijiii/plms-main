@@ -80,6 +80,7 @@ require_once __DIR__ . '../db.php';
                 has_owner_valid_id,
                 has_official_receipt,
                 remarks
+                official_receipt_no
             ) VALUES (
                 :applicant_id,
                 :application_date,

@@ -11,8 +11,6 @@ const COLORS = {
   background: '#FBFBFB',
   font: 'Montserrat, Arial, sans-serif'
 };
-const API_BUSRENEW = "/backend/business_permit/renew";
-
 
 export default function BusinessRenewal() {
   const location = useLocation();
@@ -40,6 +38,7 @@ export default function BusinessRenewal() {
     application_date: new Date().toISOString().split('T')[0],
     permit_number: '',
     permit_expiry: '',
+    official_receipt_no: '',
     owner_type: '', // Will be fetched from API based on permit number
 
     business_name: '',
@@ -159,6 +158,9 @@ export default function BusinessRenewal() {
       if (!formData.owner_type) {
         newErrors.owner_type = 'Owner type is required';
       }
+      if (!formData.official_receipt_no) {
+        newErrors.official_receipt_no = 'Official receipt number is required';
+      }
     }
     
     if (step === 2) {
@@ -215,50 +217,56 @@ export default function BusinessRenewal() {
     }
   };
 
-  const confirmDeclaration = async () => {
+const confirmDeclaration = async () => {
     if (!agreeDeclaration) {
-      setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
-      setShowConfirmModal(false);
-      return;
+        setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
+        setShowConfirmModal(false);
+        return;
     }
     
     setIsSubmitting(true);
     setShowConfirmModal(false);
 
     try {
-      const formDataToSend = new FormData();
-      
-      // Append all form data
-      Object.entries(formData).forEach(([key, value]) => {
-        if (value instanceof File) {
-          formDataToSend.append(key, value);
-        } else if (value !== null && value !== undefined) {
-          formDataToSend.append(key, String(value));
-        }
-      });
-
-      const response = await fetch(`${API_BUSRENEW}`, {
-        method: 'POST',
-        body: formDataToSend,
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        showSuccessMessage(data.message || 'Renewal application submitted successfully!');
+        const formDataToSend = new FormData();
         
-        setTimeout(() => {
-          navigate('/user/permittracker');
-        }, 3000);
-      } else {
-        showErrorMessage(data.message || 'Failed to submit renewal application');
-      }
+        // Append all form data
+        Object.entries(formData).forEach(([key, value]) => {
+            if (value instanceof File) {
+                formDataToSend.append(key, value);
+            } else if (value !== null && value !== undefined) {
+                formDataToSend.append(key, String(value));
+            }
+        });
+
+        // Add application_type to identify this as a renewal
+        formDataToSend.append('application_type', 'RENEWAL');
+        
+        // Map file field names to what backend expects
+        // No need to rename fields since backend now handles both
+        
+        const response = await fetch(`backend/business_permit/business_permit.php`, {
+            method: 'POST',
+            body: formDataToSend,
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            showSuccessMessage(data.message || 'Renewal application submitted successfully!');
+            
+            setTimeout(() => {
+                navigate('/user/permittracker');
+            }, 3000);
+        } else {
+            showErrorMessage(data.message || 'Failed to submit renewal application');
+        }
     } catch (error) {
-      console.error('Submission error:', error);
-      showErrorMessage('Network error: ' + error.message);
+        console.error('Submission error:', error);
+        showErrorMessage('Network error: ' + error.message);
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
-  };
+};
 
   const isStepValid = (step) => {
     if (step === 1) {
@@ -357,6 +365,33 @@ export default function BusinessRenewal() {
                 {submitStatus?.type === 'error' && !formData.permit_expiry && (
                   <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>Permit expiry date is required</p>
                 )}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Official Receipt Number *</label>
+                <input
+                  type="text"
+                  name="official_receipt_no"
+                  value={formData.official_receipt_no}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-black rounded-lg"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  placeholder="e.g., OR-2024-00123"
+                  required
+                />
+                {submitStatus?.type === 'error' && !formData.official_receipt_no && (
+                  <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>Official receipt number is required</p>
+                )}
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Application Date</label>
+                <input
+                  type="date"
+                  name="application_date"
+                  value={formData.application_date}
+                  readOnly
+                  className="w-full p-3 border border-black rounded-lg bg-gray-100"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                />
               </div>
               
               {/* Owner Type Input Field */}
