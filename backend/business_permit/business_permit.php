@@ -75,9 +75,11 @@ function saveDocumentFile($conn, $permitId, $fileField, $documentType, $uploadDi
     if (!in_array($fileExt, $allowedExtensions)) {
         $errorMsg = "Invalid file extension for $documentType. Allowed: " . implode(', ', $allowedExtensions);
         error_log("  - ERROR: $errorMsg");
-
+        // For now, log but don't block - you can change this based on your requirements
+        // throw new Exception($errorMsg);
     }
     
+    // Check MIME type using finfo (more accurate than browser-reported type)
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
     $actualMimeType = finfo_file($finfo, $file['tmp_name']);
     finfo_close($finfo);
