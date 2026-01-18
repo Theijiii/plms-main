@@ -182,7 +182,7 @@ export default function LandingPage() {
               </h1>
               <p className="text-lg text-white leading-relaxed font-medium max-w-2xl mx-auto">
                 Streamline your permit applications and licensing processes through our 
-                digital platform. Fast, secure, and efficient government services at your fingertips.
+                digital platform. Fast, secure, and efficient government services at your fingertips. tanginamo
               </p>
             </div>
 
