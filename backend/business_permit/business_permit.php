@@ -335,6 +335,7 @@ try {
     error_log("Columns to insert (" . count($columns) . "): " . implode(', ', $columns));
     error_log("Values count: " . count($values));
     error_log("Type string length: " . strlen($types));
+    error_log("Values: " . print_r($values, true));
     
     // Build SQL
     $sql = "INSERT INTO business_permit_applications (" . 
@@ -349,16 +350,27 @@ try {
         throw new Exception("Prepare failed: " . $conn->error . " | SQL: " . $sql);
     }
     
-    // Bind parameters
+    // === FIXED BINDING SECTION ===
+    // Bind parameters safely without reference issues
     if (!empty($values)) {
-        // Create references for binding
-        $params = array_merge([$types], $values);
-        $refs = [];
-        foreach ($params as $key => $value) {
-            $refs[$key] = &$params[$key];
+        // Create individual variables for each value
+        $bindValues = [];
+        foreach ($values as $index => $value) {
+            $bindValues[] = $value;
         }
         
-        call_user_func_array([$stmt, 'bind_param'], $refs);
+        // Build the bind_param call with proper references
+        $bindParams = [$types];
+        foreach ($bindValues as $key => $value) {
+            $bindParams[] = &$bindValues[$key];
+        }
+        
+        // Use reflection to call bind_param dynamically
+        $reflection = new ReflectionClass('mysqli_stmt');
+        $method = $reflection->getMethod('bind_param');
+        if (!$method->invokeArgs($stmt, $bindParams)) {
+            throw new Exception("Bind parameters failed");
+        }
     }
     
     if (!$stmt->execute()) {
@@ -452,13 +464,23 @@ try {
 } catch (Exception $e) {
     ob_clean();
     error_log("EXCEPTION: " . $e->getMessage());
+    error_log("Exception trace: " . $e->getTraceAsString());
+    
+    // Clean error response
+    $errorMessage = $e->getMessage();
+    // Don't expose full SQL in production
+    if (strpos($errorMessage, 'SQL:') !== false) {
+        $errorMessage = "Database error occurred. Please try again.";
+    }
+    
     echo json_encode([
         'success' => false,
-        'message' => 'Error: ' . $e->getMessage(),
-        'trace' => $e->getTraceAsString()
+        'message' => 'Error: ' . $errorMessage
+        // Remove trace from production
+        // 'trace' => $e->getTraceAsString()
     ]);
 }
 
 $conn->close();
 exit();
-?> 
+?>
