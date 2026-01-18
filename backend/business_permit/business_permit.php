@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-
 $allowedOrigins = [
     'http://localhost',
     'https://e-plms.goserveph.com/'
@@ -169,6 +168,79 @@ try {
     error_log("POST keys received: " . implode(', ', array_keys($postData)));
     error_log("FILES keys received: " . implode(', ', array_keys($_FILES)));
     
+    // ============================================
+    // STEP 1: VALIDATE REQUIRED FIELDS
+    // ============================================
+    $requiredFields = [
+        // Personal Information
+        'last_name' => 'Owner Last Name',
+        'first_name' => 'Owner First Name',
+        'owner_type' => 'Owner Type',
+        'citizenship' => 'Citizenship',
+        'contact_number' => 'Contact Number',
+        'email_address' => 'Email Address',
+        'home_address' => 'Home Address',
+        'valid_id_type' => 'Valid ID Type',
+        'valid_id_number' => 'Valid ID Number',
+        'date_of_birth' => 'Date of Birth',
+        
+        // Business Information
+        'business_name' => 'Business Name',
+        'business_nature' => 'Nature of Business',
+        'building_type' => 'Building Type',
+        
+        // Business Address
+        'house_bldg_no' => 'House/Building Number',
+        'street' => 'Street',
+        'barangay' => 'Barangay',
+    ];
+    
+    $validationErrors = [];
+    
+    // Check for missing required fields
+    foreach ($requiredFields as $field => $label) {
+        if (empty(trim($postData[$field] ?? ''))) {
+            $validationErrors[] = "$label is required";
+        }
+    }
+    
+    // Email validation
+    $email = trim($postData['email_address'] ?? '');
+    if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $validationErrors[] = "Email Address must be valid";
+    }
+    
+    // Phone validation (basic)
+    $phone = trim($postData['contact_number'] ?? '');
+    if ($phone && !preg_match('/^[0-9+\-\s()]{7,20}$/', $phone)) {
+        $validationErrors[] = "Contact Number must be a valid phone number";
+    }
+    
+    // Date validation
+    $dob = trim($postData['date_of_birth'] ?? '');
+    if ($dob && !strtotime($dob)) {
+        $validationErrors[] = "Date of Birth must be a valid date";
+    }
+    
+    // If validation errors, return them early
+    if (!empty($validationErrors)) {
+        ob_clean();
+        echo json_encode([
+            'success' => false,
+            'message' => 'Please fix the following errors:',
+            'errors' => $validationErrors,
+            'debug' => [
+                'fields_received' => array_keys($postData),
+                'required_fields' => array_keys($requiredFields)
+            ]
+        ]);
+        exit;
+    }
+    
+    // ============================================
+    // STEP 2: PREPARE DATA FOR DATABASE
+    // ============================================
+    
     // Generate IDs
     $applicant_id = 'BUS' . date('Y') . mt_rand(100, 999);
     $application_date = date('Y-m-d');
@@ -246,23 +318,45 @@ try {
         'has_representative_scanned_id' => ['db' => 'has_representative_scanned_id', 'type' => 'i'],
     ];
     
-    // Build the SQL dynamically based on what we receive
+    // ============================================
+    // STEP 3: BUILD SQL QUERY
+    // ============================================
+    
+    // Start with core columns
     $columns = ['applicant_id', 'application_date', 'permit_type', 'status'];
     $placeholders = ['?', '?', '?', '?'];
     $values = [$applicant_id, $application_date, ($postData['permit_type'] ?? 'NEW'), $status];
     $types = 'ssss';
     
-    // Add fields that exist in POST data
+    // Add ALL fields from fieldMap with proper defaults
     foreach ($fieldMap as $formField => $config) {
-        if (isset($postData[$formField]) && $postData[$formField] !== '') {
-            $columns[] = $config['db'];
-            $placeholders[] = '?';
+        $dbField = $config['db'];
+        $fieldType = $config['type'];
+        
+        $columns[] = $dbField;
+        $placeholders[] = '?';
+        
+        // Get value from POST or use appropriate default
+        if (isset($postData[$formField]) && trim($postData[$formField]) !== '') {
             $values[] = $postData[$formField];
-            $types .= $config['type'];
+        } else {
+            // Use appropriate default based on field type
+            switch ($fieldType) {
+                case 'i': // integer
+                case 'd': // decimal/double
+                    $values[] = 0;
+                    break;
+                case 's': // string
+                default:
+                    $values[] = '';
+                    break;
+            }
         }
+        
+        $types .= $fieldType;
     }
     
-    // Add barangay_clearance_status based on barangay_clearance_id
+    // Add barangay_clearance_status
     $barangay_clearance_status = isset($postData['barangay_clearance_id']) && !empty($postData['barangay_clearance_id']) ? 'ID_PROVIDED' : 'PENDING';
     $columns[] = 'barangay_clearance_status';
     $placeholders[] = '?';
@@ -273,6 +367,10 @@ try {
     error_log("Columns to insert (" . count($columns) . "): " . implode(', ', $columns));
     error_log("Values count: " . count($values));
     error_log("Type string length: " . strlen($types));
+    
+    // ============================================
+    // STEP 4: EXECUTE DATABASE INSERT
+    // ============================================
     
     // Build SQL
     $sql = "INSERT INTO business_permit_applications (" . 
@@ -297,6 +395,17 @@ try {
     }
     
     $permit_id = $conn->insert_id;
+    
+    // Validate that we got a valid permit_id
+    if ($permit_id <= 0) {
+        throw new Exception("Failed to get valid permit ID from database insert");
+    }
+    
+    error_log("Main application inserted with permit_id: " . $permit_id);
+    
+    // ============================================
+    // STEP 5: HANDLE FILE UPLOADS
+    // ============================================
     
     // Map file fields to document types
     $fileDocumentMap = [
@@ -333,6 +442,10 @@ try {
     
     $stmt->close();
     
+    // ============================================
+    // STEP 6: RETURN SUCCESS RESPONSE
+    // ============================================
+    
     ob_clean();
     echo json_encode([
         'success' => true,
@@ -341,6 +454,11 @@ try {
         'applicant_id' => $applicant_id,
         'status' => $status,
         'documents_uploaded' => $uploadedDocuments,
+        'validation_info' => [
+            'required_fields_checked' => count($requiredFields),
+            'fields_inserted' => count($columns),
+            'documents_uploaded_count' => count($uploadedDocuments)
+        ],
         'debug' => [
             'columns_inserted' => count($columns),
             'values_inserted' => count($values),
