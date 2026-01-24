@@ -9,7 +9,7 @@ $allowedOrigins = [
     'https://urbanplanning.goserveph.com'
 ];
 
-];
+
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if ($origin && in_array($origin, $allowedOrigins, true)) {
