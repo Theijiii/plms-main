@@ -1,45 +1,50 @@
 <?php
+// document.php
 
-$allowedOrigins = [
-    'http://localhost',
-    'https://e-plms.goserveph.com/',
-    'urbanplanning.goserveph.com',
-    'https://urbanplanning.goserveph.com'
-];
+// ===== CONFIG =====
+$UPLOAD_DIR = realpath(__DIR__ . '/uploads'); // adjust path if needed
 
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if ($origin && in_array($origin, $allowedOrigins, true)) {
-    header("Access-Control-Allow-Origin: {$origin}");
-} else {
-    header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/");
+// ===== VALIDATION =====
+if (!isset($_GET['file'])) {
+    http_response_code(400);
+    exit(json_encode(["error" => "File parameter is required"]));
 }
-header("Access-Control-Allow-Credentials: true");
-header("Content-Type: application/json");
-header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
-// Handle preflight
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
-$file = 'sample.pdf';
+// Prevent directory traversal
+$filename = basename($_GET['file']);
+$filePath = $UPLOAD_DIR . DIRECTORY_SEPARATOR . $filename;
 
-if (file_exists($file)) {
-    // Set headers to force download
-    header('Content-Description: File Transfer');
-    header('Content-Type: application/pdf'); // change based on file type
-    header('Content-Disposition: attachment; filename="'.basename($file).'"');
-    header('Expires: 0');
-    header('Cache-Control: must-revalidate');
-    header('Pragma: public');
-    header('Content-Length: ' . filesize($file));
-
-    // Clear output buffer
-    ob_clean();
-    flush();
-
-    // Read the file and output
-    readfile($file);
-    exit;
-} else {
+// Check file existence
+if (!file_exists($filePath) || !is_file($filePath)) {
     http_response_code(404);
-    echo json_encode(["error" => "File not found"]);
+    exit(json_encode(["error" => "File not found"]));
 }
+
+// ===== MIME TYPE =====
+$finfo = finfo_open(FILEINFO_MIME_TYPE);
+$mimeType = finfo_file($finfo, $filePath);
+finfo_close($finfo);
+
+// ===== VIEW OR DOWNLOAD =====
+// ?mode=view  → open in browser
+// ?mode=download → force download
+$mode = $_GET['mode'] ?? 'view';
+
+header('Content-Type: ' . $mimeType);
+header('Content-Length: ' . filesize($filePath));
+
+if ($mode === 'download') {
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+} else {
+    header('Content-Disposition: inline; filename="' . $filename . '"');
+}
+
+header('Cache-Control: private, max-age=0');
+header('Pragma: public');
+header('Expires: 0');
+
+// ===== OUTPUT FILE =====
+ob_clean();
+flush();
+readfile($filePath);
+exit;
