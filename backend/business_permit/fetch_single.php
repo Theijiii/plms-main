@@ -4,12 +4,11 @@ session_start();
 
 $allowedOrigins = [
     'http://localhost',
-    'https://e-plms.goserveph.com/'
-        'urbanplanning.goserveph.com',
+    'https://e-plms.goserveph.com/',
+    'urbanplanning.goserveph.com',
     'https://urbanplanning.goserveph.com'
+
 ];
-
-
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if ($origin && in_array($origin, $allowedOrigins, true)) {
