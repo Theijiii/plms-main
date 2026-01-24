@@ -1,10 +1,14 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Serve existing files as-is
+    # Allow PHP files
+    RewriteCond %{REQUEST_URI} \.php$ [NC]
+    RewriteRule ^ - [L]
+
+    # Serve existing files/folders
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
 
-    # Route everything else to index.html
+    # SPA fallback
     RewriteRule ^ index.html [L]
 </IfModule>
