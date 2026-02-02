@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ArrowLeft } from 'lucide-react';
+import { ArrowRight, ArrowLeft } from "lucide-react";
+
+const COLORS = {
+  primary: '#4A90E2',
+  secondary: '#000000',
+  accent: '#FDA811',  // hover color
+  success: '#4CAF50', // default button color
+  danger: '#E53935',
+  background: '#FBFBFB',
+  font: 'Montserrat, Arial, sans-serif'
+};
 
 export default function FranchisePermitType({ franchise_permit_id }) {
   const [selectedType, setSelectedType] = useState('');
@@ -10,9 +20,17 @@ export default function FranchisePermitType({ franchise_permit_id }) {
   const navigate = useNavigate();
 
   const application_type = [
-    { id: 'NEW', title: 'NEW', description: 'Apply for a new franchise permit', color: 'bg-green-500 hover:bg-green-600' },
-    { id: 'RENEWAL', title: 'RENEWAL', description: 'Renew your existing franchise permit', color: 'bg-blue-500 hover:bg-blue-600' }
+    { id: 'NEW', title: 'NEW', description: 'Apply for a new franchise permit' },
+    { id: 'RENEWAL', title: 'RENEWAL', description: 'Renew your existing franchise permit' },
   ];
+
+  // Hover handlers for buttons
+  const handleMouseEnter = (e) => {
+    e.currentTarget.style.backgroundColor = COLORS.accent;
+  };
+  const handleMouseLeave = (e) => {
+    e.currentTarget.style.backgroundColor = COLORS.success;
+  };
 
   const handleTypeSelection = (typeId) => {
     if (!franchise_permit_id && typeId !== 'NEW') {
@@ -25,9 +43,13 @@ export default function FranchisePermitType({ franchise_permit_id }) {
 
   const handleContinue = () => {
     setIsModalOpen(false);
-    // routes are registered under /user/franchise/* in App.jsx
-    const routeMap = { NEW: '/user/franchise/new', RENEWAL: '/user/franchise/new' };
-    navigate(routeMap[selectedType] || '/user/franchise/new', { state: { permitType: selectedType } });
+    const routeMap = {
+      NEW: '/user/franchise/new',
+      RENEWAL: '/user/franchise/new',
+    };
+    navigate(routeMap[selectedType] || '/user/franchise/new', { 
+      state: { permitType: selectedType } 
+    });
   };
 
   const handleConfirmYes = () => {
@@ -35,12 +57,18 @@ export default function FranchisePermitType({ franchise_permit_id }) {
     navigate('/user/franchise/new', { state: { permitType: 'NEW' } });
   };
 
-  const handleConfirmNo = () => setIsConfirmModalOpen(false);
+  const handleConfirmNo = () => {
+    setIsConfirmModalOpen(false);
+  };
 
   return (
     <div className="mx-1 mt-1 p-6 dark:bg-slate-900 bg-white dark:text-slate-300 rounded-lg min-h-screen">
-      <h1 className="text-2xl md:text-4xl font-bold mb-8 text-center">Franchise and Transport Permit Types</h1>
-      <p className="mb-6 text-center">Please select the type of franchise permit you need to apply for</p>
+      <h1 className="text-2xl md:text-4xl font-bold mb-8 text-center">
+        Franchise and Transport Permit Types
+      </h1>
+      <p className="mb-6 text-center">
+        Please select the type of franchise permit you need to apply for
+      </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full mt-6">
         {application_type.map((type) => (
@@ -64,27 +92,73 @@ export default function FranchisePermitType({ franchise_permit_id }) {
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-xl font-semibold mb-2">Selected Permit Type</h3>
             <p className="text-gray-600 dark:text-slate-300 mb-4">
-              You have selected:{' '}
-              <span className="font-bold text-blue-600">{application_type.find(t => t.id === selectedType)?.title}</span>
+              You have selected:{" "}
+              <span className="font-bold text-blue-600">
+                {application_type.find(t => t.id === selectedType)?.title}
+              </span>
             </p>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
               {application_type.find(t => t.id === selectedType)?.description}
             </p>
 
             <div className="flex justify-end gap-4">
-              <button onClick={() => setIsModalOpen(false)} className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg">Cancel</button>
-              <button onClick={handleContinue} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg">Continue</button>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleContinue}
+                style={{ backgroundColor: COLORS.success, color: '#fff' }}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                className="font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                Continue
+              </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Confirm Modal */}
+      {isConfirmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-semibold mb-4">No Existing Franchise Permit</h3>
+            <p className="text-gray-600 dark:text-slate-300 mb-6">
+              You must apply for a NEW Franchise Permit first. Do you want to apply now?
+            </p>
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={handleConfirmNo}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg"
+              >
+                No
+              </button>
+              <button
+                onClick={handleConfirmYes}
+                style={{ backgroundColor: COLORS.success, color: '#fff' }}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                className="font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Back to Dashboard Button */}
       <div className="mt-8 text-center">
         <button
           onClick={() => setIsConfirmBackOpen(true)}
-          className="inline-flex items-center gap-2 bg-green-600 hover:bg-orange-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+          style={{ backgroundColor: COLORS.success, color: '#fff' }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          className="inline-flex items-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors"
         >
           <ArrowLeft size={18} />
           Back to Dashboard
@@ -105,7 +179,10 @@ export default function FranchisePermitType({ franchise_permit_id }) {
               </button>
               <button
                 onClick={() => navigate('/user/dashboard')}
-                className="bg-green-600 hover:bg-orange-500 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                style={{ backgroundColor: COLORS.success, color: '#fff' }}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                className="font-semibold py-3 px-6 rounded-lg transition-colors"
               >
                 Yes, Go Back
               </button>

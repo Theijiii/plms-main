@@ -13,11 +13,7 @@ import BusinessNew from "./pages/user/BusinessPermit/BusinessNew"
 import BusinessRenewal from "./pages/user/BusinessPermit/BusinessRenewal"
 import BusinessLiquor from "./pages/user/BusinessPermit/BusinessLiquor"
 import BusinessSpecial from "./pages/user/BusinessPermit/BusinessSpecial"
-import BusinessAmendment from "./pages/user/BusinessPermit/BusinessAmendment/BusinessAmend"
-import BusinessChangeName from "./pages/user/BusinessPermit/BusinessAmendment/Business-cobn"
-import BusinessChangeOwner from "./pages/user/BusinessPermit/BusinessAmendment/Business-coo"
-import BusinessLine from "./pages/user/BusinessPermit/BusinessAmendment/Business-line"
-import BusinessTransLoc from "./pages/user/BusinessPermit/BusinessAmendment/Business-tol"
+import BusinessAmendment from "./pages/user/BusinessPermit/BusinessAmend"
 
 import BuildingNew from "./pages/user/BuildingPermit/BuildingNew"
 import BuildingPermitType from "./pages/user/BuildingPermit/BuildingPermitType"
@@ -55,12 +51,13 @@ import BuildingDashboard from "./pages/admin/BuildingPermit/BuildingDashboard";
 import BuildingProcess from "./pages/admin/BuildingPermit/BuildingProcess";
 
 import Franchise from "./pages/admin/FranchisePermit/Franchise";
-import FranchiseDashboard from "./pages/admin/FranchisePermit/FranchiseDashboard" 
+import FranchisePermitApplication from "./pages/admin/FranchisePermit/FranchisePermitApplication" 
 
 import BarangayPermit from "./pages/admin/BarangayPermit/Barangay";
 import BrgyPermitApplication from "./pages/admin/BarangayPermit/BrgyPermitApplication";
 
 import Tracker from "./pages/admin/PermitTracker/Tracker";
+import LandingPage from "./pages/plms";
 
 
 
@@ -70,7 +67,7 @@ function App() {
       <Routes>
         {/* Public routes (no authentication required) */}
         <Route path="/" element={<Navigate to="/home" replace />} />
-        <Route path="/home" element={<Plms />} />
+        <Route path="/home" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
@@ -100,10 +97,6 @@ function App() {
           <Route path="business/amendment" element={<BusinessAmendment />} />
           <Route path="business/liquor" element={<BusinessLiquor />} />
           <Route path="business/special" element={<BusinessSpecial />} />
-          <Route path="business/line" element={<BusinessLine />} />
-          <Route path="business/owner" element={<BusinessChangeOwner />} />
-          <Route path="business/location" element={<BusinessTransLoc />} />
-          <Route path="business/name" element={<BusinessChangeName />} />
 
           {/* Building routes */}
           <Route path="building/new" element={<BuildingNew />} />
@@ -200,20 +193,21 @@ function App() {
             } 
           />
           
-          {/* Transport Department Routes - Only accessible by Transport Admin and Super Admin */}
+
           <Route 
-            path="franchisepermit" 
+            path="franchisedashboard" 
             element={
               <ProtectedRoute requiredRole="admin" allowedDepartments={['transport', 'super']}>
                 <Franchise />
               </ProtectedRoute>
             } 
           />
+                    {/* Transport Department Routes - Only accessible by Transport Admin and Super Admin */}
           <Route 
-            path="franchisedashboard" 
+            path="franchisepermit" 
             element={
               <ProtectedRoute requiredRole="admin" allowedDepartments={['transport', 'super']}>
-                <FranchiseDashboard />
+                <FranchisePermitApplication />
               </ProtectedRoute>
             } 
           />

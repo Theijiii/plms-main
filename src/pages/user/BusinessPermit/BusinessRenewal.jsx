@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Upload, Check, X, Eye, FileText, Loader2 } from "lucide-react";
+import { Upload, Check, X, Eye, FileText, Calendar } from "lucide-react";
 
 const COLORS = {
   primary: '#4A90E2',
@@ -12,118 +12,197 @@ const COLORS = {
   font: 'Montserrat, Arial, sans-serif'
 };
 
+const API_BUS = "/backend/business_permit/submit_renewal.php";
+const NATIONALITIES = [
+  "Afghan", "Albanian", "Algerian", "American", "Andorran", "Angolan", "Antiguans", "Argentinean", "Armenian", "Australian", "Austrian", "Azerbaijani", "Bahamian", "Bahraini", "Bangladeshi", "Barbadian", "Barbudans", "Batswana", "Belarusian", "Belgian", "Belizean", "Beninese", "Bhutanese", "Bolivian", "Bosnian", "Brazilian", "British", "Bruneian", "Bulgarian", "Burkinabe", "Burmese", "Burundian", "Cambodian", "Cameroonian", "Canadian", "Cape Verdean", "Central African", "Chadian", "Chilean", "Chinese", "Colombian", "Comoran", "Congolese", "Costa Rican", "Croatian", "Cuban", "Cypriot", "Czech", "Danish", "Djibouti", "Dominican", "Dutch", "East Timorese", "Ecuadorean", "Egyptian", "Emirian", "Equatorial Guinean", "Eritrean", "Estonian", "Ethiopian", "Fijian", "Filipino", "Finnish", "French", "Gabonese", "Gambian", "Georgian", "German", "Ghanaian", "Greek", "Grenadian", "Guatemalan", "Guinea-Bissauan", "Guinean", "Guyanese", "Haitian", "Herzegovinian", "Honduran", "Hungarian", "I-Kiribati", "Icelander", "Indian", "Indonesian", "Iranian", "Iraqi", "Irish", "Israeli", "Italian", "Ivorian", "Jamaican", "Japanese", "Jordanian", "Kazakhstani", "Kenyan", "Kittian and Nevisian", "Kuwaiti", "Kyrgyz", "Laotian", "Latvian", "Lebanese", "Liberian", "Libyan", "Liechtensteiner", "Lithuanian", "Luxembourger", "Macedonian", "Malagasy", "Malawian", "Malaysian", "Maldivan", "Malian", "Maltese", "Marshallese", "Mauritanian", "Mauritian", "Mexican", "Micronesian", "Moldovan", "Monacan", "Mongolian", "Moroccan", "Mosotho", "Motswana", "Mozambican", "Namibian", "Nauruan", "Nepalese", "New Zealander", "Nicaraguan", "Nigerian", "Nigerien", "North Korean", "Northern Irish", "Norwegian", "Omani", "Pakistani", "Palauan", "Palestinian", "Panamanian", "Papua New Guinean", "Paraguayan", "Peruvian", "Polish", "Portuguese", "Qatari", "Romanian", "Russian", "Rwandan", "Saint Lucian", "Salvadoran", "Samoan", "San Marinese", "Sao Tomean", "Saudi", "Scottish", "Senegalese", "Serbian", "Seychellois", "Sierra Leonean", "Singaporean", "Slovakian", "Slovenian", "Solomon Islander", "Somali", "South African", "South Korean", "Spanish", "Sri Lankan", "Sudanese", "Surinamer", "Swazi", "Swedish", "Swiss", "Syrian", "Taiwanese", "Tajik", "Tanzanian", "Thai", "Togolese", "Tongan", "Trinidadian or Tobagonian", "Tunisian", "Turkish", "Tuvaluan", "Ugandan", "Ukrainian", "Uruguayan", "Uzbekistani", "Venezuelan", "Vietnamese", "Welsh", "Yemenite", "Zambian", "Zimbabwean"
+];
+
 export default function BusinessRenewal() {
   const location = useLocation();
   const navigate = useNavigate();
-  const application_type = location.state?.application_type || 'RENEWAL';
-  const permitType = location.state?.permit_type || 'NEW_BUSINESS_PERMIT';
+  const currentDate = new Date().toISOString().split('T')[0];
 
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showDeclarationModal, setShowDeclarationModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
   const [modalTitle, setModalTitle] = useState('');
   const [agreeDeclaration, setAgreeDeclaration] = useState(false);
   const [showPreview, setShowPreview] = useState({});
-  
-  const [isLoadingOwnerType, setIsLoadingOwnerType] = useState(false);
-  const [permitNumberEntered, setPermitNumberEntered] = useState('');
+  const [existingPermitId, setExistingPermitId] = useState(null);
+
+  // State for attachment checkboxes
+  const [attachmentChecks, setAttachmentChecks] = useState({
+    barangay_clearance: true,
+    owner_valid_id: true,
+    official_receipt_file: false,
+    business_tax_receipt: true,
+    fire_safety_certificate: true,
+    sanitation_permit: false,
+  });
 
   const [formData, setFormData] = useState({
     // Step 1: Renewal Info
-    permit_type: permitType,
-    application_date: new Date().toISOString().split('T')[0],
-    permit_number: '',
+    permit_type: 'Renewal',
+    application_date: currentDate,
     permit_expiry: '',
     official_receipt_no: '',
-    owner_type: '', // Will be fetched from API based on permit number
+    owner_type: 'Individual',
 
+    // Owner Information
+    owner_last_name: '',
+    owner_first_name: '',
+    owner_middle_name: '',
+    citizenship: 'Filipino',
+    contact_number: '',
+    email_address: '',
+    home_address: '',
+    valid_id_type: 'Passport',
+    valid_id_number: '',
+
+    // Business Information
     business_name: '',
     trade_name: '',
-    gross_sales: '',
-    total_employees: '',
-    
+    gross_sale: '',
+    total_employees: '0',
+    male_employees: '0',
+    female_employees: '0',
     business_nature: '',
+    
+    // Business Address
+    house_bldg_no: '',
+    street: '',
+    barangay: '',
+    city_municipality: 'Caloocan City',
+    province: 'Metro Manila',
+    zip_code: '',
+    business_area: '',
+    total_floor_area: '',
+    building_type: 'Commercial',
+    capital_investment: '',
     
     // Documents
     barangay_clearance_file: null,
+    barangay_clearance_id: '',
     owner_valid_id_file: null,
     official_receipt_file: null,
+    business_tax_receipt: null,
+    fire_safety_certificate: null,
+    sanitation_permit: null,
+    
+    // Declaration
+    date_submitted: currentDate,
+    applicant_signature: '',
   });
 
+  // Pre-populate form with existing permit data if available
+  useEffect(() => {
+    if (location.state?.existingPermit) {
+      const existing = location.state.existingPermit;
+      setExistingPermitId(existing.permit_id);
+      
+      setFormData(prev => ({
+        ...prev,
+        business_name: existing.business_name || '',
+        trade_name: existing.trade_name || '',
+        owner_last_name: existing.owner_last_name || '',
+        owner_first_name: existing.owner_first_name || '',
+        owner_middle_name: existing.owner_middle_name || '',
+        contact_number: existing.contact_number || '',
+        email_address: existing.email_address || '',
+        home_address: existing.home_address || '',
+        business_nature: existing.business_nature || '',
+        gross_sale: existing.gross_sale || '',
+        total_employees: existing.total_employees?.toString() || '0',
+        male_employees: existing.male_employees?.toString() || '0',
+        female_employees: existing.female_employees?.toString() || '0',
+        house_bldg_no: existing.house_bldg_no || '',
+        street: existing.street || '',
+        barangay: existing.barangay || '',
+        zip_code: existing.zip_code || '',
+        business_area: existing.business_area || '',
+        total_floor_area: existing.total_floor_area || '',
+        building_type: existing.building_type || 'Commercial',
+        capital_investment: existing.capital_investment || '',
+        valid_id_type: existing.valid_id_type || 'Passport',
+        valid_id_number: existing.valid_id_number || '',
+        citizenship: existing.citizenship || 'Filipino',
+      }));
+    }
+  }, [location.state]);
+
+  // Helper function to get full name
+  const getFullName = () => {
+    const parts = [
+      formData.owner_first_name,
+      formData.owner_middle_name,
+      formData.owner_last_name
+    ].filter(Boolean);
+    return parts.join(' ');
+  };
+
+  // Steps array for renewal
   const steps = [
-    { id: 1, title: 'Renewal Information', description: 'Existing permit details' },
-    { id: 2, title: 'Business Information', description: 'Updated business info' },
-    { id: 3, title: 'Documents', description: 'Upload required documents' },
-    { id: 4, title: 'Review', description: 'Review your application' }
+    { id: 1, title: 'Renewal Information', description: 'Basic renewal details and permit information' },
+    { id: 2, title: 'Owner Information', description: 'Personal details of the business owner' },
+    { id: 3, title: 'Business Details', description: 'Updated business information' },
+    { id: 4, title: 'Business Address', description: 'Current business location' },
+    { id: 5, title: 'Required Documents', description: 'Upload renewal documents' },
+    { id: 6, title: 'Declaration & Submit', description: 'Finalize and submit your renewal' }
   ];
 
-  // Debounce the fetch function
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (permitNumberEntered && permitNumberEntered.trim() !== '' && permitNumberEntered.length >= 3) {
-        // fetchBusinessData(permitNumberEntered); // Commented out for now
-      }
-    }, 1000); // 1 second debounce
-
-    return () => clearTimeout(timer);
-  }, [permitNumberEntered]);
-
   const handleChange = (e) => {
-    const { name, value, type, files } = e.target;
+    const { name, value } = e.target;
     
-    if (type === 'file') {
-      const file = files[0];
-      setFormData(prev => ({
-        ...prev,
-        [name]: file || null
-      }));
-    } else if (name === "permit_number") {
-      // Update permit number and trigger fetch
-      setPermitNumberEntered(value);
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-      
-      // Reset data if permit number is cleared
-      if (!value || value.trim() === '') {
-        setFormData(prev => ({
-          ...prev,
-          owner_type: '',
-          business_name: '',
-          trade_name: '',
-          business_nature: '',
-          permit_expiry: ''
-        }));
+    // Handle numeric fields
+    if (['total_employees', 'male_employees', 'female_employees', 'business_area', 
+         'total_floor_area', 'capital_investment', 'gross_sale'].includes(name)) {
+      // Only allow numbers
+      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+        setFormData((prev) => ({ ...prev, [name]: value }));
       }
-    } else if (name === "gross_sales" || name === "total_employees") {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value === '' ? '' : Number(value)
-      }));
     } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
+  const handleFile = (e) => {
+    const { name, files } = e.target;
+    const file = files?.[0] || null;
+    setFormData((prev) => ({ ...prev, [name]: file }));
+  };
+
+  // Handle signature upload
+  const handleSignatureUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, applicant_signature: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCheckboxChange = (field) => {
+    setAttachmentChecks(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
+
   const previewFile = (file) => {
-    if (!file) return null;
-    
-    const url = URL.createObjectURL(file);
-    const fileType = file.type.split('/')[0];
-    
-    setShowPreview({
-      url: url,
-      type: fileType,
-      name: file.name
-    });
+    if (file) {
+      const fileUrl = URL.createObjectURL(file);
+      setShowPreview({
+        url: fileUrl,
+        type: file.type.split('/')[0],
+        name: file.name
+      });
+    }
   };
 
   const closePreview = () => {
@@ -145,62 +224,124 @@ export default function BusinessRenewal() {
     setShowErrorModal(true);
   };
 
-  const validateStep = (step) => {
-    const newErrors = {};
-    
-    if (step === 1) {
-      if (!formData.permit_number || formData.permit_number.trim() === '') {
-        newErrors.permit_number = 'Permit number is required';
-      }
-      if (!formData.permit_expiry) {
-        newErrors.permit_expiry = 'Permit expiry date is required';
-      }
-      if (!formData.owner_type) {
-        newErrors.owner_type = 'Owner type is required';
-      }
-      if (!formData.official_receipt_no) {
-        newErrors.official_receipt_no = 'Official receipt number is required';
-      }
-    }
-    
-    if (step === 2) {
-      if (!formData.business_name || formData.business_name.trim() === '') {
-        newErrors.business_name = 'Business name is required';
-      }
-      if (!formData.trade_name || formData.trade_name.trim() === '') {
-        newErrors.trade_name = 'Trade name is required';
-      }
-      if (!formData.business_nature) {
-        newErrors.business_nature = 'Nature of business is required';
-      }
-    }
-    
-    if (step === 3) {
-      if (!formData.barangay_clearance_file) {
-        newErrors.barangay_clearance_file = 'Barangay clearance is required';
-      }
-      if (!formData.owner_valid_id_file) {
-        newErrors.owner_valid_id_file = 'Owner valid ID is required';
-      }
-      if (!formData.official_receipt_file) {
-        newErrors.official_receipt_file = 'Official receipt is required';
-      }
-    }
-    
-    return newErrors;
+  // Check if business is health-related
+  const isHealthRelatedBusiness = () => {
+    const healthBusinesses = [
+      'Health / Clinic / Pharmacy',
+      'Restaurant / Eatery / Food Service',
+      'Catering Services',
+      'Bakery / Pastry / Cake Shop',
+      'Water Refilling Station'
+    ];
+    return healthBusinesses.includes(formData.business_nature);
   };
-const isEmpty = (val) => {
-  if (val instanceof File) return false; // File is not empty
-  return val === undefined || val === null || 
-         (typeof val === "string" && val.trim() === "");
-};
+
+  const validateStep = (step) => {
+    const isEmpty = (val) => val === undefined || val === null || (typeof val === "string" && val.trim() === "");
+
+    if (step === 1) {
+      const missing = [];
+      if (isEmpty(formData.permit_expiry)) missing.push("Permit Expiry Date");
+      if (isEmpty(formData.official_receipt_no)) missing.push("Official Receipt Number");
+      
+      if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
+      return { ok: true };
+    }
+
+    if (step === 2) {
+      const missing = [];
+      if (isEmpty(formData.owner_first_name)) missing.push("First Name");
+      if (isEmpty(formData.owner_last_name)) missing.push("Last Name");
+      if (isEmpty(formData.citizenship)) missing.push("Citizenship");
+      if (isEmpty(formData.contact_number)) missing.push("Contact Number");
+      if (isEmpty(formData.email_address)) missing.push("Email Address");
+      if (isEmpty(formData.home_address)) missing.push("Home Address");
+      if (isEmpty(formData.valid_id_type)) missing.push("Valid ID Type");
+      if (isEmpty(formData.valid_id_number)) missing.push("Valid ID Number");
+
+      if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
+      return { ok: true };
+    }
+
+    if (step === 3) {
+      const missing = [];
+      if (isEmpty(formData.business_name)) missing.push("Business Name");
+      if (isEmpty(formData.trade_name)) missing.push("Trade Name");
+      if (isEmpty(formData.business_nature)) missing.push("Nature of Business");
+      if (isEmpty(formData.gross_sale)) missing.push("Gross Sale");
+      if (isEmpty(formData.total_employees) || formData.total_employees === '0') missing.push("Total Employees");
+      
+      // Validate employee counts
+      const total = parseInt(formData.total_employees) || 0;
+      const male = parseInt(formData.male_employees) || 0;
+      const female = parseInt(formData.female_employees) || 0;
+      
+      if (male + female !== total) {
+        return { 
+          ok: false, 
+          message: "Male + Female employees must equal Total Employees" 
+        };
+      }
+
+      if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
+      return { ok: true };
+    }
+
+    if (step === 4) {
+      const missing = [];
+      if (isEmpty(formData.house_bldg_no)) missing.push("House/Bldg. No");
+      if (isEmpty(formData.street)) missing.push("Street");
+      if (isEmpty(formData.barangay)) missing.push("Barangay");
+      if (isEmpty(formData.business_area) || formData.business_area === '0') missing.push("Business Area");
+      if (isEmpty(formData.total_floor_area) || formData.total_floor_area === '0') missing.push("Total Floor Area");
+      if (isEmpty(formData.capital_investment) || formData.capital_investment === '0') missing.push("Capital Investment");
+      
+      if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
+      return { ok: true };
+    }
+
+    if (step === 5) {
+      const missing = [];
+      
+      // Check mandatory documents - according to database, barangay clearance is required
+      if (isEmpty(formData.barangay_clearance_file) && isEmpty(formData.barangay_clearance_id)) {
+        missing.push("Barangay Clearance (file or ID)");
+      }
+      
+      if (isEmpty(formData.owner_valid_id_file)) {
+        missing.push("Owner Valid ID");
+      }
+      
+      if (attachmentChecks.official_receipt_file && isEmpty(formData.official_receipt_file)) {
+        missing.push("Official Receipt of Payment");
+      }
+
+      if (missing.length) return { ok: false, message: "Missing required documents: " + missing.join(", ") };
+      return { ok: true };
+    }
+
+    if (step === 6) {
+      const missing = [];
+      
+      if (isEmpty(formData.applicant_signature)) {
+        missing.push("Applicant's Signature");
+      }
+      
+      if (!agreeDeclaration) {
+        missing.push("Agreement to Declaration");
+      }
+
+      if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
+      return { ok: true };
+    }
+
+    return { ok: true };
+  };
+
   const nextStep = () => {
-    const errors = validateStep(currentStep);
-    if (Object.keys(errors).length > 0) {
-      setSubmitStatus({
-        type: 'error',
-        message: 'Please complete all required fields for this step.'
-      });
+    const res = validateStep(currentStep);
+    if (!res.ok) {
+      setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
       return;
     }
     setSubmitStatus(null);
@@ -209,19 +350,30 @@ const isEmpty = (val) => {
 
   const prevStep = () => setCurrentStep(s => Math.max(s - 1, 1));
 
-  const handleFormSubmit = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (currentStep < steps.length) {
-      // For steps 1-3, just go to next step
-      nextStep();
+    if (currentStep === 6) {
+      const res = validateStep(6);
+      if (!res.ok) {
+        setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
+        return;
+      }
+      setSubmitStatus(null);
+      setShowDeclarationModal(true);
     } else {
-      // On Step 4 (Review), show confirmation modal
-      setShowConfirmModal(true);
+      const res = validateStep(currentStep);
+      if (!res.ok) {
+        setSubmitStatus({ type: 'error', message: res.message || 'Please complete required fields for this step.' });
+        return;
+      }
+      setSubmitStatus(null);
+      setCurrentStep(s => Math.min(s + 1, steps.length));
     }
   };
 
-const confirmDeclaration = async () => {
+
+  const confirmDeclaration = async () => {
   if (!agreeDeclaration) {
     setSubmitStatus({ type: 'error', message: 'You must agree to the declaration to proceed.' });
     setShowDeclarationModal(false);
@@ -234,98 +386,113 @@ const confirmDeclaration = async () => {
   try {
     const formDataToSend = new FormData();
     
-    // Add ALL form data using the original field names (not db field names)
-    Object.keys(formData).forEach((fieldName) => {
-      const value = formData[fieldName];
-      
-      // Skip null/undefined/empty string values
-      if (value !== null && value !== undefined && value !== '') {
-        // For numbers, convert to string
-        if (typeof value === 'number') {
-          formDataToSend.append(fieldName, value.toString());
-        } else if (value instanceof File) {
-          // Files are handled separately below
-          formDataToSend.append(fieldName, value);
-        } else {
-          formDataToSend.append(fieldName, String(value));
-        }
-      }
-    });
-
-    // Add boolean flags for document attachments
-    const documentFlags = [
-      'has_barangay_clearance', 'has_bir_certificate', 'has_lease_or_title',
-      'has_fsic', 'has_owner_valid_id', 'has_id_picture', 'has_official_receipt',
-      'has_owner_scanned_id', 'has_dti_registration', 'has_sec_registration',
-      'has_representative_scanned_id'
+    // Get current date and time
+    const now = new Date();
+    const currentDateTime = now.toISOString().split('T')[0] + ' ' + now.toTimeString().split(' ')[0];
+    const currentTime = now.toTimeString().split(' ')[0];
+    
+    // Add all form data according to database structure
+    // Required fields based on business_permit_applications table
+    formDataToSend.append('permit_type', 'RENEWAL');
+    formDataToSend.append('application_date', formData.application_date);
+    formDataToSend.append('owner_last_name', formData.owner_last_name);
+    formDataToSend.append('owner_first_name', formData.owner_first_name);
+    formDataToSend.append('owner_middle_name', formData.owner_middle_name || '');
+    formDataToSend.append('owner_type', formData.owner_type);
+    formDataToSend.append('citizenship', formData.citizenship);
+    formDataToSend.append('contact_number', formData.contact_number);
+    formDataToSend.append('email_address', formData.email_address);
+    formDataToSend.append('home_address', formData.home_address);
+    formDataToSend.append('valid_id_type', formData.valid_id_type);
+    formDataToSend.append('valid_id_number', formData.valid_id_number);
+    formDataToSend.append('business_name', formData.business_name);
+    formDataToSend.append('trade_name', formData.trade_name || '');
+    formDataToSend.append('business_nature', formData.business_nature);
+    formDataToSend.append('building_type', formData.building_type);
+    formDataToSend.append('capital_investment', formData.capital_investment || '0');
+    formDataToSend.append('gross_sale', formData.gross_sale || '0');
+    formDataToSend.append('house_bldg_no', formData.house_bldg_no);
+    formDataToSend.append('street', formData.street);
+    formDataToSend.append('province', formData.province);
+    formDataToSend.append('city_municipality', formData.city_municipality);
+    formDataToSend.append('barangay', formData.barangay);
+    formDataToSend.append('zip_code', formData.zip_code || '');
+    formDataToSend.append('business_area', formData.business_area || '0');
+    formDataToSend.append('total_floor_area', formData.total_floor_area || '0');
+    formDataToSend.append('total_employees', formData.total_employees || '0');
+    formDataToSend.append('male_employees', formData.male_employees || '0');
+    formDataToSend.append('female_employees', formData.female_employees || '0');
+    formDataToSend.append('barangay_clearance_id', formData.barangay_clearance_id || '');
+    formDataToSend.append('official_receipt_no', formData.official_receipt_no);
+    
+    // Add optional fields
+    formDataToSend.append('owner_type_declaration', 'Business Owner');
+    formDataToSend.append('date_submitted', formData.application_date);
+    formDataToSend.append('date_submitted_time', currentTime);
+    
+    // Add document flags according to database column names
+    formDataToSend.append('has_barangay_clearance', formData.barangay_clearance_file || formData.barangay_clearance_id ? '1' : '0');
+    formDataToSend.append('has_owner_valid_id', formData.owner_valid_id_file ? '1' : '0');
+    formDataToSend.append('has_official_receipt', formData.official_receipt_file ? '1' : '0');
+    formDataToSend.append('has_fsic', formData.fire_safety_certificate ? '1' : '0');
+    
+    // Add existing permit ID if available (for renewal tracking) - ADD THIS LINE
+    if (existingPermitId) {
+      formDataToSend.append('existing_permit_id', existingPermitId);
+    } else {
+      // If no existingPermitId, send 0 or skip it (depending on your backend)
+      formDataToSend.append('existing_permit_id', '0');
+    }
+    
+    // Add files
+    const files = [
+      { field: 'barangay_clearance_file', name: 'barangay_clearance_file' },
+      { field: 'owner_valid_id_file', name: 'owner_valid_id_file' },
+      { field: 'official_receipt_file', name: 'official_receipt_file' },
+      { field: 'business_tax_receipt', name: 'business_tax_receipt' },
+      { field: 'fire_safety_certificate', name: 'fire_safety_certificate' },
+      { field: 'sanitation_permit', name: 'sanitation_permit' }
     ];
     
-    // Calculate and add document flags based on actual file presence
-    documentFlags.forEach(flag => {
-      let hasFile = false;
-      
-      switch(flag) {
-        case 'has_barangay_clearance':
-          hasFile = !!formData.barangay_clearance || !!formData.barangay_clearance_id;
-          break;
-        case 'has_bir_certificate':
-          hasFile = !!formData.bir_certificate;
-          break;
-        case 'has_lease_or_title':
-          hasFile = !!formData.lease_or_title;
-          break;
-        case 'has_fsic':
-          hasFile = !!formData.fsic;
-          break;
-        case 'has_owner_valid_id':
-          hasFile = !!formData.owner_valid_id;
-          break;
-        case 'has_id_picture':
-          hasFile = !!formData.id_picture;
-          break;
-        case 'has_official_receipt':
-          hasFile = !!formData.official_receipt_file;
-          break;
-        case 'has_owner_scanned_id':
-          hasFile = !!formData.owner_scanned_id;
-          break;
-        case 'has_dti_registration':
-          hasFile = !!formData.dti_registration;
-          break;
-        case 'has_sec_registration':
-          hasFile = !!formData.sec_registration;
-          break;
-        case 'has_representative_scanned_id':
-          hasFile = !!formData.representative_scanned_id;
-          break;
+    files.forEach(fileInfo => {
+      const file = formData[fileInfo.field];
+      if (file instanceof File) {
+        formDataToSend.append(fileInfo.name, file, file.name);
       }
-      
-      formDataToSend.append(flag, hasFile ? '1' : '0');
     });
+    
+    // Add signature if available
+    if (formData.applicant_signature && formData.applicant_signature.startsWith('data:image')) {
+      const byteString = atob(formData.applicant_signature.split(',')[1]);
+      const mimeString = formData.applicant_signature.split(',')[0].split(':')[1].split(';')[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: mimeString });
+      const signatureFile = new File([blob], 'signature.png', { type: mimeString });
+      formDataToSend.append('applicant_signature', signatureFile);
+    }
+    
+    // Add action for renewal
+    formDataToSend.append('action', 'submit_business_renewal');
 
-    // Add barangay clearance status
-    const barangayClearanceStatus = formData.barangay_clearance || formData.barangay_clearance_id ? 'ID_PROVIDED' : 'PENDING';
-    formDataToSend.append('barangay_clearance_status', barangayClearanceStatus);
-
-    console.log('FormData entries:');
+    console.log('FormData entries for renewal:');
     for (let [key, value] of formDataToSend.entries()) {
-      console.log(`${key}:`, value);
+      if (value instanceof File) {
+        console.log(`${key}: File - ${value.name} (${value.type})`);
+      } else {
+        console.log(`${key}:`, value);
+      }
     }
 
-    // Test connection
-    try {
-      const testResponse = await fetch(API_BUS, { method: 'GET' });
-      console.log('Connection test:', testResponse.status);
-    } catch (testError) {
-      console.error('Connection error:', testError);
-      throw new Error('Cannot connect to server. Please ensure backend is running.');
-    }
-
-    // Submit the form
     const response = await fetch(API_BUS, {
       method: "POST",
       body: formDataToSend,
-      credentials: 'include' // Important for sessions/cookies
+      headers: {
+        'Accept': 'application/json',
+      },
     });
 
     console.log('Response status:', response.status);
@@ -352,10 +519,10 @@ const confirmDeclaration = async () => {
     }
 
     if (!response.ok || !data.success) {
-      throw new Error(data.message || data.errors?.join(', ') || `Submission failed with status: ${response.status}`);
+      throw new Error(data.message || data.error || `Submission failed with status: ${response.status}`);
     }
 
-    showSuccessMessage(data.message || "Business permit application submitted successfully!");
+    showSuccessMessage(data.message || "Business permit renewal submitted successfully!");
     
     setTimeout(() => {
       navigate("/user/permittracker");
@@ -378,151 +545,93 @@ const confirmDeclaration = async () => {
   }
 };
 
-  const isStepValid = (step) => {
-    if (step === 1) {
-      if (!formData.permit_number || formData.permit_number.trim() === '') return false;
-      if (!formData.permit_expiry) return false;
-      if (!formData.owner_type) return false;
-      return true;
-    }
-    if (step === 2) {
-      if (!formData.business_name || formData.business_name.trim() === '') return false;
-      if (!formData.trade_name || formData.trade_name.trim() === '') return false;
-      if (!formData.business_nature) return false;
-      return true;
-    }
-    if (step === 3) {
-      if (!formData.barangay_clearance_file) return false;
-      if (!formData.owner_valid_id_file) return false;
-      if (!formData.official_receipt_file) return false;
-      return true;
-    }
-    return true;
-  };
-
-  const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return 'N/A';
-    return new Intl.NumberFormat('en-PH', {
-      style: 'currency',
-      currency: 'PHP',
-      minimumFractionDigits: 2
-    }).format(amount);
-  };
-
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Renewal Information</h3>
+            <div>
+              <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Renewal Information</h3>
+              <p className="text-sm text-gray-600 mb-4">{steps[0].description}</p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Permit Type</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Permit Type
+                </label>
                 <input
                   type="text"
-                  name="permit_type"
-                  value={formData.permit_type}
+                  value="Renewal"
                   readOnly
-                  className="w-full p-3 border border-black rounded-lg bg-gray-100"
+                  className="p-3 border border-black rounded-lg w-full bg-gray-100"
                   style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
                 />
               </div>
+
               <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Application Date</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Application Date
+                </label>
                 <input
-                  type="date"
-                  name="application_date"
+                  type="text"
                   value={formData.application_date}
                   readOnly
-                  className="w-full p-3 border border-black rounded-lg bg-gray-100"
+                  className="p-3 border border-black rounded-lg w-full bg-gray-100"
                   style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
                 />
               </div>
+
               <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Permit Number *</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Current Permit Expiry Date <span className="text-red-500">*</span>
+                </label>
                 <div className="relative">
                   <input
-                    type="text"
-                    name="permit_number"
-                    value={formData.permit_number}
+                    type="date"
+                    name="permit_expiry"
+                    value={formData.permit_expiry}
                     onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
+                    className="p-3 border border-black rounded-lg w-full pl-10"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    placeholder="e.g., BP-2024-00123"
                     required
                   />
-                  {isLoadingOwnerType && (
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                      <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                    </div>
-                  )}
+                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 </div>
-                {submitStatus?.type === 'error' && !formData.permit_number && (
-                  <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>Permit number is required</p>
-                )}
               </div>
+
               <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Permit Expiry Date *</label>
-                <input
-                  type="date"
-                  name="permit_expiry"
-                  value={formData.permit_expiry}
-                  onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  required
-                />
-                {submitStatus?.type === 'error' && !formData.permit_expiry && (
-                  <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>Permit expiry date is required</p>
-                )}
-              </div>
-              <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Official Receipt Number *</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Official Receipt Number <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   name="official_receipt_no"
                   value={formData.official_receipt_no}
                   onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
+                  placeholder="Enter official receipt number"
+                  className="p-3 border border-black rounded-lg w-full"
                   style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  placeholder="e.g., OR-2024-00123"
                   required
                 />
-                {submitStatus?.type === 'error' && !formData.official_receipt_no && (
-                  <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>Official receipt number is required</p>
-                )}
               </div>
+
               <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Application Date</label>
-                <input
-                  type="date"
-                  name="application_date"
-                  value={formData.application_date}
-                  readOnly
-                  className="w-full p-3 border border-black rounded-lg bg-gray-100"
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                />
-              </div>
-              
-              {/* Owner Type Input Field */}
-              <div className="md:col-span-2">
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Business Ownership Type *</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Owner Type <span className="text-red-500">*</span>
+                </label>
                 <select
                   name="owner_type"
                   value={formData.owner_type}
                   onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
+                  className="p-3 border border-black rounded-lg w-full"
                   style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
                   required
                 >
-                  <option value="">Select Ownership Type</option>
-                  <option value="Individual">Individual / Sole Proprietorship</option>
+                  <option value="Individual">Individual</option>
                   <option value="Partnership">Partnership</option>
                   <option value="Corporation">Corporation</option>
                 </select>
-                {submitStatus?.type === 'error' && !formData.owner_type && (
-                  <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>Owner type is required</p>
-                )}
               </div>
             </div>
           </div>
@@ -531,103 +640,161 @@ const confirmDeclaration = async () => {
       case 2:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Business Information</h3>
-            
+            <div>
+              <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Owner Information</h3>
+              <p className="text-sm text-gray-600 mb-4">{steps[1].description}</p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Registered Business Name *</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Last Name <span className="text-red-500">*</span>
+                </label>
                 <input
-                  type="text"
-                  name="business_name"
-                  value={formData.business_name}
+                  name="owner_last_name"
+                  value={formData.owner_last_name}
                   onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
+                  placeholder="Enter last name"
+                  className="p-3 border border-black rounded-lg w-full"
                   style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  placeholder="e.g., Juan's Food Products Trading"
                   required
                 />
               </div>
-              
+
               <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Trade / Brand Name *</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  First Name <span className="text-red-500">*</span>
+                </label>
                 <input
-                  type="text"
-                  name="trade_name"
-                  value={formData.trade_name}
+                  name="owner_first_name"
+                  value={formData.owner_first_name}
                   onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
+                  placeholder="Enter first name"
+                  className="p-3 border border-black rounded-lg w-full"
                   style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  placeholder="e.g., Juan's Eatery"
                   required
                 />
               </div>
-              
+
               <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Gross Sales (₱)</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Middle Name
+                </label>
                 <input
-                  type="number"
-                  name="gross_sales"
-                  value={formData.gross_sales}
+                  name="owner_middle_name"
+                  value={formData.owner_middle_name}
                   onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
+                  placeholder="Enter middle name"
+                  className="p-3 border border-black rounded-lg w-full"
                   style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  min="0"
-                  placeholder="0.00"
                 />
               </div>
-              
+
               <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Total Employees</label>
-                <input
-                  type="number"
-                  name="total_employees"
-                  value={formData.total_employees}
-                  onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
-                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  min="0"
-                  placeholder="0"
-                />
-              </div>
-              
-              <div>
-                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Nature of Business *</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Citizenship <span className="text-red-500">*</span>
+                </label>
                 <select
-                  name="business_nature"
-                  value={formData.business_nature}
+                  name="citizenship"
+                  value={formData.citizenship}
                   onChange={handleChange}
-                  className="w-full p-3 border border-black rounded-lg"
+                  className="p-3 border border-black rounded-lg w-full"
                   style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
                   required
                 >
-                  <option value="">Select Business Nature</option>
-                  <option value="Retail / Sari-sari Store">Retail / Sari-sari Store</option>
-                  <option value="Grocery / Mini Grocery">Grocery / Mini Grocery</option>
-                  <option value="Restaurant / Eatery / Food Service">Restaurant / Eatery / Food Service</option>
-                  <option value="Catering Services">Catering Services</option>
-                  <option value="Wholesale Trade">Wholesale Trade</option>
-                  <option value="Manufacturing (Light Industry)">Manufacturing (Light Industry)</option>
-                  <option value="Repairs / Technical Services">Repairs / Technical Services (Electronics, Appliances)</option>
-                  <option value="Printing / Publishing">Printing / Publishing</option>
-                  <option value="Beauty / Barber / Salon / Spa">Beauty / Barber / Salon / Spa</option>
-                  <option value="Health / Clinic / Pharmacy">Health / Clinic / Pharmacy</option>
-                  <option value="Education / Tutorial Center">Education / Tutorial Center</option>
-                  <option value="Office / Administrative Services">Office / Administrative Services</option>
-                  <option value="Logistics / Transport / Courier">Logistics / Transport / Courier</option>
-                  <option value="Real Estate / Leasing / Rental Services">Real Estate / Leasing / Rental Services</option>
-                  <option value="Construction / Contractor">Construction / Contractor</option>
-                  <option value="Workshops (Metal, Carpentry, Furniture)">Workshops (Metal, Carpentry, Furniture)</option>
-                  <option value="Bakery / Pastry / Cake Shop">Bakery / Pastry / Cake Shop</option>
-                  <option value="Laundry / Dry Cleaning">Laundry / Dry Cleaning</option>
-                  <option value="Automotive (Repair, Car Wash)">Automotive (Repair, Car Wash)</option>
-                  <option value="Water Refilling Station">Water Refilling Station</option>
-                  <option value="Entertainment / Recreation">Entertainment / Recreation</option>
-                  <option value="Advertising / Signage">Advertising / Signage</option>
-                  <option value="Online Business / E-commerce">Online Business / E-commerce</option>
-                  <option value="Agricultural / Farming">Agricultural / Farming</option>
+                  <option value="Filipino">Filipino</option>
+                  {NATIONALITIES.map(nationality => (
+                    <option key={nationality} value={nationality}>{nationality}</option>
+                  ))}
                 </select>
               </div>
-              
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Contact Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  name="contact_number"
+                  value={formData.contact_number}
+                  onChange={handleChange}
+                  placeholder="09123456789"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  pattern="[0-9]{11}"
+                  maxLength="11"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Email Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  name="email_address"
+                  value={formData.email_address}
+                  onChange={handleChange}
+                  placeholder="example@email.com"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Home Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  name="home_address"
+                  value={formData.home_address}
+                  onChange={handleChange}
+                  placeholder="Enter complete home address"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Valid ID Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="valid_id_type"
+                  value={formData.valid_id_type}
+                  onChange={handleChange}
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                >
+                  <option value="Passport">Passport</option>
+                  <option value="Driver's License">Driver's License</option>
+                  <option value="PhilSys ID">PhilSys ID</option>
+                  <option value="UMID">UMID</option>
+                  <option value="Voter's ID">Voter's ID</option>
+                  <option value="Postal ID">Postal ID</option>
+                  <option value="PRC ID">PRC ID</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Valid ID Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="valid_id_number"
+                  value={formData.valid_id_number}
+                  onChange={handleChange}
+                  placeholder="Enter ID number"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
             </div>
           </div>
         );
@@ -635,59 +802,128 @@ const confirmDeclaration = async () => {
       case 3:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Required Documents</h3>
-            
-            {/* Ownership Information Summary */}
+            <div>
+              <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Business Details</h3>
+              <p className="text-sm text-gray-600 mb-4">{steps[2].description}</p>
+            </div>
 
-            
-            <div className="space-y-4">
-              {[
-                { name: 'barangay_clearance_file', label: 'Barangay Clearance *', required: true },
-                { name: 'owner_valid_id_file', label: 'Owner Valid ID *', required: true },
-                { name: 'official_receipt_file', label: 'Official Receipt of Payment of Business Tax *', required: true },
-              ].map(doc => (
-                <div key={doc.name}>
-                  <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary }}>
-                    {doc.label}
-                  </label>
-                  <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
-                    {formData[doc.name] ? (
-                      <Check className="w-5 h-5 text-green-600" />
-                    ) : (
-                      <Upload className="w-5 h-5 text-gray-500" />
-                    )}
-                    <input
-                      type="file"
-                      name={doc.name}
-                      onChange={handleChange}
-                      accept={doc.accept || ".pdf,.jpg,.png,.doc,.docx"}
-                      className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                      style={{ fontFamily: COLORS.font }}
-                      required={doc.required}
-                    />
-                  </div>
-                  {submitStatus?.type === 'error' && doc.required && !formData[doc.name] && (
-                    <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{doc.label.replace(' *', '')} is required</p>
-                  )}
-                  
-                  {formData[doc.name] && (
-                    <div className="flex items-center justify-between mt-2">
-                      <p className="text-sm text-gray-600">
-                        Uploaded: {formData[doc.name].name}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => previewFile(formData[doc.name])}
-                        className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                        style={{ color: COLORS.secondary }}
-                      >
-                        <Eye className="w-4 h-4" />
-                        Preview
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Business Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  name="business_name"
+                  value={formData.business_name}
+                  onChange={handleChange}
+                  placeholder="Enter registered business name"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Trade Name
+                </label>
+                <input
+                  name="trade_name"
+                  value={formData.trade_name}
+                  onChange={handleChange}
+                  placeholder="Enter trade name (if different)"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Gross Annual Sale (₱) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="gross_sale"
+                  value={formData.gross_sale}
+                  onChange={handleChange}
+                  placeholder="Enter gross sale amount"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Nature of Business <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="business_nature"
+                  value={formData.business_nature}
+                  onChange={handleChange}
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                >
+                  <option value="">Select Nature of Business</option>
+                  <option value="Retail / Sari-sari Store">Retail / Sari-sari Store</option>
+                  <option value="Restaurant / Eatery / Food Service">Restaurant / Eatery / Food Service</option>
+                  <option value="Manufacturing (Light Industry)">Manufacturing (Light Industry)</option>
+                  <option value="Health / Clinic / Pharmacy">Health / Clinic / Pharmacy</option>
+                  <option value="Education / Tutorial Center">Education / Tutorial Center</option>
+                  <option value="Real Estate / Leasing">Real Estate / Leasing</option>
+                  <option value="Construction / Contractor">Construction / Contractor</option>
+                  <option value="Automotive Services">Automotive Services</option>
+                  <option value="Water Refilling Station">Water Refilling Station</option>
+                  <option value="Online Business / E-commerce">Online Business / E-commerce</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Total Employees <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="total_employees"
+                  value={formData.total_employees}
+                  onChange={handleChange}
+                  placeholder="Enter total number of employees"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Male Employees
+                </label>
+                <input
+                  type="text"
+                  name="male_employees"
+                  value={formData.male_employees}
+                  onChange={handleChange}
+                  placeholder="Enter number of male employees"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Female Employees
+                </label>
+                <input
+                  type="text"
+                  name="female_employees"
+                  value={formData.female_employees}
+                  onChange={handleChange}
+                  placeholder="Enter number of female employees"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                />
+              </div>
             </div>
           </div>
         );
@@ -695,149 +931,949 @@ const confirmDeclaration = async () => {
       case 4:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Review Your Application</h3>
+            <div>
+              <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Business Address</h3>
+              <p className="text-sm text-gray-600 mb-4">{steps[3].description}</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  House/Bldg. No <span className="text-red-500">*</span>
+                </label>
+                <input
+                  name="house_bldg_no"
+                  value={formData.house_bldg_no}
+                  onChange={handleChange}
+                  placeholder="Enter house/building number"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Street <span className="text-red-500">*</span>
+                </label>
+                <input
+                  name="street"
+                  value={formData.street}
+                  onChange={handleChange}
+                  placeholder="Enter street name"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Barangay <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="barangay"
+                  value={formData.barangay}
+                  onChange={handleChange}
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                >
+                  <option value="">Select Barangay</option>
+                  {Array.from({length: 175}, (_, i) => (
+                    <option key={`Barangay ${i+1}`} value={`Barangay ${i+1}`}>
+                      Barangay {i+1}
+                    </option>
+                  ))}
+                  {['A', 'B', 'C', 'D', 'E', 'F'].map(letter => (
+                    <option key={`Barangay 176-${letter}`} value={`Barangay 176-${letter}`}>
+                      Barangay 176-{letter}
+                    </option>
+                  ))}
+                  {Array.from({length: 12}, (_, i) => (
+                    <option key={`Barangay ${177 + i}`} value={`Barangay ${177 + i}`}>
+                      Barangay {177 + i}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  City/Municipality
+                </label>
+                <input
+                  type="text"
+                  value="Caloocan City"
+                  readOnly
+                  className="p-3 border border-black rounded-lg w-full bg-gray-100"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Province
+                </label>
+                <input
+                  type="text"
+                  value="Metro Manila"
+                  readOnly
+                  className="p-3 border border-black rounded-lg w-full bg-gray-100"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  ZIP Code
+                </label>
+                <input
+                  type="text"
+                  name="zip_code"
+                  value={formData.zip_code}
+                  onChange={handleChange}
+                  placeholder="Enter ZIP code"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  maxLength="4"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Business Area (sq.m.) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="business_area"
+                  value={formData.business_area}
+                  onChange={handleChange}
+                  placeholder="Enter business area"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Total Floor Area (sq.m.) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="total_floor_area"
+                  value={formData.total_floor_area}
+                  onChange={handleChange}
+                  placeholder="Enter total floor area"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Building Type
+                </label>
+                <select
+                  name="building_type"
+                  value={formData.building_type}
+                  onChange={handleChange}
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                >
+                  <option value="Commercial">Commercial</option>
+                  <option value="Residential">Residential</option>
+                  <option value="Industrial">Industrial</option>
+                  <option value="Mixed Use">Mixed Use</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Capital Investment (₱) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="capital_investment"
+                  value={formData.capital_investment}
+                  onChange={handleChange}
+                  placeholder="Enter capital investment"
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+case 5:
+  return (
+    <div className="space-y-6">
+      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-start">
+          <Check className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-medium text-blue-800 mb-1">Important Note for Renewal:</p>
+            <p className="text-sm text-blue-700">
+              • All documents marked with <span className="font-bold text-red-600">*</span> are <span className="font-bold text-red-600">MANDATORY</span> for permit renewal.
+            </p>
+            <p className="text-sm text-blue-700 mt-1">
+              • Ensure all documents are up-to-date and valid.
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      <div className="space-y-4">
+        {/* Barangay Clearance */}
+        <div className="border border-gray-300 rounded-lg bg-blue-50">
+          <div className="flex items-center justify-between p-3 border-b">
+            <div className="flex items-center">
+              <div className="mr-3">
+                {(formData.barangay_clearance_file || formData.barangay_clearance_id) ? (
+                  <Check className="w-5 h-5 text-green-600" />
+                ) : (
+                  <X className="w-5 h-5 text-red-600" />
+                )}
+              </div>
+              <div>
+                <span className="font-medium">Barangay Clearance: <span className="text-red-500">*</span></span>
+                <p className="text-sm text-gray-600">
+                  {formData.barangay_clearance_file ? formData.barangay_clearance_file.name : 
+                   formData.barangay_clearance_id ? 'ID Provided' : 'File or ID required'}
+                </p>
+                <p className="text-xs text-red-500 font-semibold">
+                  * Either file upload OR ID number must be provided
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  name="barangay_clearance_file"
+                  onChange={handleFile}
+                  accept=".pdf,.jpg,.png,.doc,.docx"
+                  className="hidden"
+                />
+                <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                  !formData.barangay_clearance_file ? 'border-gray-300' : 'border-green-200 bg-green-50'
+                }`} style={{ color: COLORS.secondary }}>
+                  <Upload className="w-4 h-4" />
+                  {formData.barangay_clearance_file ? 'Change' : 'Upload'}
+                </div>
+              </label>
+              {formData.barangay_clearance_file && (
+                <button
+                  type="button"
+                  onClick={() => previewFile(formData.barangay_clearance_file)}
+                  className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                  style={{ color: COLORS.secondary }}
+                >
+                  <Eye className="w-4 h-4" />
+                  Preview
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="p-3 bg-gray-50">
+            <label className="block text-sm font-medium mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+              Barangay Clearance ID/Number (Alternative to file upload):
+            </label>
+            <input
+              type="text"
+              name="barangay_clearance_id"
+              value={formData.barangay_clearance_id}
+              onChange={handleChange}
+              placeholder="Enter Barangay Clearance ID or Reference Number"
+              className="w-full p-2 border border-gray-300 rounded"
+              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+            />
+          </div>
+        </div>
+
+        {/* Owner Valid ID */}
+        <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
+          <div className="flex items-center">
+            {formData.owner_valid_id_file ? (
+              <Check className="w-5 h-5 text-green-600 mr-3" />
+            ) : (
+              <X className="w-5 h-5 text-red-600 mr-3" />
+            )}
+            <div>
+              <span className="font-medium">Owner Valid ID: <span className="text-red-500">*</span></span>
+              <p className="text-sm text-gray-600">
+                {formData.owner_valid_id_file ? formData.owner_valid_id_file.name : 'Required'}
+              </p>
+              <p className="text-xs text-red-500 font-semibold">* This document is mandatory</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                name="owner_valid_id_file"
+                onChange={handleFile}
+                accept=".pdf,.jpg,.png,.doc,.docx"
+                className="hidden"
+              />
+              <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                !formData.owner_valid_id_file ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'
+              }`} style={{ color: COLORS.secondary }}>
+                <Upload className="w-4 h-4" />
+                {formData.owner_valid_id_file ? 'Change' : 'Upload'}
+              </div>
+            </label>
+            {formData.owner_valid_id_file && (
+              <button
+                type="button"
+                onClick={() => previewFile(formData.owner_valid_id_file)}
+                className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                style={{ color: COLORS.secondary }}
+              >
+                <Eye className="w-4 h-4" />
+                Preview
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Business Tax Receipt */}
+        <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
+          <div className="flex items-center">
+            {formData.business_tax_receipt ? (
+              <Check className="w-5 h-5 text-green-600 mr-3" />
+            ) : (
+              <X className="w-5 h-5 text-red-600 mr-3" />
+            )}
+            <div>
+              <span className="font-medium">Business Tax Receipt (Previous Year): <span className="text-red-500">*</span></span>
+              <p className="text-sm text-gray-600">
+                {formData.business_tax_receipt ? formData.business_tax_receipt.name : 'Required'}
+              </p>
+              <p className="text-xs text-red-500 font-semibold">* This document is mandatory</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                name="business_tax_receipt"
+                onChange={handleFile}
+                accept=".pdf,.jpg,.png,.doc,.docx"
+                className="hidden"
+              />
+              <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                !formData.business_tax_receipt ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'
+              }`} style={{ color: COLORS.secondary }}>
+                <Upload className="w-4 h-4" />
+                {formData.business_tax_receipt ? 'Change' : 'Upload'}
+              </div>
+            </label>
+            {formData.business_tax_receipt && (
+              <button
+                type="button"
+                onClick={() => previewFile(formData.business_tax_receipt)}
+                className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                style={{ color: COLORS.secondary }}
+              >
+                <Eye className="w-4 h-4" />
+                Preview
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Fire Safety Certificate */}
+        <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
+          <div className="flex items-center">
+            {formData.fire_safety_certificate ? (
+              <Check className="w-5 h-5 text-green-600 mr-3" />
+            ) : (
+              <X className="w-5 h-5 text-red-600 mr-3" />
+            )}
+            <div>
+              <span className="font-medium">Fire Safety Inspection Certificate: <span className="text-red-500">*</span></span>
+              <p className="text-sm text-gray-600">
+                {formData.fire_safety_certificate ? formData.fire_safety_certificate.name : 'Required'}
+              </p>
+              <p className="text-xs text-red-500 font-semibold">* This document is mandatory</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                name="fire_safety_certificate"
+                onChange={handleFile}
+                accept=".pdf,.jpg,.png,.doc,.docx"
+                className="hidden"
+              />
+              <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                !formData.fire_safety_certificate ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'
+              }`} style={{ color: COLORS.secondary }}>
+                <Upload className="w-4 h-4" />
+                {formData.fire_safety_certificate ? 'Change' : 'Upload'}
+              </div>
+            </label>
+            {formData.fire_safety_certificate && (
+              <button
+                type="button"
+                onClick={() => previewFile(formData.fire_safety_certificate)}
+                className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                style={{ color: COLORS.secondary }}
+              >
+                <Eye className="w-4 h-4" />
+                Preview
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sanitation Permit (Optional for health-related businesses) */}
+        <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
+          <div className="flex items-center">
+            {formData.sanitation_permit ? (
+              <Check className="w-5 h-5 text-green-600 mr-3" />
+            ) : (
+              <div className="mr-3 w-5 h-5 flex items-center justify-center">
+                <span className="text-xs text-gray-500">Optional</span>
+              </div>
+            )}
+            <div>
+              <span className="font-medium">Sanitation Permit:</span>
+              <p className="text-sm text-gray-600">
+                {formData.sanitation_permit ? formData.sanitation_permit.name : 'Optional'}
+              </p>
+              {isHealthRelatedBusiness() && (
+                <p className="text-xs text-blue-600">* Recommended for health/food related businesses</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                name="sanitation_permit"
+                onChange={handleFile}
+                accept=".pdf,.jpg,.png,.doc,.docx"
+                className="hidden"
+              />
+              <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                !formData.sanitation_permit ? 'border-gray-300' : 'border-green-200 bg-green-50'
+              }`} style={{ color: COLORS.secondary }}>
+                <Upload className="w-4 h-4" />
+                {formData.sanitation_permit ? 'Change' : 'Upload'}
+              </div>
+            </label>
+            {formData.sanitation_permit && (
+              <button
+                type="button"
+                onClick={() => previewFile(formData.sanitation_permit)}
+                className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                style={{ color: COLORS.secondary }}
+              >
+                <Eye className="w-4 h-4" />
+                Preview
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Official Receipt */}
+        <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
+          <div className="flex items-center">
+            {formData.official_receipt_file ? (
+              <Check className="w-5 h-5 text-green-600 mr-3" />
+            ) : (
+              <X className="w-5 h-5 text-red-600 mr-3" />
+            )}
+            <div>
+              <span className="font-medium">Official Receipt of Payment: <span className="text-red-500">*</span></span>
+              <p className="text-sm text-gray-600">
+                {formData.official_receipt_file ? formData.official_receipt_file.name : 'Optional'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                name="official_receipt_file"
+                onChange={handleFile}
+                accept=".pdf,.jpg,.png,.doc,.docx"
+                className="hidden"
+              />
+              <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                !formData.official_receipt_file ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'
+              }`} style={{ color: COLORS.secondary }}>
+                <Upload className="w-4 h-4" />
+                {formData.official_receipt_file ? 'Change' : 'Upload'}
+              </div>
+            </label>
+            {formData.official_receipt_file && (
+              <button
+                type="button"
+                onClick={() => previewFile(formData.official_receipt_file)}
+                className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                style={{ color: COLORS.secondary }}
+              >
+                <Eye className="w-4 h-4" />
+                Preview
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+        return (
+          <div className="space-y-6">
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start">
+                <Check className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-blue-800 mb-1">Important Note for Renewal:</p>
+                  <p className="text-sm text-blue-700">
+                    • All documents marked with <span className="font-bold text-red-600">*</span> are <span className="font-bold text-red-600">MANDATORY</span> for permit renewal.
+                  </p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    • Ensure all documents are up-to-date and valid.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Barangay Clearance */}
+              <div className="border border-gray-300 rounded-lg bg-blue-50">
+                <div className="flex items-center justify-between p-3 border-b">
+                  <div className="flex items-center">
+                    <div className="mr-3">
+                      {(formData.barangay_clearance_file || formData.barangay_clearance_id) ? (
+                        <Check className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <X className="w-5 h-5 text-red-600" />
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-medium">Barangay Clearance: <span className="text-red-500">*</span></span>
+                      <p className="text-sm text-gray-600">
+                        {formData.barangay_clearance_file ? formData.barangay_clearance_file.name : 
+                         formData.barangay_clearance_id ? 'ID Provided' : 'File or ID required'}
+                      </p>
+                      <p className="text-xs text-red-500 font-semibold">
+                        * Either file upload OR ID number must be provided
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        name="barangay_clearance_file"
+                        onChange={handleFile}
+                        accept=".pdf,.jpg,.png,.doc,.docx"
+                        className="hidden"
+                      />
+                      <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                        !formData.barangay_clearance_file ? 'border-gray-300' : 'border-green-200 bg-green-50'
+                      }`} style={{ color: COLORS.secondary }}>
+                        <Upload className="w-4 h-4" />
+                        {formData.barangay_clearance_file ? 'Change' : 'Upload'}
+                      </div>
+                    </label>
+                    {formData.barangay_clearance_file && (
+                      <button
+                        type="button"
+                        onClick={() => previewFile(formData.barangay_clearance_file)}
+                        className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                        style={{ color: COLORS.secondary }}
+                      >
+                        <Eye className="w-4 h-4" />
+                        Preview
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="p-3 bg-gray-50">
+                  <label className="block text-sm font-medium mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Barangay Clearance ID/Number (Alternative to file upload):
+                  </label>
+                  <input
+                    type="text"
+                    name="barangay_clearance_id"
+                    value={formData.barangay_clearance_id}
+                    onChange={handleChange}
+                    placeholder="Enter Barangay Clearance ID or Reference Number"
+                    className="w-full p-2 border border-gray-300 rounded"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  />
+                </div>
+              </div>
+
+              {/* Owner Valid ID */}
+              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
+                <div className="flex items-center">
+                  {formData.owner_valid_id_file ? (
+                    <Check className="w-5 h-5 text-green-600 mr-3" />
+                  ) : (
+                    <X className="w-5 h-5 text-red-600 mr-3" />
+                  )}
+                  <div>
+                    <span className="font-medium">Owner Valid ID: <span className="text-red-500">*</span></span>
+                    <p className="text-sm text-gray-600">
+                      {formData.owner_valid_id_file ? formData.owner_valid_id_file.name : 'Required'}
+                    </p>
+                    <p className="text-xs text-red-500 font-semibold">* This document is mandatory</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      name="owner_valid_id_file"
+                      onChange={handleFile}
+                      accept=".pdf,.jpg,.png,.doc,.docx"
+                      className="hidden"
+                    />
+                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                      !formData.owner_valid_id_file ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'
+                    }`} style={{ color: COLORS.secondary }}>
+                      <Upload className="w-4 h-4" />
+                      {formData.owner_valid_id_file ? 'Change' : 'Upload'}
+                    </div>
+                  </label>
+                  {formData.owner_valid_id_file && (
+                    <button
+                      type="button"
+                      onClick={() => previewFile(formData.owner_valid_id_file)}
+                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                      style={{ color: COLORS.secondary }}
+                    >
+                      <Eye className="w-4 h-4" />
+                      Preview
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Business Tax Receipt */}
+              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={attachmentChecks.business_tax_receipt}
+                    onChange={() => handleCheckboxChange('business_tax_receipt')}
+                    className="mr-3 h-5 w-5"
+                  />
+                  <div>
+                    <span className="font-medium">Business Tax Receipt (Previous Year):</span>
+                    <p className="text-sm text-gray-600">
+                      {formData.business_tax_receipt ? formData.business_tax_receipt.name : 
+                       attachmentChecks.business_tax_receipt ? 'Required' : 'Optional'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      name="business_tax_receipt"
+                      onChange={handleFile}
+                      accept=".pdf,.jpg,.png,.doc,.docx"
+                      className="hidden"
+                      disabled={!attachmentChecks.business_tax_receipt}
+                    />
+                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                      !formData.business_tax_receipt ? 'border-gray-300' : 'border-green-200 bg-green-50'
+                    } ${!attachmentChecks.business_tax_receipt ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                    style={{ color: COLORS.secondary }}>
+                      <Upload className="w-4 h-4" />
+                      {formData.business_tax_receipt ? 'Change' : 'Upload'}
+                    </div>
+                  </label>
+                  {formData.business_tax_receipt && (
+                    <button
+                      type="button"
+                      onClick={() => previewFile(formData.business_tax_receipt)}
+                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                      style={{ color: COLORS.secondary }}
+                    >
+                      <Eye className="w-4 h-4" />
+                      Preview
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Fire Safety Certificate */}
+              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={attachmentChecks.fire_safety_certificate}
+                    onChange={() => handleCheckboxChange('fire_safety_certificate')}
+                    className="mr-3 h-5 w-5"
+                  />
+                  <div>
+                    <span className="font-medium">Fire Safety Inspection Certificate:</span>
+                    <p className="text-sm text-gray-600">
+                      {formData.fire_safety_certificate ? formData.fire_safety_certificate.name : 
+                       attachmentChecks.fire_safety_certificate ? 'Required' : 'Optional'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      name="fire_safety_certificate"
+                      onChange={handleFile}
+                      accept=".pdf,.jpg,.png,.doc,.docx"
+                      className="hidden"
+                      disabled={!attachmentChecks.fire_safety_certificate}
+                    />
+                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                      !formData.fire_safety_certificate ? 'border-gray-300' : 'border-green-200 bg-green-50'
+                    } ${!attachmentChecks.fire_safety_certificate ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                    style={{ color: COLORS.secondary }}>
+                      <Upload className="w-4 h-4" />
+                      {formData.fire_safety_certificate ? 'Change' : 'Upload'}
+                    </div>
+                  </label>
+                  {formData.fire_safety_certificate && (
+                    <button
+                      type="button"
+                      onClick={() => previewFile(formData.fire_safety_certificate)}
+                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                      style={{ color: COLORS.secondary }}
+                    >
+                      <Eye className="w-4 h-4" />
+                      Preview
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Sanitation Permit (Optional for health-related businesses) */}
+              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={attachmentChecks.sanitation_permit}
+                    onChange={() => handleCheckboxChange('sanitation_permit')}
+                    className="mr-3 h-5 w-5"
+                  />
+                  <div>
+                    <span className="font-medium">Sanitation Permit:</span>
+                    <p className="text-sm text-gray-600">
+                      {formData.sanitation_permit ? formData.sanitation_permit.name : 
+                       attachmentChecks.sanitation_permit ? 'Required' : 'Optional'}
+                    </p>
+                    {isHealthRelatedBusiness() && (
+                      <p className="text-xs text-blue-600">* Recommended for health/food related businesses</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      name="sanitation_permit"
+                      onChange={handleFile}
+                      accept=".pdf,.jpg,.png,.doc,.docx"
+                      className="hidden"
+                      disabled={!attachmentChecks.sanitation_permit}
+                    />
+                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                      !formData.sanitation_permit ? 'border-gray-300' : 'border-green-200 bg-green-50'
+                    } ${!attachmentChecks.sanitation_permit ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                    style={{ color: COLORS.secondary }}>
+                      <Upload className="w-4 h-4" />
+                      {formData.sanitation_permit ? 'Change' : 'Upload'}
+                    </div>
+                  </label>
+                  {formData.sanitation_permit && (
+                    <button
+                      type="button"
+                      onClick={() => previewFile(formData.sanitation_permit)}
+                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                      style={{ color: COLORS.secondary }}
+                    >
+                      <Eye className="w-4 h-4" />
+                      Preview
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Official Receipt (Optional) */}
+              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={attachmentChecks.official_receipt_file}
+                    onChange={() => handleCheckboxChange('official_receipt_file')}
+                    className="mr-3 h-5 w-5"
+                  />
+                  <div>
+                    <span className="font-medium">Official Receipt of Payment: <span className="text-red-500">*</span></span>
+                    <p className="text-sm text-gray-600">
+                      {formData.official_receipt_file ? formData.official_receipt_file.name : 
+                       attachmentChecks.official_receipt_file ? 'Required' : 'Required'}
+                    </p>
+                    <p className="text-xs text-red-500 font-semibold">* This document is mandatory for renewal</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      name="official_receipt_file"
+                      onChange={handleFile}
+                      accept=".pdf,.jpg,.png,.doc,.docx"
+                      className="hidden"
+                      disabled={!attachmentChecks.official_receipt_file}
+                    />
+                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                      !formData.official_receipt_file ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'
+                    } ${!attachmentChecks.official_receipt_file ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                    style={{ color: COLORS.secondary }}>
+                      <Upload className="w-4 h-4" />
+                      {formData.official_receipt_file ? 'Change' : 'Upload'}
+                    </div>
+                  </label>
+                  {formData.official_receipt_file && (
+                    <button
+                      type="button"
+                      onClick={() => previewFile(formData.official_receipt_file)}
+                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                      style={{ color: COLORS.secondary }}
+                    >
+                      <Eye className="w-4 h-4" />
+                      Preview
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 6:
+        return (
+          <div className="space-y-6">
+            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Declaration and Signature</h3>
+            
             <div className="bg-white rounded-lg shadow p-6 border border-black">
-              <div className="space-y-6">
+              <div className="mb-8 p-6 border-2 border-red-200 bg-red-50 rounded-lg">
+                <h4 className="font-bold text-lg mb-4 text-red-700">BUSINESS PERMIT RENEWAL DECLARATION</h4>
+                <div className="space-y-3 text-sm" style={{ fontFamily: COLORS.font }}>
+                  <p>I, <span className="font-bold">{getFullName() || '[Full Name]'}</span>, hereby solemnly declare that:</p>
+                  
+                  <ol className="list-decimal ml-5 space-y-2">
+                    <li>All information provided in this renewal application is true, complete, and correct;</li>
+                    <li>I am the registered owner/authorized representative of the business described in this application;</li>
+                    <li>The business remains compliant with all safety, sanitation, and environmental standards;</li>
+                    <li>I have secured all necessary clearances, permits, and paid all business taxes;</li>
+                    <li>I shall continue to abide by all business regulations, rules, and ordinances of Caloocan City;</li>
+                    <li>I understand that any false statement or misrepresentation shall be grounds for:</li>
+                    <ul className="list-disc ml-8 mt-2 space-y-1">
+                      <li>Immediate cancellation of the permit renewal</li>
+                      <li>Administrative and criminal liability</li>
+                      <li>Fines and penalties as per existing laws</li>
+                    </ul>
+                    <li>I agree to the processing of my personal data for renewal purposes in accordance with the Data Privacy Act of 2012;</li>
+                    <li>I consent to inspections and monitoring by authorized personnel.</li>
+                  </ol>
+                  
+                  <p className="mt-4 font-semibold">Republic Act No. 11032 - Ease of Doing Business and Efficient Government Service Delivery Act of 2018</p>
+                  <p className="text-xs italic">"Any person who makes any false statement in any business permit renewal application shall be subject to penalties under existing laws."</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
-                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Renewal Information</h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm" style={{ fontFamily: COLORS.font }}>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Permit Type:</span>
-                      <span className="flex-1">{formData.permit_type}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Application Date:</span>
-                      <span className="flex-1">{formData.application_date}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Permit Number:</span>
-                      <span className="flex-1">{formData.permit_number}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Permit Expiry Date:</span>
-                      <span className="flex-1">{formData.permit_expiry}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Ownership Type:</span>
-                      <span className="flex-1">{formData.owner_type}</span>
-                    </div>
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
+                    Applicant's Signature <span className="text-red-600">*</span>
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 h-32 flex items-center justify-center">
+                    {formData.applicant_signature ? (
+                      <div className="text-center">
+                        <img 
+                          src={formData.applicant_signature} 
+                          alt="Applicant Signature" 
+                          className="max-h-20 mx-auto"
+                        />
+                        <p className="text-xs mt-2 text-green-600">Signature uploaded</p>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, applicant_signature: '' }))}
+                          className="text-xs text-red-600 mt-1 hover:text-red-800"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <p className="text-gray-500 mb-2">Upload your signature</p>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleSignatureUpload}
+                          className="hidden"
+                          id="signature-upload"
+                        />
+                        <label
+                          htmlFor="signature-upload"
+                          className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors cursor-pointer"
+                        >
+                          Upload Signature
+                        </label>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div>
-                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Business Information</h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm" style={{ fontFamily: COLORS.font }}>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Business Name:</span>
-                      <span className="flex-1">{formData.business_name}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Trade/Brand Name:</span>
-                      <span className="flex-1">{formData.trade_name}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Gross Sales:</span>
-                      <span className="flex-1">{formatCurrency(formData.gross_sales)}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Total Employees:</span>
-                      <span className="flex-1">{formData.total_employees || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Nature of Business:</span>
-                      <span className="flex-1">{formData.business_nature}</span>
-                    </div>
-                 
+                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
+                    Date of Submission <span className="text-red-600">*</span>
+                  </label>
+                  <div className="w-full p-3 border border-black rounded-lg bg-gray-50">
+                    <p style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                      {new Date().toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric',
+                        weekday: 'long'
+                      })}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Automatically set to current date and time upon submission
+                    </p>
                   </div>
                 </div>
+              </div>
 
-                <div>
-                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Uploaded Documents</h5>
-                  <div className="space-y-4">
-                    {/* Barangay Clearance */}
-                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
-                      <div className="flex items-center">
-                        {formData.barangay_clearance_file ? (
-                          <Check className="w-5 h-5 text-green-600 mr-3" />
-                        ) : (
-                          <X className="w-5 h-5 text-red-600 mr-3" />
-                        )}
-                        <div>
-                          <span className="font-medium">Barangay Clearance:</span>
-                          <p className="text-sm text-gray-600">
-                            {formData.barangay_clearance_file ? formData.barangay_clearance_file.name : 'Not uploaded'}
-                          </p>
-                        </div>
-                      </div>
-                      {formData.barangay_clearance_file && (
-                        <button
-                          type="button"
-                          onClick={() => previewFile(formData.barangay_clearance_file)}
-                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                          style={{ color: COLORS.secondary }}
-                        >
-                          <Eye className="w-4 h-4" />
-                          Preview
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Owner Valid ID */}
-                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
-                      <div className="flex items-center">
-                        {formData.owner_valid_id_file ? (
-                          <Check className="w-5 h-5 text-green-600 mr-3" />
-                        ) : (
-                          <X className="w-5 h-5 text-red-600 mr-3" />
-                        )}
-                        <div>
-                          <span className="font-medium">Owner Valid ID:</span>
-                          <p className="text-sm text-gray-600">
-                            {formData.owner_valid_id_file ? formData.owner_valid_id_file.name : 'Not uploaded'}
-                          </p>
-                        </div>
-                      </div>
-                      {formData.owner_valid_id_file && (
-                        <button
-                          type="button"
-                          onClick={() => previewFile(formData.owner_valid_id_file)}
-                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                          style={{ color: COLORS.secondary }}
-                        >
-                          <Eye className="w-4 h-4" />
-                          Preview
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Official Receipt */}
-                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
-                      <div className="flex items-center">
-                        {formData.official_receipt_file ? (
-                          <Check className="w-5 h-5 text-green-600 mr-3" />
-                        ) : (
-                          <X className="w-5 h-5 text-red-600 mr-3" />
-                        )}
-                        <div>
-                          <span className="font-medium">Official Receipt of Payment:</span>
-                          <p className="text-sm text-gray-600">
-                            {formData.official_receipt_file ? formData.official_receipt_file.name : 'Not uploaded'}
-                          </p>
-                        </div>
-                      </div>
-                      {formData.official_receipt_file && (
-                        <button
-                          type="button"
-                          onClick={() => previewFile(formData.official_receipt_file)}
-                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                          style={{ color: COLORS.secondary }}
-                        >
-                          <Eye className="w-4 h-4" />
-                          Preview
-                        </button>
-                      )}
-                    </div>
-                  </div>
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start">
+                  <input
+                    type="checkbox"
+                    id="final-declaration"
+                    checked={agreeDeclaration}
+                    onChange={(e) => setAgreeDeclaration(e.target.checked)}
+                    className={`w-5 h-5 mt-1 text-green-600 border-gray-300 rounded focus:ring-green-500`}
+                  />
+                  <label htmlFor="final-declaration" className="ml-3">
+                    <span className="font-bold text-red-700">FINAL DECLARATION AND CONSENT *</span>
+                    <p className="text-sm mt-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                      I, <span className="font-semibold">{getFullName() || '[Full Name]'}</span>, have read, understood, and agree to all terms and conditions stated in this declaration. I certify that all information provided is accurate and I accept full responsibility for its veracity.
+                    </p>
+                  </label>
                 </div>
               </div>
             </div>
@@ -853,115 +1889,102 @@ const confirmDeclaration = async () => {
     <div className="mx-1 mt-1 p-6 rounded-lg min-h-screen" style={{ background: COLORS.background, color: COLORS.secondary, fontFamily: COLORS.font }}>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl md:text-4xl font-bold" style={{ color: COLORS.primary }}>BUSINESS PERMIT RENEWAL APPLICATION</h1>
-          <p className="mt-2" style={{ color: COLORS.secondary }}>
-            Renew your existing business permit for continued operation.
-          </p>
+          <h1 className="text-2xl md:text-4xl font-bold" style={{ color: COLORS.primary, fontFamily: COLORS.font }}>BUSINESS PERMIT RENEWAL APPLICATION</h1>
+          <p className="mt-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Permit Type: <span className="font-semibold" style={{ color: COLORS.success }}>Renewal</span></p>
+          {existingPermitId && (
+            <p className="text-sm text-gray-600 mt-1">Renewing Permit ID: {existingPermitId}</p>
+          )}
         </div>
-        <button
-          onClick={() => navigate('/user/business/type')}
-          onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-          onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-          style={{ background: COLORS.success }}
-          className="px-4 py-2 rounded-lg font-medium text-white hover:bg-[#FDA811] transition-colors duration-300"
-        >
-          Back to Dashboard
-        </button>
+        <div className="flex justify-end">
+          <button
+            onClick={() => navigate('/user/business/type')}
+            className="px-4 py-2 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300"
+            style={{ background: COLORS.success, fontFamily: COLORS.font }}
+            onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+            onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+          >
+            Back to Permit Type
+          </button>
+        </div>
       </div>
 
-      {/* Progress Steps - Oval Design */}
+      {/* Progress Steps */}
       <div className="mb-8">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between overflow-x-auto">
           {steps.map((step, index) => (
-            <div key={step.id} className="flex items-center">
-              <div 
-                className={`flex items-center justify-center rounded-full border-2 font-semibold transition-all duration-300 ${
-                  currentStep >= step.id ? 'text-white' : 'text-gray-500'
-                }`}
-                style={{
-                  background: currentStep >= step.id ? COLORS.success : 'transparent',
-                  borderColor: currentStep >= step.id ? COLORS.success : '#9CA3AF',
-                  width: '45px',
-                  height: '30px',
-                  borderRadius: '20px',
-                  fontFamily: COLORS.font
-                }}
-              >
-                {step.id}
-              </div>
+            <div key={step.id} className="flex items-center flex-shrink-0">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full border-2" style={{ 
+                background: currentStep >= step.id ? COLORS.success : 'transparent', 
+                borderColor: currentStep >= step.id ? COLORS.success : '#9CA3AF', 
+                color: currentStep >= step.id ? '#fff' : '#9CA3AF',
+                fontFamily: COLORS.font
+              }}>{step.id}</div>
               <div className="ml-3 hidden md:block">
-                <p 
-                  className="text-sm font-medium" 
-                  style={{ 
-                    color: currentStep >= step.id ? COLORS.success : COLORS.secondary,
-                    fontFamily: COLORS.font
-                  }}
-                >
-                  {step.title}
-                </p>
-                <p className="text-xs" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>{step.description}</p>
+                <p className="text-sm font-medium" style={{ 
+                  color: currentStep >= step.id ? COLORS.success : COLORS.secondary,
+                  fontFamily: COLORS.font
+                }}>{step.title}</p>
+                <p className="text-xs text-gray-500">{step.description}</p>
               </div>
-              {index < steps.length - 1 && (
-                <div 
-                  className="hidden md:block w-16 h-0.5 mx-4" 
-                  style={{ background: currentStep > step.id ? COLORS.success : '#9CA3AF' }} 
-                />
-              )}
+              {index < steps.length - 1 && <div className="hidden md:block w-16 h-0.5 mx-4" style={{ background: currentStep > step.id ? COLORS.success : '#9CA3AF' }} />}
             </div>
           ))}
         </div>
       </div>
 
-      {submitStatus && (
-        <div className={`p-4 mb-6 rounded ${submitStatus.type === 'success' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`} style={{ fontFamily: COLORS.font }}>
-          {submitStatus.message}
-        </div>
-      )}
+      {submitStatus && <div className="p-4 mb-6 rounded" style={{ 
+        background: submitStatus.type === 'success' ? '#e6f9ed' : '#fdecea', 
+        color: submitStatus.type === 'success' ? COLORS.success : COLORS.danger,
+        fontFamily: COLORS.font,
+        border: '1px solid ' + (submitStatus.type === 'success' ? COLORS.success : COLORS.danger)
+      }}>{submitStatus.message}</div>}
 
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-8">
         {renderStepContent()}
 
         <div className="flex justify-between pt-6">
           {currentStep > 1 && (
-            <button
-              type="button"
+            <button 
+              type="button" 
               onClick={prevStep}
+              className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300" 
+              style={{ 
+                background: COLORS.success, 
+                fontFamily: COLORS.font
+              }}
               onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
               onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-              style={{ background: COLORS.success }}
-              className="px-6 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
             >
               Previous
             </button>
           )}
-
+          
           {currentStep < steps.length ? (
-            <button
+            <button 
               type="submit"
-              disabled={!isStepValid(currentStep)}
-              style={{ background: !isStepValid(currentStep) ? '#9CA3AF' : COLORS.success }}
-              onMouseEnter={e => {
-                if (isStepValid(currentStep)) e.currentTarget.style.background = COLORS.accent;
+              className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300" 
+              style={{ 
+                background: COLORS.success, 
+                fontFamily: COLORS.font
               }}
-              onMouseLeave={e => {
-                if (isStepValid(currentStep)) e.currentTarget.style.background = COLORS.success;
-              }}
-              className={`px-6 py-3 rounded-lg font-semibold text-white ${
-                !isStepValid(currentStep) ? 'cursor-not-allowed' : 'transition-colors duration-300'
-              }`}
-            >
-              {currentStep === steps.length - 1 ? 'Review Application' : 'Next'}
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={isSubmitting}
               onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
               onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-              style={{ background: COLORS.success }}
-              className={`px-6 py-3 rounded-lg font-semibold text-white ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'transition-colors duration-300'}`}
             >
-              Submit Application
+              {currentStep === steps.length - 1 ? 'Review & Submit' : 'Next'}
+            </button>
+          ) : (
+            <button 
+              type="button" 
+              onClick={handleSubmit}
+              className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300" 
+              style={{ 
+                background: COLORS.success, 
+                fontFamily: COLORS.font
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+              onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+            >
+              Submit Renewal Application
             </button>
           )}
         </div>
@@ -1041,8 +2064,8 @@ const confirmDeclaration = async () => {
         </div>
       )}
 
-      {/* Confirmation Modal */}
-      {showConfirmModal && (
+      {/* Declaration Modal */}
+      {showDeclarationModal && (
         <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
           <div 
             className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
@@ -1052,39 +2075,36 @@ const confirmDeclaration = async () => {
               backdropFilter: 'blur(10px)'
             }}
           >
-            <h2 className="text-xl font-bold mb-6" style={{ color: COLORS.primary }}>Confirm Application</h2>
+            <h2 className="text-xl font-bold mb-6" style={{ color: COLORS.primary }}>Final Submission</h2>
             
             <div className="mb-6">
-              <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                Are you sure you want to submit your business permit renewal application? Please review your information before submitting.
-              </p>
-            </div>
-
-            <div className="p-4 bg-gray-50 rounded-lg border mb-6">
-              <p className="text-sm font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Declaration:</p>
-              <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                I hereby declare that all information provided in this business renewal application is true and correct to the best of my knowledge. I understand that any false information may result in the rejection of my application.
-              </p>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="declaration-checkbox"
-                  checked={agreeDeclaration}
-                  onChange={(e) => setAgreeDeclaration(e.target.checked)}
-                  className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                />
-                <label htmlFor="declaration-checkbox" className="ml-2 text-sm" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  I agree to the above declaration *
-                </label>
+              <div className="p-4 bg-gray-50 rounded-lg border mb-4">
+                <p className="text-sm font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Final Confirmation:</p>
+                <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  Are you sure you want to submit your business permit renewal application? Please review all information before submitting.
+                </p>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="final-confirmation-checkbox"
+                    checked={agreeDeclaration}
+                    onChange={(e) => setAgreeDeclaration(e.target.checked)}
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <label htmlFor="final-confirmation-checkbox" className="ml-2 text-sm" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    I confirm that all information is correct and I agree to the terms *
+                  </label>
+                </div>
               </div>
+              
+              <p className="text-sm" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                By submitting, you confirm that all information provided is accurate and complete.
+              </p>
             </div>
 
             <div className="flex justify-end gap-4">
               <button
-                onClick={() => {
-                  setShowConfirmModal(false);
-                  setAgreeDeclaration(false);
-                }}
+                onClick={() => setShowDeclarationModal(false)}
                 disabled={isSubmitting}
                 style={{ background: COLORS.danger }}
                 onMouseEnter={e => {
@@ -1103,18 +2123,18 @@ const confirmDeclaration = async () => {
               <button
                 onClick={confirmDeclaration}
                 disabled={isSubmitting || !agreeDeclaration}
-                style={{ background: (isSubmitting || !agreeDeclaration) ? '#9CA3AF' : COLORS.success }}
+                style={{ background: (!agreeDeclaration || isSubmitting) ? '#9CA3AF' : COLORS.success }}
                 onMouseEnter={e => {
-                  if (!(isSubmitting || !agreeDeclaration)) e.currentTarget.style.background = COLORS.accent;
+                  if (!isSubmitting && agreeDeclaration) e.currentTarget.style.background = COLORS.accent;
                 }}
                 onMouseLeave={e => {
-                  if (!(isSubmitting || !agreeDeclaration)) e.currentTarget.style.background = COLORS.success;
+                  if (!isSubmitting && agreeDeclaration) e.currentTarget.style.background = COLORS.success;
                 }}
                 className={`px-6 py-2 rounded-lg font-semibold text-white ${
                   (isSubmitting || !agreeDeclaration) ? 'cursor-not-allowed' : 'transition-colors duration-300'
                 }`}
               >
-                {isSubmitting ? 'Submitting...' : 'Confirm & Submit'}
+                {isSubmitting ? 'Submitting...' : 'Submit Renewal'}
               </button>
             </div>
           </div>
@@ -1160,7 +2180,7 @@ const confirmDeclaration = async () => {
                 onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
                 className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
               >
-                Go to Dashboard Now
+                Track Application
               </button>
             </div>
           </div>
@@ -1206,20 +2226,15 @@ const confirmDeclaration = async () => {
                 Close
               </button>
               
-              {!showConfirmModal && (
-                <button
-                  onClick={() => {
-                    setShowErrorModal(false);
-                    setShowConfirmModal(true);
-                  }}
-                  style={{ background: COLORS.success }}
-                  onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-                  onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-                  className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-                >
-                  Try Again
-                </button>
-              )}
+              <button
+                onClick={() => setShowErrorModal(false)}
+                style={{ background: COLORS.success }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
+              >
+                Try Again
+              </button>
             </div>
           </div>
         </div>
