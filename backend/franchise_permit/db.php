@@ -6,7 +6,7 @@ header("Access-Control-Allow-Headers: Content-Type");
 $servername = "localhost";
 $username = "eplms_kobe";
 $password = "mypassword";
-$dbname = "eplms_franchise_permit_db";
+$dbname = "eplms_franchise_applications";
 
 // Create connection
 $conn = new mysqli($servername, $username, $password, $dbname);
