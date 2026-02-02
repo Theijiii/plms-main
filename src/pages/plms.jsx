@@ -181,8 +181,7 @@ export default function LandingPage() {
                 Welcome to Permit & Licensing Management System
               </h1>
               <p className="text-lg text-white leading-relaxed font-medium max-w-2xl mx-auto">
-                Streamline your permit applications and licensing processes through our 
-                digital platform. Fast, secure, and efficient government services at your fingertips.
+We’re here to make your permit and license applications easier. With our secure digital platform, government services are faster, simpler, and right at your fingertips.
               </p>
             </div>
 

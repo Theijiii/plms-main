@@ -1,11 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getTxs } from "../../../lib/txLogger";
-import franchiseFormMock from "../../../lib/mock/franchiseForm.mock.json";
-import franchiseAdminMock from "../../../lib/mock/franchiseAdmin.mock.json";
-import businessAdminMock from "../../../lib/mock/businessAdmin.mock.json";
-import buildingAdminMock from "../../../lib/mock/buildingAdmin.mock.json";
-import barangayAdminMock from "../../../lib/mock/barangayAdmin.mock.json";
+
 
 export default function PermitTracker() {
   const navigate = useNavigate();
