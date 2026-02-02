@@ -1,11 +1,10 @@
 <?php
 session_start();
 
-
+// CORS Configuration
 $allowedOrigins = [
     'http://localhost',
-    'https://e-plms.goserveph.com/',
-    'urbanplanning.goserveph.com',
+    'https://e-plms.goserveph.com',
     'https://urbanplanning.goserveph.com'
 ];
 
@@ -13,25 +12,35 @@ $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if ($origin && in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: {$origin}");
 } else {
-    header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/");
+    // Fallback to one of the allowed origins
+    header("Access-Control-Allow-Origin: https://e-plms.goserveph.com");
 }
+
 header("Access-Control-Allow-Credentials: true");
 header("Content-Type: application/json");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 
-// Handle preflight
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
+// Handle preflight request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    exit(0);
+}
+
 // Database Connection
 require_once __DIR__ . '/db.php';
+
 $response = ['success' => false, 'message' => '', 'data' => [], 'stats' => []];
 
 try {
-    $conn = getDBConnection();
+    // Validate and sanitize pagination parameters
+    $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+    $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 15;
     
-    if (!$conn) {
-        throw new Exception("Database connection failed");
-    }
+    // Ensure page and limit are positive integers
+    $page = max(1, $page);
+    $limit = max(1, min(100, $limit)); // Limit to max 100 per page
+    
+    $offset = ($page - 1) * $limit;
     
     // Build base query
     $query = "SELECT SQL_CALC_FOUND_ROWS 
@@ -84,27 +93,31 @@ try {
     
     // Filter by status
     if (!empty($_GET['status']) && $_GET['status'] !== 'all') {
+        $status = trim($_GET['status']);
         $query .= " AND fa.status = ?";
-        $params[] = $_GET['status'];
+        $params[] = $status;
         $types .= "s";
     }
     
     // Filter by permit type
     if (!empty($_GET['permit_type']) && $_GET['permit_type'] !== 'all') {
+        $permitType = trim($_GET['permit_type']);
         $query .= " AND fa.permit_type = ?";
-        $params[] = $_GET['permit_type'];
+        $params[] = $permitType;
         $types .= "s";
     }
     
     // Filter by permit subtype
     if (!empty($_GET['permit_subtype']) && $_GET['permit_subtype'] !== 'all') {
+        $permitSubtype = trim($_GET['permit_subtype']);
         $query .= " AND fa.permit_subtype = ?";
-        $params[] = $_GET['permit_subtype'];
+        $params[] = $permitSubtype;
         $types .= "s";
     }
     
     // Search filter
     if (!empty($_GET['search'])) {
+        $searchTerm = "%" . trim($_GET['search']) . "%";
         $query .= " AND (
             fa.plate_number LIKE ? OR 
             fa.first_name LIKE ? OR 
@@ -114,7 +127,8 @@ try {
             fa.engine_number LIKE ? OR 
             fa.application_id LIKE ?
         )";
-        $searchTerm = "%{$_GET['search']}%";
+        
+        // Add the same search term 7 times for each LIKE condition
         for ($i = 0; $i < 7; $i++) {
             $params[] = $searchTerm;
             $types .= "s";
@@ -123,29 +137,30 @@ try {
     
     // Filter by date range
     if (!empty($_GET['start_date']) && !empty($_GET['end_date'])) {
-        $query .= " AND DATE(fa.date_submitted) BETWEEN ? AND ?";
-        $params[] = $_GET['start_date'];
-        $params[] = $_GET['end_date'];
-        $types .= "ss";
+        $startDate = trim($_GET['start_date']);
+        $endDate = trim($_GET['end_date']);
+        
+        // Validate date format (YYYY-MM-DD)
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
+            $query .= " AND DATE(fa.date_submitted) BETWEEN ? AND ?";
+            $params[] = $startDate;
+            $params[] = $endDate;
+            $types .= "ss";
+        }
     }
     
     // Add ordering and pagination
     $query .= " ORDER BY fa.created_at DESC LIMIT ? OFFSET ?";
-    
-    $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
-    $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 15;
-    $offset = ($page - 1) * $limit;
-    
     $params[] = $limit;
     $params[] = $offset;
     $types .= "ii";
     
     // Prepare and execute query
-    $stmt = $conn->prepare($query);
-    if (!$stmt) {
+    if (!$stmt = $conn->prepare($query)) {
         throw new Exception("Prepare failed: " . $conn->error);
     }
     
+    // Bind parameters if any
     if ($params) {
         $stmt->bind_param($types, ...$params);
     }
@@ -198,6 +213,10 @@ try {
     
     // Get total count
     $totalResult = $conn->query("SELECT FOUND_ROWS() as total");
+    if (!$totalResult) {
+        throw new Exception("Failed to get total count: " . $conn->error);
+    }
+    
     $totalRow = $totalResult->fetch_assoc();
     $total = $totalRow['total'];
     
@@ -243,8 +262,13 @@ try {
 } catch (Exception $e) {
     $response['message'] = $e->getMessage();
     error_log("Error in admin_fetch.php: " . $e->getMessage());
+    
+    // Close connection if still open
+    if (isset($conn) && $conn) {
+        $conn->close();
+    }
 }
 
-// Remove JSON_PRETTY_PRINT for production, use JSON_UNESCAPED_UNICODE for better performance
+// Output JSON response
 echo json_encode($response, JSON_UNESCAPED_UNICODE);
 ?>
