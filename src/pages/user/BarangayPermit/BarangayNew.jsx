@@ -40,6 +40,50 @@ export default function BarangayNew() {
   });
   const ocrWorkerRef = useRef(null);
 
+  const steps = [
+    { id: 1, title: 'Personal Info', description: 'Applicant Information' },
+    { id: 2, title: 'Address', description: 'Address Information' },
+    { id: 3, title: 'Clearance Details', description: 'Purpose & ID Info' },
+    { id: 4, title: 'Documents', description: 'Required Documents' },
+    { id: 5, title: 'Review', description: 'Review Application' }
+  ];
+
+  const [formData, setFormData] = useState({
+    permit_type: permitType,
+    application_date: new Date().toISOString().split('T')[0],
+    status: 'pending',
+    first_name: '',
+    middle_name: '',
+    last_name: '',
+    suffix: '',
+    mobile_number: '',
+    email: '',
+    birthdate: '',
+    gender: '',
+    civil_status: '',
+    nationality: '',
+    house_no: '',
+    street: '',
+    barangay: '',
+    city_municipality: '',
+    province: '',
+    zip_code: '',
+    purpose: '',
+    duration: '',
+    id_type: '',
+    id_number: '',
+    clearance_fee: 0.00,
+    receipt_number: '',
+    user_id: null,
+    applicant_signature: '',
+    valid_id_file: null,
+    proof_of_residence_file: null,
+    receipt_file: null,
+    signature_file: null,
+    photo_fingerprint_file: null,
+    attachments: '',
+  });
+
   useEffect(() => {
     return () => {
       if (ocrWorkerRef.current) {
