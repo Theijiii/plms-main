@@ -4,8 +4,6 @@ session_start();
 $allowedOrigins = [
     'http://localhost',
     'https://e-plms.goserveph.com/',
-    'urbanplanning.goserveph.com',
-    'https://urbanplanning.goserveph.com'
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -35,11 +33,6 @@ $response = [
 ];
 
 try {
-    // Get database connection
-    $conn = getDBConnection();
-    if (!$conn) {
-        throw new Exception('Database connection failed');
-    }
     
     // Get the raw POST data
     $input = json_decode(file_get_contents('php://input'), true);
@@ -63,7 +56,6 @@ try {
             throw new Exception('Application ID and Plate Number are required');
         }
         
-        // Prepare statement - CASE SENSITIVE exact match
         $stmt = $conn->prepare("
             SELECT * FROM franchise_permit_applications 
             WHERE application_id = ? 
