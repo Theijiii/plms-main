@@ -39,6 +39,7 @@ export default function FranchiseRenewal() {
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [showPaymentCompletionModal, setShowPaymentCompletionModal] = useState(false);
   const [barangayClearanceMethod, setBarangayClearanceMethod] = useState('id'); // 'id' or 'upload'
+  const [businessPermitMethod, setBusinessPermitMethod] = useState('id'); // 'id' or 'upload'
   
   // Payment status state
   const [paymentStatus, setPaymentStatus] = useState({
@@ -101,6 +102,8 @@ export default function FranchiseRenewal() {
     lto_or_copy: null,
     barangay_clearance_id: '', // Can be ID or Upload
     barangay_clearance_file: null, // Alternative to ID
+    business_permit_id: '', // Can be ID or Upload
+    business_permit_file: null, // Alternative to ID
     community_tax_certificate: null,
     drivers_license: null,
     inspection_report: null,
@@ -933,6 +936,17 @@ export default function FranchiseRenewal() {
         }
       }
       
+      // Check for business permit (either ID or upload)
+      if (businessPermitMethod === 'id') {
+        if (!formData.business_permit_id?.trim()) {
+          newErrors.business_permit_id = 'Business Permit ID is required';
+        }
+      } else {
+        if (!formData.business_permit_file) {
+          newErrors.business_permit_file = 'Business Permit file is required';
+        }
+      }
+      
       let uploadedCount = 0;
       requiredDocs.forEach(doc => {
         if (!formData[doc.name]) {
@@ -1068,6 +1082,13 @@ export default function FranchiseRenewal() {
         
         if (!hasBarangayClearance) return false;
         
+        // Check business permit (either ID or upload)
+        const hasBusinessPermit = businessPermitMethod === 'id' 
+          ? formData.business_permit_id?.trim() 
+          : formData.business_permit_file;
+        
+        if (!hasBusinessPermit) return false;
+        
         return requiredDocs.every(doc => formData[doc]);
       },
       6: () => {
@@ -1180,6 +1201,7 @@ export default function FranchiseRenewal() {
       formDataToSend.append('renewal_type', renewalType);
       formDataToSend.append('original_permit_id', formData.original_permit_id);
       formDataToSend.append('barangay_clearance_method', barangayClearanceMethod);
+      formDataToSend.append('business_permit_method', businessPermitMethod);
       
       // Add checkbox values
       formDataToSend.append('renewal_fee_checked', formData.renewal_fee_checked ? '1' : '0');
@@ -1432,6 +1454,126 @@ export default function FranchiseRenewal() {
                 </p>
               )}
               <p className="text-xs text-gray-500 mt-1">Upload scanned copy or photo of your Barangay Clearance</p>
+            </div>
+          )}
+        </div>
+        
+        {/* Combined Business Permit Field */}
+        <div className="bg-white rounded-lg shadow p-6 border border-black mb-6">
+          <h4 className="font-bold text-lg mb-4" style={{ color: COLORS.primary }}>
+            Business Permit Information *
+          </h4>
+          <p className="text-sm text-gray-600 mb-4">
+            Provide either your Business Permit ID or upload the permit document.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div 
+              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
+                businessPermitMethod === 'id' ? 
+                'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+              }`} 
+              onClick={() => setBusinessPermitMethod('id')}
+            >
+              <div className="flex items-center">
+                <div className={`w-5 h-5 rounded-full border-2 mr-3 ${
+                  businessPermitMethod === 'id' ? 
+                  'border-blue-500 bg-blue-500' : 'border-gray-300'
+                }`}>
+                  {businessPermitMethod === 'id' && (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h5 className="font-semibold">Enter Permit ID</h5>
+                  <p className="text-sm text-gray-600">
+                    Enter your Business Permit ID number
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div 
+              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
+                businessPermitMethod === 'upload' ? 
+                'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'
+              }`} 
+              onClick={() => setBusinessPermitMethod('upload')}
+            >
+              <div className="flex items-center">
+                <div className={`w-5 h-5 rounded-full border-2 mr-3 ${
+                  businessPermitMethod === 'upload' ? 
+                  'border-green-500 bg-green-500' : 'border-gray-300'
+                }`}>
+                  {businessPermitMethod === 'upload' && (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h5 className="font-semibold">Upload Permit Document</h5>
+                  <p className="text-sm text-gray-600">
+                    Upload scanned copy or photo of permit
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {businessPermitMethod === 'id' ? (
+            <div>
+              <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
+                Business Permit ID *
+              </label>
+              <input
+                type="text"
+                name="business_permit_id"
+                value={formData.business_permit_id || ''}
+                onChange={handleChange}
+                placeholder="Enter Business Permit ID"
+                className={`w-full p-3 border rounded-lg ${errors.business_permit_id ? 'border-red-500' : 'border-black'}`}
+                style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                required
+              />
+              {errors.business_permit_id && (
+                <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>
+                  {errors.business_permit_id}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">Enter your Business Permit ID number</p>
+            </div>
+          ) : (
+            <div>
+              <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
+                Business Permit Document *
+              </label>
+              <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
+                <Upload className="w-5 h-5 text-gray-500" />
+                <input 
+                  type="file" 
+                  name="business_permit_file" 
+                  onChange={handleChange} 
+                  accept=".jpg,.jpeg,.png,.pdf" 
+                  className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                  style={{ fontFamily: COLORS.font }}
+                  required
+                />
+              </div>
+              {errors.business_permit_file && (
+                <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>
+                  {errors.business_permit_file}
+                </p>
+              )}
+              {formData.business_permit_file && (
+                <p className="text-green-600 text-xs mt-1 flex items-center">
+                  <Check className="w-3 h-3 mr-1" />
+                  Uploaded: {formData.business_permit_file.name}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">Upload scanned copy or photo of your Business Permit</p>
             </div>
           )}
         </div>

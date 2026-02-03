@@ -39,12 +39,7 @@ export default function FranchiseNew() {
   });
   const [originalMTOPData, setOriginalMTOPData] = useState(null);
   const [autoFilledFields, setAutoFilledFields] = useState({});
-  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
-  const [duplicateCheck, setDuplicateCheck] = useState({
-    hasDuplicate: false,
-    message: '',
-    duplicateDetails: null
-  });
+  const [businessPermitMethod, setBusinessPermitMethod] = useState('id');
   const [paymentStatus, setPaymentStatus] = useState({
     isPaid: false,
     paymentMethod: '',
@@ -88,6 +83,8 @@ export default function FranchiseNew() {
     company_name: '',
     barangay_clearance: null,
     barangay_clearance_id: '',
+    business_permit_id: '',
+    business_permit_file: null,
     toda_endorsement: null,
     lto_or_cr: null,
     insurance_certificate: null,
@@ -233,48 +230,6 @@ export default function FranchiseNew() {
     };
   };
 
-  const checkForDuplicateApplication = async () => {
-    if (!formData.id_number || !formData.plate_number) return false;
-    setIsCheckingDuplicates(true);
-    try {
-      const response = await fetch('/backend/franchise_permit/check_duplicate.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id_number: formData.id_number,
-          plate_number: formData.plate_number,
-          permit_subtype: formData.permit_subtype,
-          current_application_id: formData.mtop_application_id || null
-        })
-      });
-      
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      
-      if (data.success) {
-        if (data.hasDuplicate) {
-          setDuplicateCheck({
-            hasDuplicate: true,
-            message: data.message || `You already have a ${formData.permit_subtype} application in progress for this vehicle. Application ID: ${data.duplicate_id}, Status: ${data.status}`,
-            duplicateDetails: data.duplicateDetails
-          });
-          return true;
-        } else {
-          setDuplicateCheck({ hasDuplicate: false, message: '', duplicateDetails: null });
-          return false;
-        }
-      } else {
-        setDuplicateCheck({ hasDuplicate: false, message: 'Unable to check for duplicates. Please try again.', duplicateDetails: null });
-        return false;
-      }
-    } catch (error) {
-      console.error('Error checking for duplicates:', error);
-      setDuplicateCheck({ hasDuplicate: false, message: 'Error checking for duplicate applications.', duplicateDetails: null });
-      return false;
-    } finally {
-      setIsCheckingDuplicates(false);
-    }
-  };
 
   const autoFillFromMTOP = (mtopData) => {
     if (!mtopData) return;
@@ -693,14 +648,12 @@ export default function FranchiseNew() {
         setMtopValidation({ hasExistingPermit: false, permitDetails: null, message: '', canProceed: false });
         setOriginalMTOPData(null); 
         setAutoFilledFields({}); 
-        setDuplicateCheck({ hasDuplicate: false, message: '', duplicateDetails: null });
       }
       
       if (name === 'mtop_application_id' || name === 'mtop_plate_number') {
         setMtopValidation({ hasExistingPermit: false, permitDetails: null, message: '', canProceed: false });
         setOriginalMTOPData(null); 
         setAutoFilledFields({}); 
-        setDuplicateCheck({ hasDuplicate: false, message: '', duplicateDetails: null });
       }
     }
   };
@@ -833,9 +786,6 @@ export default function FranchiseNew() {
     if (step === 1) {
       if (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) {
         newErrors.mtop_validation = 'Please validate your existing MTOP permit before proceeding';
-      }
-      if (duplicateCheck.hasDuplicate) {
-        newErrors.duplicate = duplicateCheck.message;
       }
     }
     
@@ -990,8 +940,8 @@ export default function FranchiseNew() {
     const validators = {
       1: () => {
         if (!formData.permit_subtype) return false;
-        if (formData.permit_subtype === 'MTOP') return !duplicateCheck.hasDuplicate;
-        if (formData.permit_subtype === 'FRANCHISE') return mtopValidation.canProceed && !duplicateCheck.hasDuplicate;
+        if (formData.permit_subtype === 'MTOP') return true;
+        if (formData.permit_subtype === 'FRANCHISE') return mtopValidation.canProceed;
         return true;
       },
       2: () => {
@@ -1096,11 +1046,6 @@ export default function FranchiseNew() {
         return;
       }
       
-      if (duplicateCheck.hasDuplicate && currentStep === 1) {
-        showErrorMessage("You cannot proceed with a duplicate application. Please check your existing applications.");
-        return;
-      }
-      
       const ok = validateStep(currentStep);
       if (ok) { 
         setCurrentStep(currentStep + 1); 
@@ -1148,15 +1093,8 @@ export default function FranchiseNew() {
       return;
     }
     
-    const hasDuplicate = await checkForDuplicateApplication();
-    if (hasDuplicate) {
-      showErrorMessage("Duplicate application detected. You cannot submit another application for the same vehicle.");
-      setShowConfirmModal(false);
-      return;
-    }
-    
     setIsSubmitting(true);
-    const backendUrl = "http://localhost/plms-main/backend/franchise_permit/franchise_permit.php";
+    const backendUrl = "/backend/franchise_permit/franchise_permit.php";
     
     try {
       const formDataToSend = new FormData();
@@ -1316,37 +1254,6 @@ export default function FranchiseNew() {
               Select Permit Type
             </h3>
             
-            {duplicateCheck.hasDuplicate && (
-              <div className="p-4 rounded-lg border mb-4 bg-red-50 border-red-200">
-                <div className="flex items-start">
-                  <AlertCircle className="w-5 h-5 mr-2 mt-0.5 text-red-600" />
-                  <div>
-                    <p className="text-sm font-medium text-red-700">
-                      ⚠️ Duplicate Application Detected
-                    </p>
-                    <p className="text-xs mt-1 text-red-600">
-                      {duplicateCheck.message}
-                    </p>
-                    {duplicateCheck.duplicateDetails && (
-                      <div className="mt-2 text-xs">
-                        <p><strong>Application ID:</strong> {duplicateCheck.duplicateDetails.application_id}</p>
-                        <p><strong>Status:</strong> {duplicateCheck.duplicateDetails.status}</p>
-                        <p><strong>Date Submitted:</strong> {duplicateCheck.duplicateDetails.date_submitted}</p>
-                        <p><strong>Remarks:</strong> {duplicateCheck.duplicateDetails.remarks || 'None'}</p>
-                      </div>
-                    )}
-                    <button 
-                      type="button" 
-                      onClick={() => navigate('/user/permittracker')} 
-                      className="mt-2 px-3 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200 rounded transition-colors"
-                    >
-                      View Your Applications
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            
             {formData.permit_subtype && (
               <div className={`p-4 rounded-lg border mb-4 ${
                 mtopValidation.hasExistingPermit ? 
@@ -1369,7 +1276,7 @@ export default function FranchiseNew() {
                     </p>
                     <p className="text-xs mt-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
                       {formData.permit_subtype === 'MTOP' ? 
-                        '• Must NOT have existing approved MTOP permit (to avoid duplicates)' : 
+                        '• For individual tricycle operators' : 
                         '• MUST have existing APPROVED MTOP permit first'
                       }
                     </p>
@@ -3476,34 +3383,29 @@ export default function FranchiseNew() {
               type="submit" 
               disabled={
                 !isStepValid(currentStep) || 
-                (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
-                duplicateCheck.hasDuplicate
+                (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
               } 
               style={{ 
                 background: (
                   !isStepValid(currentStep) || 
-                  (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
-                  duplicateCheck.hasDuplicate
+                  (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
                 ) ? '#9CA3AF' : COLORS.success 
               }} 
               onMouseEnter={e => { 
                 if (isStepValid(currentStep) && 
-                    !(formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) && 
-                    !duplicateCheck.hasDuplicate) {
+                    !(formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)) {
                   e.currentTarget.style.background = COLORS.accent; 
                 }
               }} 
               onMouseLeave={e => { 
                 if (isStepValid(currentStep) && 
-                    !(formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) && 
-                    !duplicateCheck.hasDuplicate) {
+                    !(formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)) {
                   e.currentTarget.style.background = COLORS.success; 
                 }
               }} 
               className={`px-6 py-3 rounded-lg font-semibold text-white ${
                 (!isStepValid(currentStep) || 
-                (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
-                duplicateCheck.hasDuplicate) ? 'cursor-not-allowed' : 'transition-colors duration-300'
+                (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)) ? 'cursor-not-allowed' : 'transition-colors duration-300'
               }`}
             >
               {currentStep === steps.length - 1 ? 'Review Application' : 'Next'}
@@ -3512,23 +3414,23 @@ export default function FranchiseNew() {
             <button 
               type="button" 
               onClick={() => setShowConfirmModal(true)} 
-              disabled={isSubmitting || !mtopValidation.canProceed || duplicateCheck.hasDuplicate} 
+              disabled={isSubmitting || !mtopValidation.canProceed} 
               onMouseEnter={e => { 
-                if (!isSubmitting && mtopValidation.canProceed && !duplicateCheck.hasDuplicate) {
+                if (!isSubmitting && mtopValidation.canProceed) {
                   e.currentTarget.style.background = COLORS.accent; 
                 }
               }} 
               onMouseLeave={e => { 
-                if (!isSubmitting && mtopValidation.canProceed && !duplicateCheck.hasDuplicate) {
+                if (!isSubmitting && mtopValidation.canProceed) {
                   e.currentTarget.style.background = COLORS.success; 
                 }
               }} 
               style={{ 
-                background: (isSubmitting || !mtopValidation.canProceed || duplicateCheck.hasDuplicate) ? 
+                background: (isSubmitting || !mtopValidation.canProceed) ? 
                 '#9CA3AF' : COLORS.success 
               }} 
               className={`px-6 py-3 rounded-lg font-semibold text-white ${
-                (isSubmitting || !mtopValidation.canProceed || duplicateCheck.hasDuplicate) ? 
+                (isSubmitting || !mtopValidation.canProceed) ? 
                 'cursor-not-allowed' : 'transition-colors duration-300'
               }`}
             >
@@ -3641,21 +3543,6 @@ export default function FranchiseNew() {
                 </div>
               )}
               
-              {duplicateCheck.hasDuplicate && (
-                <div className="p-4 rounded-lg border mb-4 bg-red-50 border-red-200">
-                  <div className="flex items-start">
-                    <AlertCircle className="w-5 h-5 mr-2 mt-0.5 text-red-600" />
-                    <div>
-                      <p className="text-sm font-medium text-red-700">
-                        ⚠️ Duplicate Application Warning
-                      </p>
-                      <p className="text-xs mt-1 text-red-600">
-                        {duplicateCheck.message}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
               
               <div className={`p-4 rounded-lg border mb-4 ${
                 mtopValidation.canProceed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
@@ -3777,23 +3664,20 @@ export default function FranchiseNew() {
                 disabled={
                   isSubmitting || 
                   !agreeDeclaration || 
-                  (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
-                  duplicateCheck.hasDuplicate
+                  (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
                 } 
                 style={{ 
                   background: (
                     isSubmitting || 
                     !agreeDeclaration || 
-                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
-                    duplicateCheck.hasDuplicate
+                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
                   ) ? '#9CA3AF' : COLORS.success 
                 }} 
                 onMouseEnter={e => { 
                   if (!(
                     isSubmitting || 
                     !agreeDeclaration || 
-                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
-                    duplicateCheck.hasDuplicate
+                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
                   )) {
                     e.currentTarget.style.background = COLORS.accent; 
                   }
@@ -3802,18 +3686,16 @@ export default function FranchiseNew() {
                   if (!(
                     isSubmitting || 
                     !agreeDeclaration || 
-                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
-                    duplicateCheck.hasDuplicate
+                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
                   )) {
                     e.currentTarget.style.background = COLORS.success; 
                   }
                 }} 
-                className={`px-6 py-2 rounded-lg font-semibold text-white ${
+                className={`px-6 py-3 rounded-lg font-semibold text-white ${
                   (
                     isSubmitting || 
                     !agreeDeclaration || 
-                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
-                    duplicateCheck.hasDuplicate
+                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
                   ) ? 'cursor-not-allowed' : 'transition-colors duration-300'
                 }`}
               >

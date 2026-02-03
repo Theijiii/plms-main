@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Upload, Check, X, Eye, FileText } from "lucide-react";
+import { Upload, Check, X, Eye, FileText, Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import * as tf from '@tensorflow/tfjs';
+import { createWorker } from 'tesseract.js';
 
 const COLORS = {
   primary: '#4A90E2',
@@ -29,63 +31,235 @@ export default function BarangayNew() {
   const [modalTitle, setModalTitle] = useState('');
   const [agreeDeclaration, setAgreeDeclaration] = useState(false);
   const [showPreview, setShowPreview] = useState({});
-  
-  // Initialize form data
-  const [formData, setFormData] = useState({
-    // Permit Information
-    permit_type: permitType,
-    application_date: new Date().toISOString().split('T')[0],
-    status: 'pending',
-    
-    // Applicant Information
-    first_name: '',
-    middle_name: '',
-    last_name: '',
-    suffix: '',
-    mobile_number: '',
-    email: '',
-    birthdate: '',
-    gender: '',
-    civil_status: '',
-    nationality: '',
-    
-    // Address Information
-    house_no: '',
-    street: '',
-    barangay: '',
-    city_municipality: '',
-    province: '',
-    zip_code: '',
-    
-    // Clearance Details
-    purpose: '',
-    duration: '',
-    id_type: '',
-    id_number: '',
-    
-    // Additional fields
-    clearance_fee: 0.00,
-    receipt_number: '',
-    user_id: null,
-    applicant_signature: '',
-    
-    // File attachments
-    valid_id_file: null,
-    proof_of_residence_file: null,
-    receipt_file: null,
-    signature_file: null,
-    photo_fingerprint_file: null,
-    
-    attachments: '',
+  const [verificationStatus, setVerificationStatus] = useState({
+    isVerifying: false,
+    isVerified: false,
+    message: '',
+    confidence: 0,
+    extractedData: null
   });
+  const ocrWorkerRef = useRef(null);
 
-  const steps = [
-    { id: 1, title: 'Applicant Information', description: 'Personal details' },
-    { id: 2, title: 'Address Information', description: 'Where you live' },
-    { id: 3, title: 'Clearance Details', description: 'Purpose, ID, Duration' },
-    { id: 4, title: 'Uploads', description: 'Required documents' },
-    { id: 5, title: 'Review', description: 'Review your application' }
-  ];
+  useEffect(() => {
+    return () => {
+      if (ocrWorkerRef.current) {
+        ocrWorkerRef.current.terminate();
+      }
+    };
+  }, []);
+
+  const verifyIDDocument = async (file, idType, idNumber, firstName, middleName, lastName) => {
+    if (!file || !idType || !idNumber || !firstName || !lastName) {
+      return;
+    }
+
+    setVerificationStatus({
+      isVerifying: true,
+      isVerified: false,
+      message: 'Initializing AI verification...',
+      confidence: 0,
+      extractedData: null
+    });
+
+    try {
+      setVerificationStatus(prev => ({ ...prev, message: 'Loading OCR engine...' }));
+      
+      if (!ocrWorkerRef.current) {
+        ocrWorkerRef.current = await createWorker('eng');
+      }
+      const worker = ocrWorkerRef.current;
+
+      setVerificationStatus(prev => ({ ...prev, message: 'Extracting text from ID document...' }));
+      
+      const { data } = await worker.recognize(file);
+      const extractedText = data.text.toUpperCase();
+      
+      const idTypeNormalized = idType.toUpperCase();
+      const idNumberNormalized = idNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      
+      const idTypeKeywords = extractIDTypeKeywords(idTypeNormalized);
+      
+      let idTypeFound = false;
+      let idNumberFound = false;
+      let firstNameFound = false;
+      let middleNameFound = false;
+      let lastNameFound = false;
+      let confidence = 0;
+      
+      for (const keyword of idTypeKeywords) {
+        if (extractedText.includes(keyword)) {
+          idTypeFound = true;
+          confidence += 25;
+          break;
+        }
+      }
+      
+      const extractedNumbers = extractedText.replace(/[^A-Z0-9]/g, '');
+      if (extractedNumbers.includes(idNumberNormalized)) {
+        idNumberFound = true;
+        confidence += 30;
+      } else {
+        const similarity = calculateSimilarity(extractedNumbers, idNumberNormalized);
+        if (similarity > 0.7) {
+          idNumberFound = true;
+          confidence += Math.floor(similarity * 30);
+        }
+      }
+      
+      const firstNameNormalized = firstName.toUpperCase().trim();
+      const middleNameNormalized = middleName ? middleName.toUpperCase().trim() : '';
+      const lastNameNormalized = lastName.toUpperCase().trim();
+      
+      if (extractedText.includes(firstNameNormalized)) {
+        firstNameFound = true;
+        confidence += 15;
+      } else {
+        const firstNameSimilarity = calculateStringSimilarity(extractedText, firstNameNormalized);
+        if (firstNameSimilarity > 0.6) {
+          firstNameFound = true;
+          confidence += Math.floor(firstNameSimilarity * 15);
+        }
+      }
+      
+      if (extractedText.includes(lastNameNormalized)) {
+        lastNameFound = true;
+        confidence += 15;
+      } else {
+        const lastNameSimilarity = calculateStringSimilarity(extractedText, lastNameNormalized);
+        if (lastNameSimilarity > 0.6) {
+          lastNameFound = true;
+          confidence += Math.floor(lastNameSimilarity * 15);
+        }
+      }
+      
+      if (middleNameNormalized) {
+        if (extractedText.includes(middleNameNormalized)) {
+          middleNameFound = true;
+          confidence += 10;
+        } else {
+          const middleNameSimilarity = calculateStringSimilarity(extractedText, middleNameNormalized);
+          if (middleNameSimilarity > 0.6) {
+            middleNameFound = true;
+            confidence += Math.floor(middleNameSimilarity * 10);
+          }
+        }
+      } else {
+        middleNameFound = true;
+      }
+      
+      if (data.confidence > 60) {
+        confidence += 5;
+      }
+      
+      const isVerified = idTypeFound && idNumberFound && firstNameFound && lastNameFound && middleNameFound && confidence >= 70;
+      
+      const missingFields = [];
+      if (!idTypeFound) missingFields.push('ID type');
+      if (!idNumberFound) missingFields.push('ID number');
+      if (!firstNameFound) missingFields.push('first name');
+      if (!middleNameFound) missingFields.push('middle name');
+      if (!lastNameFound) missingFields.push('last name');
+      
+      setVerificationStatus({
+        isVerifying: false,
+        isVerified: isVerified,
+        message: isVerified 
+          ? `✓ ID verified successfully! All details match. (${confidence}% confidence)` 
+          : `⚠ Verification incomplete. ${missingFields.length > 0 ? `Could not clearly detect: ${missingFields.join(', ')}. ` : ''}Please ensure the ID is clear and readable.`,
+        confidence: confidence,
+        extractedData: {
+          idTypeFound,
+          idNumberFound,
+          firstNameFound,
+          middleNameFound,
+          lastNameFound,
+          text: extractedText.substring(0, 200)
+        }
+      });
+      
+    } catch (error) {
+      console.error('ID Verification Error:', error);
+      setVerificationStatus({
+        isVerifying: false,
+        isVerified: false,
+        message: 'Verification failed. Please ensure the image is clear and try again.',
+        confidence: 0,
+        extractedData: null
+      });
+    }
+  };
+
+  const extractIDTypeKeywords = (idType) => {
+    const keywordMap = {
+      'PHILIPPINE NATIONAL ID': ['PHILSYS', 'NATIONAL ID', 'PSN'],
+      'DRIVER\'S LICENSE': ['DRIVER', 'LICENSE', 'LTO', 'LAND TRANSPORTATION'],
+      'PASSPORT': ['PASSPORT', 'REPUBLIC OF THE PHILIPPINES', 'DFA'],
+      'UMID': ['UMID', 'UNIFIED'],
+      'VOTER': ['VOTER', 'COMELEC'],
+      'POSTAL': ['POSTAL', 'PHLPOST'],
+      'PRC': ['PRC', 'PROFESSIONAL REGULATION'],
+      'SENIOR CITIZEN': ['SENIOR', 'CITIZEN', 'OSCA'],
+      'PWD': ['PWD', 'DISABILITY'],
+      'BARANGAY': ['BARANGAY', 'BRGY'],
+      'SSS': ['SSS', 'SOCIAL SECURITY'],
+      'PHILHEALTH': ['PHILHEALTH', 'PHIC'],
+      'PAG-IBIG': ['PAG-IBIG', 'HDMF'],
+      'TIN': ['TIN', 'TAX IDENTIFICATION']
+    };
+    
+    for (const [key, keywords] of Object.entries(keywordMap)) {
+      if (idType.includes(key)) {
+        return keywords;
+      }
+    }
+    
+    return [idType.split(' ')[0]];
+  };
+
+  const calculateSimilarity = (str1, str2) => {
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    
+    if (longer.length === 0) return 1.0;
+    
+    let matches = 0;
+    for (let i = 0; i < shorter.length; i++) {
+      if (longer.includes(shorter[i])) {
+        matches++;
+      }
+    }
+    
+    return matches / longer.length;
+  };
+
+  const calculateStringSimilarity = (text, searchString) => {
+    if (!text || !searchString) return 0;
+    if (text.includes(searchString)) return 1.0;
+    
+    const words = text.split(/\s+/);
+    let bestMatch = 0;
+    
+    for (const word of words) {
+      if (word.length < 2) continue;
+      
+      const cleanWord = word.replace(/[^A-Z]/g, '');
+      const cleanSearch = searchString.replace(/[^A-Z]/g, '');
+      
+      if (cleanWord === cleanSearch) return 1.0;
+      
+      let matches = 0;
+      const minLen = Math.min(cleanWord.length, cleanSearch.length);
+      
+      for (let i = 0; i < minLen; i++) {
+        if (cleanWord[i] === cleanSearch[i]) matches++;
+      }
+      
+      const similarity = matches / Math.max(cleanWord.length, cleanSearch.length);
+      if (similarity > bestMatch) bestMatch = similarity;
+    }
+    
+    return bestMatch;
+  };
 
   const handleChange = (e) => {
     const { name, value, type, files } = e.target;
@@ -97,6 +271,27 @@ export default function BarangayNew() {
         [name]: file || null,
         ...(name === 'signature_file' && { applicant_signature: file?.name || '' })
       }));
+      
+      if (name === 'valid_id_file' && file) {
+        setVerificationStatus({
+          isVerifying: false,
+          isVerified: false,
+          message: '',
+          confidence: 0,
+          extractedData: null
+        });
+        
+        if (formData.id_type && formData.id_number && formData.first_name && formData.last_name) {
+          verifyIDDocument(
+            file, 
+            formData.id_type, 
+            formData.id_number, 
+            formData.first_name, 
+            formData.middle_name, 
+            formData.last_name
+          );
+        }
+      }
     } else if (name === "mobile_number") {
       const onlyNums = value.replace(/[^0-9]/g, "");
       setFormData(prev => ({
@@ -108,6 +303,18 @@ export default function BarangayNew() {
         ...prev,
         [name]: value
       }));
+      
+      if ((name === 'id_type' || name === 'id_number' || name === 'first_name' || name === 'middle_name' || name === 'last_name') && formData.valid_id_file) {
+        const idType = name === 'id_type' ? value : formData.id_type;
+        const idNumber = name === 'id_number' ? value : formData.id_number;
+        const firstName = name === 'first_name' ? value : formData.first_name;
+        const middleName = name === 'middle_name' ? value : formData.middle_name;
+        const lastName = name === 'last_name' ? value : formData.last_name;
+        
+        if (idType && idNumber && firstName && lastName) {
+          verifyIDDocument(formData.valid_id_file, idType, idNumber, firstName, middleName, lastName);
+        }
+      }
     }
   };
 
@@ -630,12 +837,79 @@ export default function BarangayNew() {
                   <input
                     type="file"
                     name="valid_id_file"
+                    accept="image/*"
                     onChange={handleChange}
                     className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
                     style={{ fontFamily: COLORS.font }}
                   />
                 </div>
                 {errors.valid_id_file && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.valid_id_file}</p>}
+                
+                {formData.valid_id_file && (
+                  <div className="mt-3">
+                    {verificationStatus.isVerifying ? (
+                      <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-blue-800" style={{ fontFamily: COLORS.font }}>
+                            AI Document Verification in Progress
+                          </p>
+                          <p className="text-xs text-blue-600" style={{ fontFamily: COLORS.font }}>
+                            {verificationStatus.message}
+                          </p>
+                        </div>
+                      </div>
+                    ) : verificationStatus.isVerified ? (
+                      <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-green-800" style={{ fontFamily: COLORS.font }}>
+                            ID Verified Successfully
+                          </p>
+                          <p className="text-xs text-green-600" style={{ fontFamily: COLORS.font }}>
+                            {verificationStatus.message}
+                          </p>
+                        </div>
+                      </div>
+                    ) : verificationStatus.message ? (
+                      <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <AlertCircle className="w-5 h-5 text-amber-600" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-amber-800" style={{ fontFamily: COLORS.font }}>
+                            Verification Warning
+                          </p>
+                          <p className="text-xs text-amber-600" style={{ fontFamily: COLORS.font }}>
+                            {verificationStatus.message}
+                          </p>
+                        </div>
+                      </div>
+                    ) : formData.id_type && formData.id_number ? (
+                      <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <AlertCircle className="w-5 h-5 text-gray-600" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-800" style={{ fontFamily: COLORS.font }}>
+                            Ready for AI Verification
+                          </p>
+                          <p className="text-xs text-gray-600" style={{ fontFamily: COLORS.font }}>
+                            Verification will start automatically when ID details are provided in Step 3.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <AlertCircle className="w-5 h-5 text-blue-600" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-blue-800" style={{ fontFamily: COLORS.font }}>
+                            AI Verification Required
+                          </p>
+                          <p className="text-xs text-blue-600" style={{ fontFamily: COLORS.font }}>
+                            Please complete Step 3 (ID Type and Number) to enable automatic verification.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>

@@ -78,7 +78,7 @@ ChartJS.register(
   Filler
 );
 
-const API_BASE = "http://localhost/plms-latest/backend/business_permit";
+const API_BASE = "/backend/business_permit";
 
 // Business types and categories
 const BUSINESS_CATEGORIES = [

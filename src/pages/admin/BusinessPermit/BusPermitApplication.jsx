@@ -5,7 +5,7 @@ import {
   FileText,
 } from "lucide-react";
 
-const API_BUSINESS = "http://localhost/plms-latest/backend/business_permit/";
+const API_BUSINESS = "/backend/business_permit/";
 
 export default function BusPermitApplication() {
   const [selectedPermit, setSelectedPermit] = useState(null);
