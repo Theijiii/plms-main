@@ -138,56 +138,24 @@ $formData['user_id'] = $user_id;
 $formData['attachments'] = json_encode($uploadedFiles, JSON_UNESCAPED_SLASHES);
 
 // ====== GENERATE APPLICANT_ID ======
-// Simple rule: applicant_id = user_id (for logged-in users)
-// For guests, generate unique ID
-$applicant_id = 0;
+// Format: BC-YYYY-NNNNNN (e.g., BC-2026-123456)
+$applicant_id = '';
+$year = date('Y');
+$maxAttempts = 10;
 
-if ($user_id > 0) {
-    // User is logged in - use user_id as applicant_id
-    $applicant_id = $user_id;
+for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+    $randomNumber = str_pad(rand(100000, 999999), 6, '0', STR_PAD_LEFT);
+    $applicant_id = "BC-{$year}-{$randomNumber}";
     
-    // Also update user's information if needed
-    $updateUser = "UPDATE barangay_permit SET 
-                   first_name = ?, last_name = ?, email = ?, mobile_number = ?
-                   WHERE user_id = ?";
-    $stmtUpdate = $conn->prepare($updateUser);
-    $stmtUpdate->bind_param(
-        "ssssi",
-        $formData['first_name'],
-        $formData['last_name'],
-        $formData['email'],
-        $formData['mobile_number'],
-        $user_id
-    );
-    $stmtUpdate->execute();
-    $stmtUpdate->close();
-} else {
-    // Guest user - generate unique negative ID
-    // Check if this guest already has an applicant_id
-    $checkGuest = "SELECT applicant_id FROM barangay_permit 
-                   WHERE first_name = ? AND last_name = ? AND birthdate = ? 
-                   AND email = ? AND user_id = 0 
-                   ORDER BY created_at DESC LIMIT 1";
-    $stmtCheck = $conn->prepare($checkGuest);
-    $stmtCheck->bind_param(
-        "ssss",
-        $formData['first_name'],
-        $formData['last_name'],
-        $formData['birthdate'],
-        $formData['email']
-    );
+    $checkQuery = "SELECT applicant_id FROM barangay_permit WHERE applicant_id = ? LIMIT 1";
+    $stmtCheck = $conn->prepare($checkQuery);
+    $stmtCheck->bind_param("s", $applicant_id);
     $stmtCheck->execute();
     $checkResult = $stmtCheck->get_result();
     
-    if ($row = $checkResult->fetch_assoc()) {
-        // Same guest applying again - reuse their applicant_id
-        $applicant_id = $row['applicant_id'];
-    } else {
-        // New guest - generate negative ID
-        $maxQuery = "SELECT MIN(applicant_id) as min_id FROM barangay_permit WHERE applicant_id < 0";
-        $result = $conn->query($maxQuery);
-        $row = $result->fetch_assoc();
-        $applicant_id = $row['min_id'] ? $row['min_id'] - 1 : -1000;
+    if ($checkResult->num_rows === 0) {
+        $stmtCheck->close();
+        break;
     }
     $stmtCheck->close();
 }
@@ -239,9 +207,9 @@ if (!$stmt) {
 }
 
 $stmt->bind_param(
-    "iisssssssssssssssssssssssdsss",
+    "issssssssssssssssssssssssdsss",
     $formData['user_id'],             // i
-    $applicant_id,                    // i
+    $applicant_id,                    // s
     $formData['application_date'],    // s
     $formData['first_name'],          // s
     $formData['middle_name'],         // s

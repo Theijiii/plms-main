@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Upload, Check, X, Eye, FileText, Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import * as tf from '@tensorflow/tfjs';
+import { Upload, Check, X, Eye, FileText, AlertCircle, Loader2, Shield } from "lucide-react";
 import { createWorker } from 'tesseract.js';
 
 const COLORS = {
@@ -31,27 +30,23 @@ export default function BarangayNew() {
   const [modalTitle, setModalTitle] = useState('');
   const [agreeDeclaration, setAgreeDeclaration] = useState(false);
   const [showPreview, setShowPreview] = useState({});
+  
   const [verificationStatus, setVerificationStatus] = useState({
     isVerifying: false,
     isVerified: false,
-    message: '',
-    confidence: 0,
-    extractedData: null
+    verificationResults: null,
+    verificationError: null,
+    progress: 0
   });
-  const ocrWorkerRef = useRef(null);
-
-  const steps = [
-    { id: 1, title: 'Personal Info', description: 'Applicant Information' },
-    { id: 2, title: 'Address', description: 'Address Information' },
-    { id: 3, title: 'Clearance Details', description: 'Purpose & ID Info' },
-    { id: 4, title: 'Documents', description: 'Required Documents' },
-    { id: 5, title: 'Review', description: 'Review Application' }
-  ];
-
+  
+  // Initialize form data
   const [formData, setFormData] = useState({
+    // Permit Information
     permit_type: permitType,
     application_date: new Date().toISOString().split('T')[0],
     status: 'pending',
+    
+    // Applicant Information
     first_name: '',
     middle_name: '',
     last_name: '',
@@ -62,250 +57,46 @@ export default function BarangayNew() {
     gender: '',
     civil_status: '',
     nationality: '',
+    
+    // Address Information
     house_no: '',
     street: '',
     barangay: '',
     city_municipality: '',
     province: '',
     zip_code: '',
+    
+    // Clearance Details
     purpose: '',
     duration: '',
     id_type: '',
     id_number: '',
+    
+    // Additional fields
     clearance_fee: 0.00,
     receipt_number: '',
     user_id: null,
     applicant_signature: '',
+    
+    // File attachments
     valid_id_file: null,
     proof_of_residence_file: null,
     receipt_file: null,
     signature_file: null,
     photo_fingerprint_file: null,
+    
     attachments: '',
   });
 
-  useEffect(() => {
-    return () => {
-      if (ocrWorkerRef.current) {
-        ocrWorkerRef.current.terminate();
-      }
-    };
-  }, []);
+  const steps = [
+    { id: 1, title: 'Applicant Information', description: 'Personal details' },
+    { id: 2, title: 'Address Information', description: 'Where you live' },
+    { id: 3, title: 'Clearance Details', description: 'Purpose, ID, Duration' },
+    { id: 4, title: 'Uploads', description: 'Required documents' },
+    { id: 5, title: 'Review', description: 'Review your application' }
+  ];
 
-  const verifyIDDocument = async (file, idType, idNumber, firstName, middleName, lastName) => {
-    if (!file || !idType || !idNumber || !firstName || !lastName) {
-      return;
-    }
-
-    setVerificationStatus({
-      isVerifying: true,
-      isVerified: false,
-      message: 'Initializing AI verification...',
-      confidence: 0,
-      extractedData: null
-    });
-
-    try {
-      setVerificationStatus(prev => ({ ...prev, message: 'Loading OCR engine...' }));
-      
-      if (!ocrWorkerRef.current) {
-        ocrWorkerRef.current = await createWorker('eng');
-      }
-      const worker = ocrWorkerRef.current;
-
-      setVerificationStatus(prev => ({ ...prev, message: 'Extracting text from ID document...' }));
-      
-      const { data } = await worker.recognize(file);
-      const extractedText = data.text.toUpperCase();
-      
-      const idTypeNormalized = idType.toUpperCase();
-      const idNumberNormalized = idNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      
-      const idTypeKeywords = extractIDTypeKeywords(idTypeNormalized);
-      
-      let idTypeFound = false;
-      let idNumberFound = false;
-      let firstNameFound = false;
-      let middleNameFound = false;
-      let lastNameFound = false;
-      let confidence = 0;
-      
-      for (const keyword of idTypeKeywords) {
-        if (extractedText.includes(keyword)) {
-          idTypeFound = true;
-          confidence += 25;
-          break;
-        }
-      }
-      
-      const extractedNumbers = extractedText.replace(/[^A-Z0-9]/g, '');
-      if (extractedNumbers.includes(idNumberNormalized)) {
-        idNumberFound = true;
-        confidence += 30;
-      } else {
-        const similarity = calculateSimilarity(extractedNumbers, idNumberNormalized);
-        if (similarity > 0.7) {
-          idNumberFound = true;
-          confidence += Math.floor(similarity * 30);
-        }
-      }
-      
-      const firstNameNormalized = firstName.toUpperCase().trim();
-      const middleNameNormalized = middleName ? middleName.toUpperCase().trim() : '';
-      const lastNameNormalized = lastName.toUpperCase().trim();
-      
-      if (extractedText.includes(firstNameNormalized)) {
-        firstNameFound = true;
-        confidence += 15;
-      } else {
-        const firstNameSimilarity = calculateStringSimilarity(extractedText, firstNameNormalized);
-        if (firstNameSimilarity > 0.6) {
-          firstNameFound = true;
-          confidence += Math.floor(firstNameSimilarity * 15);
-        }
-      }
-      
-      if (extractedText.includes(lastNameNormalized)) {
-        lastNameFound = true;
-        confidence += 15;
-      } else {
-        const lastNameSimilarity = calculateStringSimilarity(extractedText, lastNameNormalized);
-        if (lastNameSimilarity > 0.6) {
-          lastNameFound = true;
-          confidence += Math.floor(lastNameSimilarity * 15);
-        }
-      }
-      
-      if (middleNameNormalized) {
-        if (extractedText.includes(middleNameNormalized)) {
-          middleNameFound = true;
-          confidence += 10;
-        } else {
-          const middleNameSimilarity = calculateStringSimilarity(extractedText, middleNameNormalized);
-          if (middleNameSimilarity > 0.6) {
-            middleNameFound = true;
-            confidence += Math.floor(middleNameSimilarity * 10);
-          }
-        }
-      } else {
-        middleNameFound = true;
-      }
-      
-      if (data.confidence > 60) {
-        confidence += 5;
-      }
-      
-      const isVerified = idTypeFound && idNumberFound && firstNameFound && lastNameFound && middleNameFound && confidence >= 70;
-      
-      const missingFields = [];
-      if (!idTypeFound) missingFields.push('ID type');
-      if (!idNumberFound) missingFields.push('ID number');
-      if (!firstNameFound) missingFields.push('first name');
-      if (!middleNameFound) missingFields.push('middle name');
-      if (!lastNameFound) missingFields.push('last name');
-      
-      setVerificationStatus({
-        isVerifying: false,
-        isVerified: isVerified,
-        message: isVerified 
-          ? `✓ ID verified successfully! All details match. (${confidence}% confidence)` 
-          : `⚠ Verification incomplete. ${missingFields.length > 0 ? `Could not clearly detect: ${missingFields.join(', ')}. ` : ''}Please ensure the ID is clear and readable.`,
-        confidence: confidence,
-        extractedData: {
-          idTypeFound,
-          idNumberFound,
-          firstNameFound,
-          middleNameFound,
-          lastNameFound,
-          text: extractedText.substring(0, 200)
-        }
-      });
-      
-    } catch (error) {
-      console.error('ID Verification Error:', error);
-      setVerificationStatus({
-        isVerifying: false,
-        isVerified: false,
-        message: 'Verification failed. Please ensure the image is clear and try again.',
-        confidence: 0,
-        extractedData: null
-      });
-    }
-  };
-
-  const extractIDTypeKeywords = (idType) => {
-    const keywordMap = {
-      'PHILIPPINE NATIONAL ID': ['PHILSYS', 'NATIONAL ID', 'PSN'],
-      'DRIVER\'S LICENSE': ['DRIVER', 'LICENSE', 'LTO', 'LAND TRANSPORTATION'],
-      'PASSPORT': ['PASSPORT', 'REPUBLIC OF THE PHILIPPINES', 'DFA'],
-      'UMID': ['UMID', 'UNIFIED'],
-      'VOTER': ['VOTER', 'COMELEC'],
-      'POSTAL': ['POSTAL', 'PHLPOST'],
-      'PRC': ['PRC', 'PROFESSIONAL REGULATION'],
-      'SENIOR CITIZEN': ['SENIOR', 'CITIZEN', 'OSCA'],
-      'PWD': ['PWD', 'DISABILITY'],
-      'BARANGAY': ['BARANGAY', 'BRGY'],
-      'SSS': ['SSS', 'SOCIAL SECURITY'],
-      'PHILHEALTH': ['PHILHEALTH', 'PHIC'],
-      'PAG-IBIG': ['PAG-IBIG', 'HDMF'],
-      'TIN': ['TIN', 'TAX IDENTIFICATION']
-    };
-    
-    for (const [key, keywords] of Object.entries(keywordMap)) {
-      if (idType.includes(key)) {
-        return keywords;
-      }
-    }
-    
-    return [idType.split(' ')[0]];
-  };
-
-  const calculateSimilarity = (str1, str2) => {
-    const longer = str1.length > str2.length ? str1 : str2;
-    const shorter = str1.length > str2.length ? str2 : str1;
-    
-    if (longer.length === 0) return 1.0;
-    
-    let matches = 0;
-    for (let i = 0; i < shorter.length; i++) {
-      if (longer.includes(shorter[i])) {
-        matches++;
-      }
-    }
-    
-    return matches / longer.length;
-  };
-
-  const calculateStringSimilarity = (text, searchString) => {
-    if (!text || !searchString) return 0;
-    if (text.includes(searchString)) return 1.0;
-    
-    const words = text.split(/\s+/);
-    let bestMatch = 0;
-    
-    for (const word of words) {
-      if (word.length < 2) continue;
-      
-      const cleanWord = word.replace(/[^A-Z]/g, '');
-      const cleanSearch = searchString.replace(/[^A-Z]/g, '');
-      
-      if (cleanWord === cleanSearch) return 1.0;
-      
-      let matches = 0;
-      const minLen = Math.min(cleanWord.length, cleanSearch.length);
-      
-      for (let i = 0; i < minLen; i++) {
-        if (cleanWord[i] === cleanSearch[i]) matches++;
-      }
-      
-      const similarity = matches / Math.max(cleanWord.length, cleanSearch.length);
-      if (similarity > bestMatch) bestMatch = similarity;
-    }
-    
-    return bestMatch;
-  };
-
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { name, value, type, files } = e.target;
     
     if (type === 'file') {
@@ -320,21 +111,10 @@ export default function BarangayNew() {
         setVerificationStatus({
           isVerifying: false,
           isVerified: false,
-          message: '',
-          confidence: 0,
-          extractedData: null
+          verificationResults: null,
+          verificationError: null,
+          progress: 0
         });
-        
-        if (formData.id_type && formData.id_number && formData.first_name && formData.last_name) {
-          verifyIDDocument(
-            file, 
-            formData.id_type, 
-            formData.id_number, 
-            formData.first_name, 
-            formData.middle_name, 
-            formData.last_name
-          );
-        }
       }
     } else if (name === "mobile_number") {
       const onlyNums = value.replace(/[^0-9]/g, "");
@@ -347,18 +127,6 @@ export default function BarangayNew() {
         ...prev,
         [name]: value
       }));
-      
-      if ((name === 'id_type' || name === 'id_number' || name === 'first_name' || name === 'middle_name' || name === 'last_name') && formData.valid_id_file) {
-        const idType = name === 'id_type' ? value : formData.id_type;
-        const idNumber = name === 'id_number' ? value : formData.id_number;
-        const firstName = name === 'first_name' ? value : formData.first_name;
-        const middleName = name === 'middle_name' ? value : formData.middle_name;
-        const lastName = name === 'last_name' ? value : formData.last_name;
-        
-        if (idType && idNumber && firstName && lastName) {
-          verifyIDDocument(formData.valid_id_file, idType, idNumber, firstName, middleName, lastName);
-        }
-      }
     }
   };
 
@@ -380,6 +148,268 @@ export default function BarangayNew() {
       URL.revokeObjectURL(showPreview.url);
     }
     setShowPreview({});
+  };
+
+  const normalizeText = (text) => {
+    return text.toLowerCase().replace(/[^a-z0-9]/g, '');
+  };
+
+  const fuzzyMatch = (str1, str2, threshold = 0.7) => {
+    const s1 = normalizeText(str1);
+    const s2 = normalizeText(str2);
+    
+    if (s1 === s2) return 1.0;
+    if (s1.includes(s2) || s2.includes(s1)) return 0.9;
+    
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    
+    if (longer.length === 0) return 0.0;
+    
+    let matches = 0;
+    for (let i = 0; i < shorter.length; i++) {
+      if (longer.includes(shorter[i])) matches++;
+    }
+    
+    const similarity = matches / longer.length;
+    return similarity >= threshold ? similarity : 0;
+  };
+
+  const ID_TYPE_PATTERNS = {
+    "Philippine National ID (PhilSys ID)": ["philsys", "philippine national id", "national id", "phil id", "republic of the philippines", "pambansang pagkakakilanlan", "philippine identification card", "pcn"],
+    "Passport (DFA)": ["passport", "dfa", "department of foreign affairs", "p <", "republic of the philippines passport"],
+    "Driver's License (LTO)": ["driver", "license", "licence", "lto", "land transportation", "dl no"],
+    "UMID": ["umid", "unified multi-purpose id", "sss", "gsis"],
+    "PRC ID": ["prc", "professional regulation commission", "professional id"],
+    "Voter's ID": ["voter", "comelec", "commission on elections", "voter's identification"],
+    "COMELEC Voter's Certificate": ["comelec", "voter", "certificate", "commission on elections"],
+    "Postal ID (PhilPost)": ["postal", "philpost", "philippine postal"],
+    "Senior Citizen ID": ["senior citizen", "osca", "office of senior citizen"],
+    "PWD ID": ["pwd", "person with disability", "disabled"],
+    "SSS ID": ["sss", "social security system", "social security"],
+    "GSIS eCard": ["gsis", "government service insurance", "ecard"],
+    "PhilHealth ID": ["philhealth", "philippine health", "health insurance"],
+    "Pag-IBIG ID": ["pag-ibig", "pagibig", "hdmf", "home development mutual fund"],
+    "TIN ID": ["tin", "tax identification number", "bir", "bureau of internal revenue"],
+    "Barangay ID": ["barangay id", "barangay identification", "brgy id"],
+    "Barangay Clearance": ["barangay clearance", "brgy clearance"],
+    "Police Clearance": ["police clearance", "pnp clearance", "philippine national police"],
+    "NBI Clearance": ["nbi clearance", "national bureau of investigation"],
+    "Solo Parent ID": ["solo parent", "single parent"],
+    "Indigenous People's (IP) ID": ["indigenous people", "ip id", "ncip", "national commission on indigenous"],
+    "School ID": ["school id", "student id", "university", "college", "student number"],
+    "Company / Employee ID": ["company id", "employee id", "employee no", "emp no"],
+    "Government Office ID": ["government", "office id", "gov id"],
+    "Firearms License ID": ["firearms", "license to own and possess firearms", "ltopf"],
+    "Seafarer's Identification Record Book (SIRB)": ["seafarer", "sirb", "marina", "maritime"],
+    "OWWA ID": ["owwa", "overseas workers welfare", "ofw"],
+    "Alien Certificate of Registration (ACR I-Card)": ["acr", "alien certificate", "i-card", "bureau of immigration"]
+  };
+
+  const detectIDType = (extractedText) => {
+    const textLower = extractedText.toLowerCase();
+    const detectedTypes = [];
+
+    for (const [idType, keywords] of Object.entries(ID_TYPE_PATTERNS)) {
+      let matchCount = 0;
+      for (const keyword of keywords) {
+        if (textLower.includes(keyword.toLowerCase())) {
+          matchCount++;
+        }
+      }
+      if (matchCount > 0) {
+        detectedTypes.push({
+          type: idType,
+          confidence: matchCount / keywords.length,
+          matchCount: matchCount
+        });
+      }
+    }
+
+    detectedTypes.sort((a, b) => {
+      if (b.matchCount !== a.matchCount) {
+        return b.matchCount - a.matchCount;
+      }
+      return b.confidence - a.confidence;
+    });
+
+    return detectedTypes.length > 0 ? detectedTypes[0] : null;
+  };
+
+  const verifyDocument = async () => {
+    if (!formData.valid_id_file) {
+      setVerificationStatus(prev => ({
+        ...prev,
+        verificationError: 'Please upload a valid ID first'
+      }));
+      return;
+    }
+
+    if (!formData.first_name || !formData.last_name || !formData.id_number) {
+      setVerificationStatus(prev => ({
+        ...prev,
+        verificationError: 'Please fill in First Name, Last Name, and ID Number before verification'
+      }));
+      return;
+    }
+
+    if (!formData.id_type) {
+      setVerificationStatus(prev => ({
+        ...prev,
+        verificationError: 'Please select an ID type before verification'
+      }));
+      return;
+    }
+
+    setVerificationStatus({
+      isVerifying: true,
+      isVerified: false,
+      verificationResults: null,
+      verificationError: null,
+      progress: 0
+    });
+
+    try {
+      const worker = await createWorker('eng', 1, {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            setVerificationStatus(prev => ({
+              ...prev,
+              progress: Math.round(m.progress * 100)
+            }));
+          }
+        }
+      });
+
+      setVerificationStatus(prev => ({ ...prev, progress: 10 }));
+
+      const { data: { text } } = await worker.recognize(formData.valid_id_file);
+      await worker.terminate();
+
+      setVerificationStatus(prev => ({ ...prev, progress: 90 }));
+
+      const extractedText = text.toLowerCase();
+      
+      const firstNameMatch = fuzzyMatch(formData.first_name, extractedText);
+      const lastNameMatch = fuzzyMatch(formData.last_name, extractedText);
+      const middleNameMatch = formData.middle_name ? 
+        fuzzyMatch(formData.middle_name, extractedText) : null;
+      
+      const idNumberNormalized = normalizeText(formData.id_number);
+      const idNumberMatch = extractedText.includes(idNumberNormalized) || 
+        fuzzyMatch(formData.id_number, extractedText) > 0.8;
+
+      let birthdateMatch = null;
+      if (formData.birthdate) {
+        const birthdate = new Date(formData.birthdate);
+        const month = String(birthdate.getMonth() + 1).padStart(2, '0');
+        const day = String(birthdate.getDate()).padStart(2, '0');
+        const dayNoZero = String(birthdate.getDate());
+        const year = birthdate.getFullYear();
+        
+        const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 
+                           'july', 'august', 'september', 'october', 'november', 'december'];
+        const monthNamesShort = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 
+                                 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        
+        const monthName = monthNames[birthdate.getMonth()];
+        const monthNameShort = monthNamesShort[birthdate.getMonth()];
+        
+        const formats = [
+          `${month}/${day}/${year}`,
+          `${month}-${day}-${year}`,
+          `${day}/${month}/${year}`,
+          `${day}-${month}-${year}`,
+          `${year}/${month}/${day}`,
+          `${year}-${month}-${day}`,
+          `${month}${day}${year}`,
+          `${day}${month}${year}`,
+          `${year}${month}${day}`,
+          `${monthName} ${day}, ${year}`,
+          `${monthName} ${dayNoZero}, ${year}`,
+          `${day} ${monthName} ${year}`,
+          `${dayNoZero} ${monthName} ${year}`,
+          `${monthNameShort} ${day}, ${year}`,
+          `${monthNameShort} ${dayNoZero}, ${year}`,
+          `${day} ${monthNameShort} ${year}`,
+          `${dayNoZero} ${monthNameShort} ${year}`,
+          `${monthName} ${day} ${year}`,
+          `${monthName} ${dayNoZero} ${year}`,
+          `${day} ${monthName}, ${year}`,
+          `${dayNoZero} ${monthName}, ${year}`,
+          `${monthNameShort} ${day} ${year}`,
+          `${monthNameShort} ${dayNoZero} ${year}`,
+          `${day} ${monthNameShort}, ${year}`,
+          `${dayNoZero} ${monthNameShort}, ${year}`
+        ];
+        
+        birthdateMatch = formats.some(format => 
+          text.includes(format) || extractedText.includes(format.toLowerCase())
+        );
+      }
+
+      const detectedID = detectIDType(text);
+      const idTypeMatch = detectedID && detectedID.type === formData.id_type;
+
+      const results = {
+        firstName: {
+          matched: firstNameMatch > 0,
+          confidence: firstNameMatch,
+          value: formData.first_name
+        },
+        lastName: {
+          matched: lastNameMatch > 0,
+          confidence: lastNameMatch,
+          value: formData.last_name
+        },
+        middleName: formData.middle_name ? {
+          matched: middleNameMatch > 0,
+          confidence: middleNameMatch,
+          value: formData.middle_name
+        } : null,
+        idNumber: {
+          matched: idNumberMatch,
+          confidence: idNumberMatch ? 1.0 : 0,
+          value: formData.id_number
+        },
+        birthdate: formData.birthdate ? {
+          matched: birthdateMatch,
+          value: formData.birthdate
+        } : null,
+        idType: {
+          detected: detectedID ? detectedID.type : 'Unknown',
+          selected: formData.id_type,
+          matched: idTypeMatch,
+          confidence: detectedID ? detectedID.confidence : 0
+        },
+        extractedText: text
+      };
+
+      const allMatched = results.firstName.matched && 
+                        results.lastName.matched && 
+                        results.idNumber.matched &&
+                        results.idType.matched &&
+                        (!formData.middle_name || results.middleName.matched) &&
+                        (!formData.birthdate || results.birthdate.matched);
+
+      setVerificationStatus({
+        isVerifying: false,
+        isVerified: allMatched,
+        verificationResults: results,
+        verificationError: allMatched ? null : 'Some information does not match the ID',
+        progress: 100
+      });
+
+    } catch (error) {
+      console.error('Verification error:', error);
+      setVerificationStatus({
+        isVerifying: false,
+        isVerified: false,
+        verificationResults: null,
+        verificationError: 'Failed to verify document: ' + error.message,
+        progress: 0
+      });
+    }
   };
 
   const [errors, setErrors] = useState({});
@@ -410,6 +440,9 @@ export default function BarangayNew() {
     if (step === 4) {
       if (!formData.valid_id_file) newErrors.valid_id_file = 'Valid ID is required';
       if (!formData.signature_file) newErrors.signature_file = 'Applicant Signature is required';
+      if (formData.valid_id_file && !verificationStatus.isVerified) {
+        newErrors.verification_required = 'You must verify your ID and it must be VALID to proceed';
+      }
     }
 
     setErrors(newErrors);
@@ -444,6 +477,7 @@ export default function BarangayNew() {
     if (step === 4) {
       if (!formData.valid_id_file) return false;
       if (!formData.signature_file) return false;
+      if (!verificationStatus.isVerified) return false;
       return true;
     }
     return true;
@@ -829,33 +863,65 @@ export default function BarangayNew() {
               </div>
               <div>
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Valid ID Type *</label>
-                <select name="id_type" value={formData.id_type} onChange={handleChange} className={`w-full p-3 border border-black rounded-lg ${errors.id_type ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} >
-                  <option value="">Select ID type</option>
-                  <optgroup label="Primary Valid Government-Issued IDs">
-                    <option value="Philippine National ID (PhilSys ID)">Philippine National ID (PhilSys ID)</option>
-                    <option value="Driver's License (LTO)">Driver's License (LTO)</option>
-                    <option value="Passport (DFA)">Passport (DFA)</option>
-                    <option value="UMID">UMID</option>
-                    <option value="Voter's ID or COMELEC Voter's Certificate">Voter's ID or COMELEC Voter's Certificate</option>
-                    <option value="Postal ID (PhilPost)">Postal ID (PhilPost)</option>
-                    <option value="PRC ID">PRC ID</option>
-                    <option value="Senior Citizen ID">Senior Citizen ID</option>
-                    <option value="PWD ID">PWD ID</option>
-                    <option value="Barangay ID">Barangay ID</option>
-                  </optgroup>
-                  <optgroup label="Secondary / Supporting IDs">
-                    <option value="School ID">School ID</option>
-                    <option value="Company / Employee ID">Company / Employee ID</option>
-                    <option value="Police Clearance or NBI Clearance">Police Clearance or NBI Clearance</option>
-                    <option value="Tax Identification Number (TIN) ID">Tax Identification Number (TIN) ID</option>
-                    <option value="PhilHealth ID">PhilHealth ID</option>
-                    <option value="Pag-IBIG ID">Pag-IBIG ID</option>
-                    <option value="GSIS eCard">GSIS eCard</option>
-                    <option value="Solo Parent ID">Solo Parent ID</option>
-                    <option value="Indigenous People's (IP) ID">Indigenous People's (IP) ID</option>
-                    <option value="Firearms License ID">Firearms License ID</option>
-                  </optgroup>
-                </select>
+<select
+  name="id_type"
+  value={formData.id_type}
+  onChange={handleChange}
+  className={`w-full p-3 border border-black rounded-lg ${
+    errors.id_type ? 'border-red-500' : ''
+  }`}
+  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+>
+  <option value="">Select ID type</option>
+
+  <optgroup label="Primary Valid Government-Issued IDs">
+    <option value="Philippine National ID (PhilSys ID)">
+      Philippine National ID (PhilSys ID)
+    </option>
+    <option value="Passport (DFA)">Passport (DFA)</option>
+    <option value="Driver's License (LTO)">Driver's License (LTO)</option>
+    <option value="UMID">UMID (SSS / GSIS)</option>
+    <option value="PRC ID">PRC ID</option>
+    <option value="Voter's ID">Voter's ID</option>
+    <option value="COMELEC Voter's Certificate">
+      COMELEC Voter's Certificate
+    </option>
+    <option value="Postal ID (PhilPost)">Postal ID (PhilPost)</option>
+    <option value="Senior Citizen ID">Senior Citizen ID</option>
+    <option value="PWD ID">PWD ID</option>
+  </optgroup>
+
+  <optgroup label="Secondary / Supporting Government IDs">
+    <option value="SSS ID">SSS ID</option>
+    <option value="GSIS eCard">GSIS eCard</option>
+    <option value="PhilHealth ID">PhilHealth ID</option>
+    <option value="Pag-IBIG ID">Pag-IBIG ID</option>
+    <option value="TIN ID">Tax Identification Number (TIN) ID</option>
+    <option value="Barangay ID">Barangay ID</option>
+    <option value="Barangay Clearance">Barangay Clearance</option>
+    <option value="Police Clearance">Police Clearance</option>
+    <option value="NBI Clearance">NBI Clearance</option>
+    <option value="Solo Parent ID">Solo Parent ID</option>
+    <option value="Indigenous People's (IP) ID">
+      Indigenous People's (IP) ID
+    </option>
+  </optgroup>
+
+  <optgroup label="Other Acceptable IDs (Conditional)">
+    <option value="School ID">School ID</option>
+    <option value="Company / Employee ID">Company / Employee ID</option>
+    <option value="Government Office ID">Government Office ID</option>
+    <option value="Firearms License ID">Firearms License ID</option>
+    <option value="Seafarer's Identification Record Book (SIRB)">
+      Seafarer's Identification Record Book (SIRB)
+    </option>
+    <option value="OWWA ID">OWWA ID</option>
+    <option value="Alien Certificate of Registration (ACR I-Card)">
+      Alien Certificate of Registration (ACR I-Card)
+    </option>
+  </optgroup>
+</select>
+
                 {errors.id_type && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.id_type}</p>}
               </div>
               <div>
@@ -881,8 +947,8 @@ export default function BarangayNew() {
                   <input
                     type="file"
                     name="valid_id_file"
-                    accept="image/*"
                     onChange={handleChange}
+                    accept="image/*"
                     className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
                     style={{ fontFamily: COLORS.font }}
                   />
@@ -890,68 +956,228 @@ export default function BarangayNew() {
                 {errors.valid_id_file && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.valid_id_file}</p>}
                 
                 {formData.valid_id_file && (
-                  <div className="mt-3">
-                    {verificationStatus.isVerifying ? (
-                      <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-blue-800" style={{ fontFamily: COLORS.font }}>
-                            AI Document Verification in Progress
-                          </p>
-                          <p className="text-xs text-blue-600" style={{ fontFamily: COLORS.font }}>
-                            {verificationStatus.message}
+                  <div className="mt-4 p-4 border border-blue-200 rounded-lg bg-blue-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-semibold text-blue-900" style={{ fontFamily: COLORS.font }}>
+                          AI Document Verification
+                        </h4>
+                      </div>
+                      {!verificationStatus.isVerifying && !verificationStatus.isVerified && (
+                        <button
+                          type="button"
+                          onClick={verifyDocument}
+                          disabled={!formData.first_name || !formData.last_name || !formData.id_number || !formData.id_type}
+                          className="px-4 py-2 rounded-lg font-medium text-white transition-colors duration-300 flex items-center gap-2"
+                          style={{ 
+                            background: (!formData.first_name || !formData.last_name || !formData.id_number || !formData.id_type) ? '#9CA3AF' : COLORS.primary,
+                            cursor: (!formData.first_name || !formData.last_name || !formData.id_number || !formData.id_type) ? 'not-allowed' : 'pointer'
+                          }}
+                          onMouseEnter={e => {
+                            if (formData.first_name && formData.last_name && formData.id_number && formData.id_type) {
+                              e.currentTarget.style.background = COLORS.accent;
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (formData.first_name && formData.last_name && formData.id_number && formData.id_type) {
+                              e.currentTarget.style.background = COLORS.primary;
+                            }
+                          }}
+                        >
+                          <Shield className="w-4 h-4" />
+                          Verify ID
+                        </button>
+                      )}
+                    </div>
+
+                    {verificationStatus.isVerifying && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                          <p className="text-sm text-blue-800" style={{ fontFamily: COLORS.font }}>
+                            Verifying document... {verificationStatus.progress}%
                           </p>
                         </div>
-                      </div>
-                    ) : verificationStatus.isVerified ? (
-                      <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <CheckCircle2 className="w-5 h-5 text-green-600" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-green-800" style={{ fontFamily: COLORS.font }}>
-                            ID Verified Successfully
-                          </p>
-                          <p className="text-xs text-green-600" style={{ fontFamily: COLORS.font }}>
-                            {verificationStatus.message}
-                          </p>
+                        <div className="w-full bg-blue-200 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${verificationStatus.progress}%` }}
+                          />
                         </div>
                       </div>
-                    ) : verificationStatus.message ? (
-                      <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                        <AlertCircle className="w-5 h-5 text-amber-600" />
+                    )}
+
+                    {verificationStatus.verificationError && !verificationStatus.isVerifying && (
+                      <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-amber-800" style={{ fontFamily: COLORS.font }}>
-                            Verification Warning
+                          <p className="text-sm font-medium text-red-800" style={{ fontFamily: COLORS.font }}>
+                            Verification Failed
                           </p>
-                          <p className="text-xs text-amber-600" style={{ fontFamily: COLORS.font }}>
-                            {verificationStatus.message}
-                          </p>
-                        </div>
-                      </div>
-                    ) : formData.id_type && formData.id_number ? (
-                      <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                        <AlertCircle className="w-5 h-5 text-gray-600" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-800" style={{ fontFamily: COLORS.font }}>
-                            Ready for AI Verification
-                          </p>
-                          <p className="text-xs text-gray-600" style={{ fontFamily: COLORS.font }}>
-                            Verification will start automatically when ID details are provided in Step 3.
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <AlertCircle className="w-5 h-5 text-blue-600" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-blue-800" style={{ fontFamily: COLORS.font }}>
-                            AI Verification Required
-                          </p>
-                          <p className="text-xs text-blue-600" style={{ fontFamily: COLORS.font }}>
-                            Please complete Step 3 (ID Type and Number) to enable automatic verification.
+                          <p className="text-xs text-red-600 mt-1" style={{ fontFamily: COLORS.font }}>
+                            {verificationStatus.verificationError}
                           </p>
                         </div>
                       </div>
                     )}
+
+                    {verificationStatus.verificationResults && !verificationStatus.isVerifying && (
+                      <div className="space-y-2">
+                        <div className={`p-4 rounded-lg border-2 ${verificationStatus.isVerified ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'}`}>
+                          <div className="flex items-center gap-3 mb-3">
+                            {verificationStatus.isVerified ? (
+                              <>
+                                <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
+                                  <Check className="w-7 h-7 text-white" />
+                                </div>
+                                <div>
+                                  <p className="text-xl font-bold text-green-800" style={{ fontFamily: COLORS.font }}>
+                                    VALID
+                                  </p>
+                                  <p className="text-sm text-green-700" style={{ fontFamily: COLORS.font }}>
+                                    ID verification successful
+                                  </p>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center">
+                                  <X className="w-7 h-7 text-white" />
+                                </div>
+                                <div>
+                                  <p className="text-xl font-bold text-red-800" style={{ fontFamily: COLORS.font }}>
+                                    INVALID
+                                  </p>
+                                  <p className="text-sm text-red-700" style={{ fontFamily: COLORS.font }}>
+                                    Information does not match ID
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          
+                          <div className="border-t pt-3 space-y-1 text-xs" style={{ fontFamily: COLORS.font, borderColor: verificationStatus.isVerified ? '#22c55e' : '#ef4444' }}>
+                            <p className="font-semibold mb-2" style={{ color: verificationStatus.isVerified ? '#166534' : '#991b1b' }}>Verification Details:</p>
+                            
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-medium">ID Type:</span>
+                                <div className="text-[10px] mt-0.5">
+                                  <div>Selected: {verificationStatus.verificationResults.idType.selected}</div>
+                                  <div>Detected: {verificationStatus.verificationResults.idType.detected}</div>
+                                </div>
+                              </div>
+                              {verificationStatus.verificationResults.idType.matched ? (
+                                <Check className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <X className="w-4 h-4 text-red-600" />
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span>First Name: {verificationStatus.verificationResults.firstName.value}</span>
+                              {verificationStatus.verificationResults.firstName.matched ? (
+                                <Check className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <X className="w-4 h-4 text-red-600" />
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>Last Name: {verificationStatus.verificationResults.lastName.value}</span>
+                              {verificationStatus.verificationResults.lastName.matched ? (
+                                <Check className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <X className="w-4 h-4 text-red-600" />
+                              )}
+                            </div>
+                            {verificationStatus.verificationResults.middleName && (
+                              <div className="flex items-center justify-between">
+                                <span>Middle Name: {verificationStatus.verificationResults.middleName.value}</span>
+                                {verificationStatus.verificationResults.middleName.matched ? (
+                                  <Check className="w-4 h-4 text-green-600" />
+                                ) : (
+                                  <X className="w-4 h-4 text-red-600" />
+                                )}
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span>ID Number: {verificationStatus.verificationResults.idNumber.value}</span>
+                              {verificationStatus.verificationResults.idNumber.matched ? (
+                                <Check className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <X className="w-4 h-4 text-red-600" />
+                              )}
+                            </div>
+                            {verificationStatus.verificationResults.birthdate && (
+                              <div className="flex items-center justify-between">
+                                <span>Birthdate: {new Date(verificationStatus.verificationResults.birthdate.value).toLocaleDateString()}</span>
+                                {verificationStatus.verificationResults.birthdate.matched ? (
+                                  <Check className="w-4 h-4 text-green-600" />
+                                ) : (
+                                  <X className="w-4 h-4 text-red-600" />
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {!verificationStatus.isVerified && (
+                            <div className="mt-3 p-2 bg-red-100 rounded border border-red-300">
+                              <p className="text-xs text-red-800 font-medium" style={{ fontFamily: COLORS.font }}>
+                                ⚠️ You cannot proceed until your ID is verified as VALID. Issues found:
+                              </p>
+                              <ul className="text-xs text-red-700 mt-1 ml-4 list-disc" style={{ fontFamily: COLORS.font }}>
+                                {!verificationStatus.verificationResults.idType.matched && (
+                                  <li className="font-semibold">
+                                    ID Type Mismatch: You selected "{verificationStatus.verificationResults.idType.selected}" but the system detected "{verificationStatus.verificationResults.idType.detected}". Please select the correct ID type.
+                                  </li>
+                                )}
+                                {!verificationStatus.verificationResults.firstName.matched && (
+                                  <li>First Name does not match the ID</li>
+                                )}
+                                {!verificationStatus.verificationResults.lastName.matched && (
+                                  <li>Last Name does not match the ID</li>
+                                )}
+                                {verificationStatus.verificationResults.middleName && !verificationStatus.verificationResults.middleName.matched && (
+                                  <li>Middle Name does not match the ID</li>
+                                )}
+                                {!verificationStatus.verificationResults.idNumber.matched && (
+                                  <li>ID Number does not match the ID</li>
+                                )}
+                                {verificationStatus.verificationResults.birthdate && !verificationStatus.verificationResults.birthdate.matched && (
+                                  <li>Birthdate does not match the ID</li>
+                                )}
+                                <li className="mt-1">Ensure your ID image is clear and readable</li>
+                                <li>Verify the information you entered exactly matches your ID</li>
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <button
+                          type="button"
+                          onClick={verifyDocument}
+                          className="text-xs text-blue-600 hover:text-blue-800 underline font-medium"
+                          style={{ fontFamily: COLORS.font }}
+                        >
+                          Re-verify Document
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {errors.verification_required && (
+                  <div className="mt-2 flex items-start gap-2 p-3 bg-red-50 border-2 border-red-500 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-red-800" style={{ fontFamily: COLORS.font }}>
+                        Verification Required
+                      </p>
+                      <p className="text-xs text-red-700 mt-1" style={{ fontFamily: COLORS.font }}>
+                        {errors.verification_required}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1131,30 +1357,63 @@ export default function BarangayNew() {
                   <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Uploaded Documents</h5>
                   <div className="space-y-4">
                     {/* Valid ID */}
-                    <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
-                      <div className="flex items-center">
-                        {formData.valid_id_file ? (
-                          <Check className="w-5 h-5 text-green-600 mr-3" />
-                        ) : (
-                          <X className="w-5 h-5 text-red-600 mr-3" />
-                        )}
-                        <div>
-                          <span className="font-medium">Valid ID:</span>
-                          <p className="text-sm text-gray-600">
-                            {formData.valid_id_file ? formData.valid_id_file.name : 'Not uploaded'}
-                          </p>
+                    <div className="p-3 border border-gray-300 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center">
+                          {formData.valid_id_file ? (
+                            <Check className="w-5 h-5 text-green-600 mr-3" />
+                          ) : (
+                            <X className="w-5 h-5 text-red-600 mr-3" />
+                          )}
+                          <div>
+                            <span className="font-medium">Valid ID:</span>
+                            <p className="text-sm text-gray-600">
+                              {formData.valid_id_file ? formData.valid_id_file.name : 'Not uploaded'}
+                            </p>
+                          </div>
                         </div>
+                        {formData.valid_id_file && (
+                          <button
+                            type="button"
+                            onClick={() => previewFile(formData.valid_id_file)}
+                            className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                            style={{ color: COLORS.secondary }}
+                          >
+                            <Eye className="w-4 h-4" />
+                            Preview
+                          </button>
+                        )}
                       </div>
+                      
                       {formData.valid_id_file && (
-                        <button
-                          type="button"
-                          onClick={() => previewFile(formData.valid_id_file)}
-                          className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                          style={{ color: COLORS.secondary }}
-                        >
-                          <Eye className="w-4 h-4" />
-                          Preview
-                        </button>
+                        <div className="mt-2">
+                          {verificationStatus.isVerified ? (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border-2 border-green-500 rounded">
+                              <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                                <Check className="w-4 h-4 text-white" />
+                              </div>
+                              <span className="text-sm text-green-800 font-bold" style={{ fontFamily: COLORS.font }}>
+                                VALID - AI Verified
+                              </span>
+                            </div>
+                          ) : verificationStatus.verificationResults ? (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border-2 border-red-500 rounded">
+                              <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                                <X className="w-4 h-4 text-white" />
+                              </div>
+                              <span className="text-sm text-red-800 font-bold" style={{ fontFamily: COLORS.font }}>
+                                INVALID - Information does not match
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border-2 border-red-500 rounded">
+                              <AlertCircle className="w-5 h-5 text-red-600" />
+                              <span className="text-sm text-red-800 font-bold" style={{ fontFamily: COLORS.font }}>
+                                NOT VERIFIED - Go back to step 4 to verify
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
 
