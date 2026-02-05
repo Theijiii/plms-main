@@ -86,7 +86,7 @@ export default function BusPermitType({ business_permit_id }) {
 
         {/* No button - Blue */}
         <button
-          onClick={() => navigate('/user/barangay/type')}
+          onClick={() => navigate('/user/barangay/new')}
           className="bg-[#4A90E2] hover:bg-[#FDA811] text-white font-semibold py-3 px-8 rounded-lg transition-colors"
         >
           No

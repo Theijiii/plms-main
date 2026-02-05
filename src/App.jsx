@@ -34,7 +34,6 @@ import FranchiseNew from "./pages/user/FranchisePermit/FranchiseNew"
 
 
 import BarangayNew from "./pages/user/BarangayPermit/BarangayNew"
-import BarangayPermitType from "./pages/user/BarangayPermit/BarangayPermitType"
 import UserTracker from "./pages/user/PermitTracker/UserTracker"
 import UserGeneralSettings from "./pages/user/Settings/General"
 import UserSecuritySettings from "./pages/user/Settings/Security"
@@ -120,7 +119,6 @@ function App() {
 
           {/* Barangay routes */}
           <Route path="barangay/new" element={<BarangayNew />} />
-          <Route path="barangay/type" element={<BarangayPermitType />} />
 
           {/* Other user routes */}
           <Route path="permittracker" element={<UserTracker />} />

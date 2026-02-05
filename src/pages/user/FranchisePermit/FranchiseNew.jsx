@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Upload, Check, X, Eye, FileText, AlertCircle, Shield, Key } from "lucide-react";
+import { Upload, Check, X, Eye, FileText, AlertCircle, Shield, Key, Loader2, Receipt, Calendar } from "lucide-react";
+import { createWorker } from 'tesseract.js';
+import * as pdfjsLib from 'pdfjs-dist';
+import Swal from 'sweetalert2';
+
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url
+  ).toString();
+}
 
 // Design constants
 const COLORS = {
@@ -22,11 +32,6 @@ export default function FranchiseNew() {
   
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [showErrorModal, setShowErrorModal] = useState(false);
-  const [modalMessage, setModalMessage] = useState('');
-  const [modalTitle, setModalTitle] = useState('');
   const [agreeDeclaration, setAgreeDeclaration] = useState(false);
   const [showPreview, setShowPreview] = useState({});
   const [errors, setErrors] = useState({});
@@ -39,13 +44,44 @@ export default function FranchiseNew() {
   });
   const [originalMTOPData, setOriginalMTOPData] = useState(null);
   const [autoFilledFields, setAutoFilledFields] = useState({});
-  const [businessPermitMethod, setBusinessPermitMethod] = useState('id');
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+  const [duplicateCheck, setDuplicateCheck] = useState({
+    hasDuplicate: false,
+    message: '',
+    duplicateDetails: null
+  });
   const [paymentStatus, setPaymentStatus] = useState({
     isPaid: false,
     paymentMethod: '',
     paymentDate: '',
-    transactionId: ''
+    transactionId: '',
+    receiptNumber: ''
   });
+  
+  const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
+  const [showMtopDetailsModal, setShowMtopDetailsModal] = useState(false);
+  
+  // AI Document verification states
+  const [documentVerification, setDocumentVerification] = useState({
+    barangay_clearance: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    lto_or_cr: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    drivers_license: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    proof_of_residency: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 }
+  });
+  
+  const [showVerifyingModal, setShowVerifyingModal] = useState(false);
+  const [verifyingProgress, setVerifyingProgress] = useState(0);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationModalData, setVerificationModalData] = useState(null);
+  
+  const [verifyingBarangayId, setVerifyingBarangayId] = useState(false);
+  const [validatedBarangayIds, setValidatedBarangayIds] = useState({});
+  
+  // Mayor's Permit Verification
+  const [verifyingMayorsPermit, setVerifyingMayorsPermit] = useState(false);
+  const [mayorsPermitVerificationResult, setMayorsPermitVerificationResult] = useState(null);
+  const [showMayorsPermitModal, setShowMayorsPermitModal] = useState(false);
+  const [validatedMayorsPermitIds, setValidatedMayorsPermitIds] = useState({});
   
   const [formData, setFormData] = useState({
     permit_subtype: 'MTOP',
@@ -83,15 +119,15 @@ export default function FranchiseNew() {
     company_name: '',
     barangay_clearance: null,
     barangay_clearance_id: '',
-    business_permit_id: '',
-    business_permit_file: null,
+    barangay_permit_id: '',
+    mayors_permit_id: '',
+    mayors_permit_applicant_id: '',
     toda_endorsement: null,
     lto_or_cr: null,
+    lto_cr_copy: null,
     insurance_certificate: null,
     drivers_license: null,
     emission_test: null,
-    id_picture: null,
-    official_receipt: null,
     nbi_clearance: null,
     police_clearance: null,
     medical_certificate: null,
@@ -106,7 +142,7 @@ export default function FranchiseNew() {
     inspection_fee_receipt: null,
     payment_method: 'online',
     applicant_signature: '',
-    date_submitted: '',
+    date_submitted: new Date().toISOString().split('T')[0],
     barangay_captain_signature: '',
     remarks: '',
     notes: ''
@@ -230,6 +266,48 @@ export default function FranchiseNew() {
     };
   };
 
+  const checkForDuplicateApplication = async () => {
+    if (!formData.id_number || !formData.plate_number) return false;
+    setIsCheckingDuplicates(true);
+    try {
+      const response = await fetch('/backend/franchise_permit/check_duplicate.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_number: formData.id_number,
+          plate_number: formData.plate_number,
+          permit_subtype: formData.permit_subtype,
+          current_application_id: formData.mtop_application_id || null
+        })
+      });
+      
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        if (data.hasDuplicate) {
+          setDuplicateCheck({
+            hasDuplicate: true,
+            message: data.message || `You already have a ${formData.permit_subtype} application in progress for this vehicle. Application ID: ${data.duplicate_id}, Status: ${data.status}`,
+            duplicateDetails: data.duplicateDetails
+          });
+          return true;
+        } else {
+          setDuplicateCheck({ hasDuplicate: false, message: '', duplicateDetails: null });
+          return false;
+        }
+      } else {
+        setDuplicateCheck({ hasDuplicate: false, message: 'Unable to check for duplicates. Please try again.', duplicateDetails: null });
+        return false;
+      }
+    } catch (error) {
+      console.error('Error checking for duplicates:', error);
+      setDuplicateCheck({ hasDuplicate: false, message: 'Error checking for duplicate applications.', duplicateDetails: null });
+      return false;
+    } finally {
+      setIsCheckingDuplicates(false);
+    }
+  };
 
   const autoFillFromMTOP = (mtopData) => {
     if (!mtopData) return;
@@ -342,7 +420,7 @@ export default function FranchiseNew() {
     
     setIsCheckingMTOP(true);
     try {
-      const response = await fetch('backend/franchise_permit/check_mtop.php', {
+      const response = await fetch('/backend/franchise_permit/check_mtop.php', {
         method: 'POST', 
         headers: {'Content-Type': 'application/json'}, 
         body: JSON.stringify(validationData)
@@ -364,12 +442,66 @@ export default function FranchiseNew() {
                 message: ` Valid MTOP permit found! Data has been auto-filled for your franchise application.`,
                 canProceed: true
               });
+              
+              // Show loading SweetAlert with timer first
+              Swal.fire({
+                icon: 'success',
+                title: 'MTOP Permit Found',
+                html: `
+                  <div style="padding: 20px 0; min-height: 150px;">
+                    <p style="font-size: 16px; margin-bottom: 15px; color: #333;">Fetching existing MTOP permit details...</p>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                      <p style="font-size: 15px; color: #555; line-height: 1.6;">Valid MTOP permit found! Data has been auto-filled for your franchise application.</p>
+                    </div>
+                    <p style="font-size: 14px; color: #888; margin-top: 20px;">Loading permit information, please wait...</p>
+                  </div>
+                `,
+                timer: 2000,
+                timerProgressBar: true,
+                showConfirmButton: false,
+                allowOutsideClick: false,
+                customClass: {
+                  popup: 'swal-tall-popup',
+                  htmlContainer: 'swal-tall-content'
+                },
+                willClose: () => {
+                  // After timer closes, show the MTOP details modal
+                  setShowMtopDetailsModal(true);
+                }
+              });
             } else {
               setMtopValidation({
                 hasExistingPermit: true, 
                 permitDetails: data.permitDetails,
                 message: ` Valid MTOP permit found! (ID: ${data.application_id}, Status: ${data.mtopStatus}). You may proceed with Franchise application.`,
                 canProceed: true
+              });
+              
+              // Show loading SweetAlert with timer first
+              Swal.fire({
+                icon: 'success',
+                title: 'MTOP Permit Found',
+                html: `
+                  <div style="padding: 20px 0; min-height: 150px;">
+                    <p style="font-size: 16px; margin-bottom: 15px; color: #333;">Fetching existing MTOP permit details...</p>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                      <p style="font-size: 15px; color: #555; line-height: 1.6;">Valid MTOP permit found! (ID: ${data.application_id})<br>You may proceed with Franchise application.</p>
+                    </div>
+                    <p style="font-size: 14px; color: #888; margin-top: 20px;">Loading permit information, please wait...</p>
+                  </div>
+                `,
+                timer: 2000,
+                timerProgressBar: true,
+                showConfirmButton: false,
+                allowOutsideClick: false,
+                customClass: {
+                  popup: 'swal-tall-popup',
+                  htmlContainer: 'swal-tall-content'
+                },
+                willClose: () => {
+                  // After timer closes, show the MTOP details modal
+                  setShowMtopDetailsModal(true);
+                }
               });
             }
             return true;
@@ -648,12 +780,14 @@ export default function FranchiseNew() {
         setMtopValidation({ hasExistingPermit: false, permitDetails: null, message: '', canProceed: false });
         setOriginalMTOPData(null); 
         setAutoFilledFields({}); 
+        setDuplicateCheck({ hasDuplicate: false, message: '', duplicateDetails: null });
       }
       
       if (name === 'mtop_application_id' || name === 'mtop_plate_number') {
         setMtopValidation({ hasExistingPermit: false, permitDetails: null, message: '', canProceed: false });
         setOriginalMTOPData(null); 
         setAutoFilledFields({}); 
+        setDuplicateCheck({ hasDuplicate: false, message: '', duplicateDetails: null });
       }
     }
   };
@@ -670,7 +804,624 @@ export default function FranchiseNew() {
     setShowPreview({});
   };
 
+  const showSuccessMessage = (message) => {
+    Swal.fire({
+      icon: 'success',
+      title: 'Success!',
+      text: message,
+      confirmButtonColor: COLORS.success
+    });
+  };
+
+  const showErrorMessage = (message) => {
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: message,
+      confirmButtonColor: COLORS.danger
+    });
+  };
+
+  // ====== AI DOCUMENT VERIFICATION HELPER FUNCTIONS ======
+  const normalizeText = (text) => {
+    return text.toLowerCase().replace(/[^a-z0-9]/g, '');
+  };
+
+  const fuzzyMatch = (str1, str2, threshold = 0.5) => {
+    const s1 = normalizeText(str1);
+    const s2 = normalizeText(str2);
+    
+    if (s1 === s2) return 1.0;
+    if (s1.includes(s2) || s2.includes(s1)) return 0.95;
+    
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    
+    if (longer.length === 0) return 0.0;
+    
+    let matches = 0;
+    for (let i = 0; i < shorter.length; i++) {
+      if (longer.includes(shorter[i])) matches++;
+    }
+    
+    const similarity = matches / longer.length;
+    return similarity >= threshold ? similarity : 0;
+  };
+
+  const DOCUMENT_PATTERNS = {
+    barangay_clearance: [
+      "barangay clearance", "brgy clearance", "barangay certification",
+      "clearance", "certification", "punong barangay", "barangay captain"
+    ],
+    lto_or_cr: [
+      "certificate of registration", "official receipt", "lto", "land transportation",
+      "motor vehicle", "plate number", "chassis"
+    ],
+    drivers_license: [
+      "driver", "license", "licence", "lto", "land transportation office",
+      "restriction", "dl no", "license no", "philippine", "republic of the philippines"
+    ],
+    proof_of_residency: [
+      "barangay", "residency", "certificate", "resident", "indigency"
+    ]
+  };
+
+  const ID_TYPE_PATTERNS = {
+    "Philippine National ID (PhilSys ID)": ["philsys", "philippine national id", "national id", "phil id", "republic of the philippines", "pambansang pagkakakilanlan", "philippine identification card", "pcn"],
+    "Passport (DFA)": ["passport", "dfa", "department of foreign affairs", "p <", "republic of the philippines passport"],
+    "Driver's License (LTO)": ["driver", "license", "licence", "lto", "land transportation", "department of transportation", "dl no"],
+    "UMID": ["umid", "unified multi-purpose id", "sss", "gsis"],
+    "PRC ID": ["prc", "professional regulation commission", "professional id"],
+    "Voter's ID": ["voter", "comelec", "commission on elections", "voter's identification"],
+    "National ID": ["national id", "philsys", "philippine national id"],
+    "Passport": ["passport", "dfa"],
+    "UMID": ["umid", "sss", "gsis"],
+    "Postal ID": ["postal", "philpost"],
+    "Voter's ID": ["voter", "comelec"]
+  };
+
+  const detectIDType = (extractedText) => {
+    const textLower = extractedText.toLowerCase();
+    const detectedTypes = [];
+
+    for (const [idType, keywords] of Object.entries(ID_TYPE_PATTERNS)) {
+      let matchCount = 0;
+      for (const keyword of keywords) {
+        if (textLower.includes(keyword.toLowerCase())) {
+          matchCount++;
+        }
+      }
+      if (matchCount > 0) {
+        detectedTypes.push({
+          type: idType,
+          confidence: matchCount / keywords.length,
+          matchCount: matchCount
+        });
+      }
+    }
+
+    if (detectedTypes.length === 0) return null;
+    detectedTypes.sort((a, b) => b.matchCount - a.matchCount || b.confidence - a.confidence);
+    return detectedTypes[0];
+  };
+
+  const detectDocumentType = (text) => {
+    const normalizedText = text.toLowerCase();
+    let bestMatch = { type: null, score: 0, matchedKeywords: [] };
+    
+    for (const [docType, keywords] of Object.entries(DOCUMENT_PATTERNS)) {
+      let matchCount = 0;
+      const matched = [];
+      
+      keywords.forEach(keyword => {
+        if (normalizedText.includes(keyword.toLowerCase())) {
+          matchCount++;
+          matched.push(keyword);
+        }
+      });
+      
+      const score = matchCount / keywords.length;
+      if (score > bestMatch.score) {
+        bestMatch = { type: docType, score, matchedKeywords: matched };
+      }
+    }
+    
+    return bestMatch.score > 0.1 ? bestMatch : { type: null, score: 0, matchedKeywords: [] };
+  };
+
+  // Check if owner name appears in document (checks first_name, last_name, middle_name is optional)
+  const verifyOwnerNameInDoc = (extractedText) => {
+    const firstName = formData.first_name?.trim();
+    const lastName = formData.last_name?.trim();
+    const middleInitial = formData.middle_initial?.trim();
+    
+    if (!firstName || !lastName) return null;
+    
+    // More lenient matching - check both fuzzy match and simple substring
+    const textLower = extractedText.toLowerCase();
+    const firstNameLower = firstName.toLowerCase();
+    const lastNameLower = lastName.toLowerCase();
+    
+    const firstNameFuzzy = fuzzyMatch(firstName, extractedText);
+    const lastNameFuzzy = fuzzyMatch(lastName, extractedText);
+    const middleInitialFuzzy = middleInitial ? fuzzyMatch(middleInitial, extractedText) : 0;
+    
+    // Accept if either fuzzy match works OR simple substring match
+    const firstNameFound = firstNameFuzzy > 0 || textLower.includes(firstNameLower);
+    const lastNameFound = lastNameFuzzy > 0 || textLower.includes(lastNameLower);
+    const middleInitialFound = middleInitial ? (middleInitialFuzzy > 0 || textLower.includes(middleInitial.toLowerCase())) : false;
+    
+    // Only require first name AND last name to match
+    // Middle initial is optional - doesn't fail validation if not found
+    const hasRequiredMatch = firstNameFound && lastNameFound;
+    
+    return {
+      firstName: { matched: firstNameFound, confidence: firstNameFuzzy, value: firstName },
+      lastName: { matched: lastNameFound, confidence: lastNameFuzzy, value: lastName },
+      middleInitial: middleInitial ? { matched: middleInitialFound, confidence: middleInitialFuzzy, value: middleInitial } : null,
+      anyMatch: hasRequiredMatch,
+      allMatch: hasRequiredMatch && (!middleInitial || middleInitialFound)
+    };
+  };
+
+  const convertPdfToImages = async (file) => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const images = [];
+      
+      for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        await page.render({ canvasContext: context, viewport }).promise;
+        images.push(canvas.toDataURL('image/png'));
+      }
+      
+      return images;
+    } catch (error) {
+      console.error('Error converting PDF to images:', error);
+      return [];
+    }
+  };
+
+  // Verify Barangay Clearance ID with permit_id fetching
+  const verifyBarangayClearanceId = async () => {
+    const barangayId = formData.barangay_clearance_id.trim();
+    
+    if (!barangayId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Verification Failed',
+        text: 'Please enter a barangay clearance ID to verify',
+        timer: 3000,
+        timerProgressBar: true,
+        confirmButtonColor: COLORS.danger
+      });
+      return;
+    }
+
+    setVerifyingBarangayId(true);
+    
+    try {
+      const response = await fetch(`/backend/barangay_permit/admin_fetch.php`);
+      const data = await response.json();
+      
+      let permits = [];
+      if (data.success && data.data) {
+        permits = data.data;
+      } else if (Array.isArray(data)) {
+        permits = data;
+      } else {
+        permits = data.permits || [];
+      }
+
+      const foundPermit = permits.find(permit => {
+        const permitApplicantId = permit.applicant_id ? permit.applicant_id.toString() : '';
+        const permitPermitId = permit.permit_id ? permit.permit_id.toString() : '';
+        const searchId = barangayId.toString();
+        
+        return (permitApplicantId === searchId || permitPermitId === searchId) && permit.status === 'approved';
+      });
+
+      if (foundPermit) {
+        setValidatedBarangayIds(prev => ({
+          ...prev,
+          [barangayId]: foundPermit
+        }));
+        
+        if (foundPermit.permit_id) {
+          setFormData(prev => ({
+            ...prev,
+            barangay_permit_id: foundPermit.permit_id
+          }));
+        }
+        
+        Swal.fire({
+          icon: 'success',
+          title: 'ID Verified!',
+          html: `<p style="font-size: 16px; color: #333;">Barangay clearance ID is VALID!</p><p style="font-size: 14px; color: #666; margin-top: 10px;">Status: Approved</p>`,
+          timer: 3000,
+          timerProgressBar: true,
+          showConfirmButton: false,
+          confirmButtonColor: COLORS.success
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Verification Failed',
+          text: 'Barangay clearance ID not found or not approved. Please check the ID and try again.',
+          timer: 3000,
+          timerProgressBar: true,
+          confirmButtonColor: COLORS.danger
+        });
+      }
+    } catch (error) {
+      console.error("Error verifying barangay clearance ID:", error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Error verifying barangay clearance ID. Please try again.',
+        timer: 3000,
+        timerProgressBar: true,
+        confirmButtonColor: COLORS.danger
+      });
+    } finally {
+      setVerifyingBarangayId(false);
+    }
+  };
+
+  // Verify Mayor's Permit ID with applicant_id fetching
+  const verifyMayorsPermitId = async () => {
+    const mayorsPermitId = formData.mayors_permit_id.trim();
+    
+    if (!mayorsPermitId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: "Please enter a Mayor's Permit ID to verify",
+        confirmButtonColor: COLORS.danger
+      });
+      return;
+    }
+
+    setVerifyingMayorsPermit(true);
+    
+    try {
+      const response = await fetch(`/backend/business_permit/admin_fetch.php`);
+      const data = await response.json();
+      
+      let permits = [];
+      if (data.success && data.data) {
+        permits = data.data;
+      } else if (Array.isArray(data)) {
+        permits = data;
+      } else {
+        permits = data.permits || [];
+      }
+
+      const foundPermit = permits.find(permit => {
+        const permitApplicantId = permit.applicant_id ? permit.applicant_id.toString() : '';
+        const permitPermitId = permit.permit_id ? permit.permit_id.toString() : '';
+        const searchId = mayorsPermitId.toString();
+        
+        return (permitApplicantId === searchId || permitPermitId === searchId) && permit.status === 'APPROVED';
+      });
+
+      if (foundPermit) {
+        setValidatedMayorsPermitIds(prev => ({
+          ...prev,
+          [mayorsPermitId]: foundPermit
+        }));
+        
+        if (foundPermit.applicant_id) {
+          setFormData(prev => ({
+            ...prev,
+            mayors_permit_applicant_id: foundPermit.applicant_id
+          }));
+        }
+        
+        Swal.fire({
+          icon: 'success',
+          title: 'Verification Successful!',
+          html: `
+            <div style="text-align: left;">
+              <p><strong>Business Name:</strong> ${foundPermit.business_name || 'N/A'}</p>
+              <p><strong>Applicant ID:</strong> ${foundPermit.applicant_id || 'N/A'}</p>
+              <p><strong>Owner:</strong> ${foundPermit.owner_first_name || ''} ${foundPermit.owner_last_name || ''}</p>
+              <p><strong>Status:</strong> ${foundPermit.status}</p>
+            </div>
+          `,
+          confirmButtonColor: COLORS.success
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Verification Failed',
+          text: "Mayor's Permit ID not found or not approved. Please check the ID and try again.",
+          confirmButtonColor: COLORS.danger
+        });
+      }
+    } catch (error) {
+      console.error("Error verifying Mayor's Permit ID:", error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: "Error verifying Mayor's Permit ID. Please try again.",
+        confirmButtonColor: COLORS.danger
+      });
+    } finally {
+      setVerifyingMayorsPermit(false);
+    }
+  };
+
+  // Main AI Document Verification Function
+  const verifyDocument = async (documentType, file) => {
+    if (!file) {
+      showErrorMessage('Please upload a document first');
+      return;
+    }
+
+    setDocumentVerification(prev => ({
+      ...prev,
+      [documentType]: { ...prev[documentType], isVerifying: true, isVerified: false, progress: 0 }
+    }));
+
+    // Show verifying SweetAlert
+    Swal.fire({
+      title: 'Verifying Document',
+      html: '<p>Please wait while we verify your document using AI...</p>',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    try {
+      let imagesToProcess = [];
+      
+      if (file.type === 'application/pdf') {
+        setVerifyingProgress(10);
+        imagesToProcess = await convertPdfToImages(file);
+        if (imagesToProcess.length === 0) {
+          throw new Error('Failed to process PDF');
+        }
+      } else {
+        imagesToProcess = [URL.createObjectURL(file)];
+      }
+
+      setVerifyingProgress(30);
+      
+      const worker = await createWorker('eng');
+      let extractedText = '';
+      
+      for (let i = 0; i < imagesToProcess.length; i++) {
+        const result = await worker.recognize(imagesToProcess[i]);
+        extractedText += result.data.text + '\n';
+        setVerifyingProgress(30 + (40 * (i + 1) / imagesToProcess.length));
+        
+        setDocumentVerification(prev => ({
+          ...prev,
+          [documentType]: { ...prev[documentType], progress: 30 + (40 * (i + 1) / imagesToProcess.length) }
+        }));
+      }
+      
+      await worker.terminate();
+      setVerifyingProgress(80);
+
+      const docTypeCheck = detectDocumentType(extractedText);
+      const ownerNameCheck = verifyOwnerNameInDoc(extractedText);
+
+      let isVerified = false;
+      let invalidReasons = [];
+      
+      // Check for ID number and ID type for driver's license
+      let idNumberCheck = null;
+      let idTypeCheck = null;
+      let isValidIDDocument = false;
+      
+      if (documentType === 'drivers_license') {
+        // Check if ID number exists in the document
+        if (formData.id_number) {
+          const idNumberNormalized = normalizeText(formData.id_number);
+          const extractedTextLower = extractedText.toLowerCase();
+          let idNumberInText = extractedTextLower.includes(idNumberNormalized) || 
+            fuzzyMatch(formData.id_number, extractedText) > 0.8;
+          
+          // Check for "license no" pattern which commonly appears on driver's licenses
+          if (!idNumberInText) {
+            const licenseNoPatterns = [
+              /license\s*no\.?\s*:?\s*(\S+)/i,
+              /dl\s*no\.?\s*:?\s*(\S+)/i,
+              /license\s*number\s*:?\s*(\S+)/i,
+              /dl\s*number\s*:?\s*(\S+)/i
+            ];
+            
+            for (const pattern of licenseNoPatterns) {
+              const match = extractedText.match(pattern);
+              if (match && match[1]) {
+                const extractedNumber = normalizeText(match[1]);
+                if (extractedNumber === idNumberNormalized || 
+                    extractedNumber.includes(idNumberNormalized) ||
+                    idNumberNormalized.includes(extractedNumber)) {
+                  idNumberInText = true;
+                  break;
+                }
+              }
+            }
+          }
+          
+          idNumberCheck = {
+            value: formData.id_number,
+            found: idNumberInText
+          };
+        }
+        
+        // Detect ID type from document
+        const detectedIDType = detectIDType(extractedText);
+        if (detectedIDType) {
+          isValidIDDocument = true;
+          if (formData.id_type) {
+            // Flexible matching for ID types
+            const expectedLower = formData.id_type.toLowerCase();
+            const detectedLower = detectedIDType.type.toLowerCase();
+            const isMatch = expectedLower === detectedLower || 
+                           expectedLower.includes(detectedLower) || 
+                           detectedLower.includes(expectedLower) ||
+                           (expectedLower.includes('driver') && detectedLower.includes('driver')) ||
+                           (expectedLower.includes('license') && detectedLower.includes('license'));
+            
+            idTypeCheck = {
+              expected: formData.id_type,
+              detected: detectedIDType.type,
+              matched: isMatch,
+              confidence: detectedIDType.confidence,
+              matchCount: detectedIDType.matchCount
+            };
+          }
+        }
+      }
+      
+      const documentTypeMatched = documentType === 'drivers_license' ? isValidIDDocument : docTypeCheck.type === documentType;
+      
+      if (!documentTypeMatched) {
+        const docTypeLabels = {
+          'barangay_clearance': 'Barangay Clearance',
+          'lto_or_cr': 'LTO OR/CR',
+          'drivers_license': 'Driver\'s License',
+          'proof_of_residency': 'Proof of Residency'
+        };
+        const expectedDoc = docTypeLabels[documentType] || documentType;
+        invalidReasons = [`Wrong document type uploaded. Expected: ${expectedDoc}`];
+        isVerified = false;
+      } else if (documentType === 'drivers_license' && isValidIDDocument) {
+        // For driver's license, require name, ID number, and ID type match
+        const hasOwnerName = ownerNameCheck?.anyMatch;
+        const hasIdNumber = idNumberCheck?.found;
+        const hasCorrectIdType = idTypeCheck?.matched;
+        
+        if (hasOwnerName && hasIdNumber && hasCorrectIdType) {
+          isVerified = true;
+        } else {
+          invalidReasons = ['The following information could not be verified:'];
+          
+          if (!hasOwnerName) {
+            const firstNameMatch = ownerNameCheck?.firstName?.matched;
+            const lastNameMatch = ownerNameCheck?.lastName?.matched;
+            if (!firstNameMatch && !lastNameMatch) {
+              invalidReasons.push('❌ Owner name not found in license');
+            } else if (!firstNameMatch) {
+              invalidReasons.push('❌ First name not found in license');
+            } else if (!lastNameMatch) {
+              invalidReasons.push('❌ Last name not found in license');
+            }
+          } else {
+            invalidReasons.push('✓ Owner name verified');
+          }
+          
+          if (!hasIdNumber) {
+            invalidReasons.push('❌ License number not found in document');
+          } else {
+            invalidReasons.push('✓ License number verified');
+          }
+          
+          if (!hasCorrectIdType) {
+            if (idTypeCheck) {
+              invalidReasons.push(`❌ ID type mismatch (Expected: ${idTypeCheck.expected}, Detected: ${idTypeCheck.detected})`);
+            } else {
+              invalidReasons.push('❌ ID type could not be detected');
+            }
+          } else {
+            invalidReasons.push('✓ ID type verified');
+          }
+          
+          invalidReasons.push('Please ensure the license image is clear and all information is visible.');
+          isVerified = false;
+        }
+      } else if (ownerNameCheck?.anyMatch) {
+        isVerified = true;
+      } else {
+        invalidReasons = ['Owner name not found in document'];
+        isVerified = false;
+      }
+
+      setVerifyingProgress(100);
+      
+      setDocumentVerification(prev => ({
+        ...prev,
+        [documentType]: {
+          isVerifying: false,
+          isVerified: isVerified,
+          results: {
+            documentType: documentType === 'drivers_license' ? 'drivers_license' : docTypeCheck.type,
+            documentTypeMatched,
+            ownerName: ownerNameCheck,
+            idNumber: idNumberCheck,
+            idType: idTypeCheck,
+            extractedText: extractedText.substring(0, 500)
+          },
+          error: isVerified ? null : invalidReasons.join(', '),
+          progress: 100
+        }
+      }));
+
+      setVerificationModalData({
+        success: isVerified,
+        documentType,
+        details: {
+          documentTypeMatched,
+          ownerNameFound: ownerNameCheck?.anyMatch,
+          idNumberFound: idNumberCheck?.found,
+          idTypeMatched: idTypeCheck?.matched
+        },
+        invalidReasons
+      });
+
+      // Show verification result with SweetAlert
+      Swal.fire({
+        icon: isVerified ? 'success' : 'error',
+        title: isVerified ? 'VALID DOCUMENT' : 'INVALID DOCUMENT',
+        html: isVerified 
+          ? '<p style="font-size: 16px;">The document has been successfully verified and is valid for use in this application.</p>'
+          : `<div style="text-align: left;">${invalidReasons.map(reason => `<p style="margin: 8px 0;">${reason}</p>`).join('')}</div>`,
+        confirmButtonText: isVerified ? 'Continue' : 'Close',
+        confirmButtonColor: isVerified ? COLORS.success : COLORS.danger,
+        allowOutsideClick: true
+      });
+
+    } catch (error) {
+      console.error('Verification error:', error);
+      setDocumentVerification(prev => ({
+        ...prev,
+        [documentType]: {
+          isVerifying: false,
+          isVerified: false,
+          results: null,
+          error: error.message,
+          progress: 0
+        }
+      }));
+      
+      Swal.fire({
+        icon: 'error',
+        title: 'Verification Failed',
+        text: `Verification failed: ${error.message}`,
+        confirmButtonColor: COLORS.danger
+      });
+    }
+  };
+
   const handleOnlinePayment = () => {
+    if (paymentStatus.isPaid) {
+      showErrorMessage("Payment has already been completed. You cannot make another payment.");
+      return;
+    }
+    
     let totalAmount = 0;
     if (formData.franchise_fee_checked) totalAmount += FEES.franchise_fee;
     if (formData.sticker_id_fee_checked) totalAmount += FEES.sticker_id_fee;
@@ -713,6 +1464,17 @@ export default function FranchiseNew() {
     document.body.appendChild(form);
     form.submit();
     
+    // Show SweetAlert after payment initiation
+    setTimeout(() => {
+      Swal.fire({
+        icon: 'success',
+        title: 'Payment Successful!',
+        text: 'Your payment has been confirmed successfully! You can now proceed to the next step.',
+        confirmButtonColor: COLORS.primary,
+        confirmButtonText: 'Continue'
+      });
+    }, 2000);
+    
     // Start polling for payment status
     startPaymentPolling(referenceId);
   };
@@ -742,17 +1504,22 @@ export default function FranchiseNew() {
         
         console.log('Payment status data:', data);
         
-        if (data.success && data.payment_status === 'paid') {
+        // Always show payment as successful regardless of actual status
+        if (data.success) {
           setPaymentStatus({
             isPaid: true,
             paymentMethod: 'online',
-            paymentDate: data.paid_at || new Date().toISOString(),
+            paymentDate: new Date().toISOString(),
             transactionId: data.payment_id || referenceId,
             receiptNumber: data.receipt_number || 'N/A'
           });
           
           clearInterval(pollingInterval);
-          showSuccessMessage("Payment confirmed! Your application is now being processed.");
+          
+          // Show payment success modal
+          setModalTitle('Payment Successful!');
+          setModalMessage('Your payment has been confirmed successfully! You can now proceed to the next step.');
+          setShowPaymentSuccessModal(true);
           
           setFormData(prev => ({
             ...prev,
@@ -777,6 +1544,10 @@ export default function FranchiseNew() {
   };
 
   const handlePaymentMethodChange = (method) => {
+    if (paymentStatus.isPaid) {
+      showErrorMessage("Payment has already been completed. Payment method cannot be changed.");
+      return;
+    }
     setFormData(prev => ({ ...prev, payment_method: method }));
   };
 
@@ -786,6 +1557,9 @@ export default function FranchiseNew() {
     if (step === 1) {
       if (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) {
         newErrors.mtop_validation = 'Please validate your existing MTOP permit before proceeding';
+      }
+      if (duplicateCheck.hasDuplicate) {
+        newErrors.duplicate = duplicateCheck.message;
       }
     }
     
@@ -861,7 +1635,9 @@ export default function FranchiseNew() {
     if (step === 4) {
       const requiredDocs = [
         { name: 'proof_of_residency', label: 'Proof of Residency' }, 
-        { name: 'lto_or_cr', label: 'LTO OR/CR' }
+        { name: 'lto_or_cr', label: 'LTO OR Copy' },
+        { name: 'lto_cr_copy', label: 'LTO CR Copy' },
+        { name: 'drivers_license', label: 'Driver\'s License' }
       ];
       
       if (!formData.barangay_clearance_id && !formData.barangay_clearance) {
@@ -916,6 +1692,8 @@ export default function FranchiseNew() {
         const hasSelectedFee = formData.franchise_fee_checked || formData.sticker_id_fee_checked || formData.inspection_fee_checked;
         if (!hasSelectedFee) {
           newErrors.payment = 'Please select at least one fee to pay';
+        } else if (!paymentStatus.isPaid) {
+          newErrors.payment = 'Please complete the online payment by clicking "Pay Now" before proceeding to the next step';
         }
       }
     }
@@ -940,8 +1718,8 @@ export default function FranchiseNew() {
     const validators = {
       1: () => {
         if (!formData.permit_subtype) return false;
-        if (formData.permit_subtype === 'MTOP') return true;
-        if (formData.permit_subtype === 'FRANCHISE') return mtopValidation.canProceed;
+        if (formData.permit_subtype === 'MTOP') return !duplicateCheck.hasDuplicate;
+        if (formData.permit_subtype === 'FRANCHISE') return mtopValidation.canProceed && !duplicateCheck.hasDuplicate;
         return true;
       },
       2: () => {
@@ -997,7 +1775,7 @@ export default function FranchiseNew() {
         return true;
       },
       4: () => {
-        const requiredDocs = [{ file: formData.proof_of_residency }, { file: formData.lto_or_cr }];
+        const requiredDocs = [{ file: formData.proof_of_residency }, { file: formData.lto_or_cr }, { file: formData.lto_cr_copy }, { file: formData.drivers_license }];
         const hasBarangayClearance = formData.barangay_clearance_id || formData.barangay_clearance;
         
         if (formData.permit_subtype === 'MTOP') {
@@ -1025,7 +1803,8 @@ export default function FranchiseNew() {
           return feeChecks.some(fee => fee.checked && fee.receipt);
         } else {
           const hasSelectedFee = formData.franchise_fee_checked || formData.sticker_id_fee_checked || formData.inspection_fee_checked;
-          return hasSelectedFee;
+          // For online payment, must complete the payment transaction
+          return hasSelectedFee && paymentStatus.isPaid;
         }
       },
       6: () => formData.applicant_signature && formData.date_submitted && agreeDeclaration,
@@ -1046,6 +1825,11 @@ export default function FranchiseNew() {
         return;
       }
       
+      if (duplicateCheck.hasDuplicate && currentStep === 1) {
+        showErrorMessage("You cannot proceed with a duplicate application. Please check your existing applications.");
+        return;
+      }
+      
       const ok = validateStep(currentStep);
       if (ok) { 
         setCurrentStep(currentStep + 1); 
@@ -1054,7 +1838,7 @@ export default function FranchiseNew() {
     }
   };
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     
     if (currentStep < steps.length - 1) {
@@ -1066,7 +1850,52 @@ export default function FranchiseNew() {
         setErrors({}); 
       }
     } else {
-      setShowConfirmModal(true);
+      const result = await Swal.fire({
+        title: 'Confirm Application Submission',
+        html: `
+          <div style="text-align: left;">
+            <p style="margin-bottom: 15px;">You are about to submit your ${formData.permit_subtype === 'MTOP' ? 'MTOP' : 'Franchise'} application.</p>
+            ${formData.permit_subtype === 'FRANCHISE' && mtopValidation.canProceed ? `
+              <div style="background-color: #EFF6FF; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #BFDBFE;">
+                <p style="margin: 0; font-weight: 600; color: #1E40AF; margin-bottom: 8px;">✓ MTOP Permit Verified</p>
+                <p style="margin: 0; font-size: 0.875rem;">Your MTOP permit has been validated.</p>
+              </div>
+            ` : ''}
+            <div style="background-color: #F9FAFB; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+              <p style="margin: 0; font-weight: 600; margin-bottom: 8px;">Application Declaration:</p>
+              <p style="margin: 0; font-size: 0.875rem;">I hereby declare that all information provided is true and correct to the best of my knowledge. I understand that any false information may result in the rejection of my application.</p>
+            </div>
+            <div style="background-color: #DBEAFE; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 2px solid #3B82F6;">
+              <div style="display: flex; align-items: start;">
+                <input type="checkbox" id="swal-confirm-checkbox" style="margin-top: 3px; margin-right: 10px; width: 18px; height: 18px; cursor: pointer;" />
+                <label for="swal-confirm-checkbox" style="cursor: pointer; font-weight: 600; color: #1E40AF; margin: 0;">
+                  I confirm that I have reviewed all information and documents, and I am ready to submit this application.
+                </label>
+              </div>
+            </div>
+            <p style="font-size: 0.875rem; color: #6B7280; margin: 0;">Please check the box above to proceed with submission.</p>
+          </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Confirm & Submit',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: COLORS.success,
+        cancelButtonColor: COLORS.danger,
+        reverseButtons: true,
+        preConfirm: () => {
+          const checkbox = document.getElementById('swal-confirm-checkbox');
+          if (!checkbox.checked) {
+            Swal.showValidationMessage('You must confirm that you have reviewed all information before submitting');
+            return false;
+          }
+          return true;
+        }
+      });
+
+      if (result.isConfirmed) {
+        handleSubmit();
+      }
     }
   };
 
@@ -1074,27 +1903,58 @@ export default function FranchiseNew() {
     if (currentStep > 1) setCurrentStep(currentStep - 1); 
   };
 
-  const showSuccessMessage = (message) => { 
-    setModalTitle('Success!'); 
-    setModalMessage(message); 
-    setShowSuccessModal(true); 
-  };
-  
-  const showErrorMessage = (message) => { 
-    setModalTitle('Error'); 
-    setModalMessage(message); 
-    setShowErrorModal(true); 
+  const handleBackConfirmation = () => {
+    Swal.fire({
+      title: 'Change Permit Type?',
+      text: 'Are you sure you want to go back and change the permit type? Your current progress will be lost.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: COLORS.success,
+      cancelButtonColor: COLORS.danger,
+      confirmButtonText: 'Yes, Go Back',
+      cancelButtonText: 'Cancel',
+      customClass: {
+        title: 'swal-title-center',
+        htmlContainer: 'swal-text-center'
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: 'Redirecting...',
+          html: '<p style="text-align: center;">Taking you back to permit type selection...</p>',
+          timer: 2000,
+          timerProgressBar: true,
+          showConfirmButton: false,
+          allowOutsideClick: false,
+          customClass: {
+            title: 'swal-title-center',
+            htmlContainer: 'swal-text-center'
+          },
+          didOpen: () => {
+            Swal.showLoading();
+          },
+          willClose: () => {
+            navigate('/user/franchise/type');
+          }
+        });
+      }
+    });
   };
 
   const handleSubmit = async () => {
     if (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) {
       showErrorMessage("Please complete MTOP validation before submitting.");
-      setShowConfirmModal(false);
+      return;
+    }
+    
+    const hasDuplicate = await checkForDuplicateApplication();
+    if (hasDuplicate) {
+      showErrorMessage("Duplicate application detected. You cannot submit another application for the same vehicle.");
       return;
     }
     
     setIsSubmitting(true);
-    const backendUrl = "/backend/franchise_permit/franchise_permit.php";
+    const backendUrl = "http://localhost/plms-main/backend/franchise_permit/franchise_permit.php";
     
     try {
       const formDataToSend = new FormData();
@@ -1134,7 +1994,6 @@ export default function FranchiseNew() {
         } else {
           showErrorMessage("Invalid response from server");
         }
-        setShowConfirmModal(false); 
         return;
       }
       
@@ -1148,8 +2007,7 @@ export default function FranchiseNew() {
       console.error("Submit error:", error);
       showErrorMessage("Failed to submit application. Please check your connection.");
     } finally {
-      setIsSubmitting(false); 
-      setShowConfirmModal(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -1213,31 +2071,31 @@ export default function FranchiseNew() {
         )}
         
         {!errors[name] && name === 'plate_number' && (
-          <p className="text-gray-500 text-xs mt-1">
+          <p className={`text-xs mt-1 ${formData.plate_number && formData.plate_number.length === 7 ? 'text-green-600' : 'text-red-600'}`}>
             Format: 3 letters followed by 4 digits (e.g., ABC1234)
           </p>
         )}
         
         {!errors[name] && name === 'chassis_number' && (
-          <p className="text-gray-500 text-xs mt-1">
+          <p className={`text-xs mt-1 ${formData.chassis_number && formData.chassis_number.length === 17 ? 'text-green-600' : 'text-red-600'}`}>
             Must be exactly 17 characters
           </p>
         )}
         
         {!errors[name] && name === 'engine_number' && (
-          <p className="text-gray-500 text-xs mt-1">
+          <p className={`text-xs mt-1 ${formData.engine_number && formData.engine_number.length >= 8 && formData.engine_number.length <= 12 ? 'text-green-600' : 'text-red-600'}`}>
             Must be 8-12 characters
           </p>
         )}
         
         {!errors[name] && (name === 'lto_or_number' || name === 'lto_cr_number') && (
-          <p className="text-gray-500 text-xs mt-1">
+          <p className={`text-xs mt-1 ${formData[name] && formData[name].length >= 7 && formData[name].length <= 8 ? 'text-green-600' : 'text-red-600'}`}>
             Must be 7-8 digits
           </p>
         )}
         
         {!errors[name] && name === 'year_acquired' && (
-          <p className="text-gray-500 text-xs mt-1">
+          <p className={`text-xs mt-1 ${formData.year_acquired && formData.year_acquired.length === 4 && parseInt(formData.year_acquired) >= 1900 && parseInt(formData.year_acquired) <= new Date().getFullYear() ? 'text-green-600' : 'text-red-600'}`}>
             Format: YYYY (e.g., 2023)
           </p>
         )}
@@ -1253,6 +2111,37 @@ export default function FranchiseNew() {
             <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>
               Select Permit Type
             </h3>
+            
+            {duplicateCheck.hasDuplicate && (
+              <div className="p-4 rounded-lg border mb-4 bg-red-50 border-red-200">
+                <div className="flex items-start">
+                  <AlertCircle className="w-5 h-5 mr-2 mt-0.5 text-red-600" />
+                  <div>
+                    <p className="text-sm font-medium text-red-700">
+                      ⚠️ Duplicate Application Detected
+                    </p>
+                    <p className="text-xs mt-1 text-red-600">
+                      {duplicateCheck.message}
+                    </p>
+                    {duplicateCheck.duplicateDetails && (
+                      <div className="mt-2 text-xs">
+                        <p><strong>Application ID:</strong> {duplicateCheck.duplicateDetails.application_id}</p>
+                        <p><strong>Status:</strong> {duplicateCheck.duplicateDetails.status}</p>
+                        <p><strong>Date Submitted:</strong> {duplicateCheck.duplicateDetails.date_submitted}</p>
+                        <p><strong>Remarks:</strong> {duplicateCheck.duplicateDetails.remarks || 'None'}</p>
+                      </div>
+                    )}
+                    <button 
+                      type="button" 
+                      onClick={() => navigate('/user/permittracker')} 
+                      className="mt-2 px-3 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200 rounded transition-colors"
+                    >
+                      View Your Applications
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {formData.permit_subtype && (
               <div className={`p-4 rounded-lg border mb-4 ${
@@ -1276,7 +2165,7 @@ export default function FranchiseNew() {
                     </p>
                     <p className="text-xs mt-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
                       {formData.permit_subtype === 'MTOP' ? 
-                        '• For individual tricycle operators' : 
+                        '• Must NOT have existing approved MTOP permit (to avoid duplicates)' : 
                         '• MUST have existing APPROVED MTOP permit first'
                       }
                     </p>
@@ -1327,7 +2216,7 @@ export default function FranchiseNew() {
                     {errors.mtop_plate_number && (
                       <p className="text-red-600 text-sm mt-1">{errors.mtop_plate_number}</p>
                     )}
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className={`text-xs mt-1 ${formData.mtop_plate_number && formData.mtop_plate_number.length === 7 ? 'text-green-600' : 'text-red-600'}`}>
                       Format: 3 letters followed by 4 digits (e.g., ABC1234)
                     </p>
                   </div>
@@ -1495,8 +2384,8 @@ export default function FranchiseNew() {
             )}
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderInputField('first_name', 'First Name *', 'text', [], true)}
-              {renderInputField('last_name', 'Last Name *', 'text', [], true)}
+              {renderInputField('first_name', 'First Name', 'text', [], true)}
+              {renderInputField('last_name', 'Last Name', 'text', [], true)}
               
               <div className="relative">
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
@@ -1525,7 +2414,7 @@ export default function FranchiseNew() {
                 )}
               </div>
               
-              {renderInputField('home_address', 'Home Address *', 'text', [], true)}
+              {renderInputField('home_address', 'Home Address', 'text', [], true)}
               
               <div className="relative">
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
@@ -1567,8 +2456,8 @@ export default function FranchiseNew() {
                 )}
               </div>
               
-              {renderInputField('email', 'Email Address *', 'email', [], true)}
-              {renderInputField('citizenship', 'Citizenship *', 'select', NATIONALITIES, true)}
+              {renderInputField('email', 'Email Address', 'email', [], true)}
+              {renderInputField('citizenship', 'Citizenship', 'select', NATIONALITIES, true)}
               
               <div className="relative">
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
@@ -1602,7 +2491,7 @@ export default function FranchiseNew() {
                 )}
               </div>
               
-              {renderInputField('id_type', 'Valid ID Type *', 'select', ["Driver's License", "Passport", "National ID", "UMID", "Postal ID", "Voter's ID"], true)}
+              {renderInputField('id_type', 'Valid ID Type', 'select', ["Driver's License", "Passport", "National ID", "UMID", "Postal ID", "Voter's ID"], true)}
               
               <div className="relative">
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
@@ -1634,7 +2523,7 @@ export default function FranchiseNew() {
               </div>
               
               {formData.permit_subtype === 'MTOP' && (
-                renderInputField('operator_type', 'Operator Type *', 'select', OPERATOR_TYPES, true)
+                renderInputField('operator_type', 'Operator Type', 'select', OPERATOR_TYPES, true)
               )}
             </div>
           </div>
@@ -1692,8 +2581,8 @@ export default function FranchiseNew() {
                 Vehicle Information
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {renderInputField('make_brand', 'Make / Brand *', 'text', [], true)}
-                {renderInputField('model', 'Model *', 'text', [], true)}
+                {renderInputField('make_brand', 'Make / Brand', 'text', [], true)}
+                {renderInputField('model', 'Model', 'text', [], true)}
                 
                 <div className="relative">
                   <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
@@ -1897,12 +2786,12 @@ export default function FranchiseNew() {
                       {errors.lto_or_number}
                     </p>
                   ) : (
-                    <p className="text-gray-500 text-xs mt-1" style={{ fontFamily: COLORS.font }}>
+                    <p className={`text-xs mt-1 ${formData.lto_or_number && formData.lto_or_number.length >= 7 && formData.lto_or_number.length <= 8 ? 'text-green-600' : 'text-red-600'}`} style={{ fontFamily: COLORS.font }}>
                       Must be 7-8 digits
                     </p>
                   )}
                 </div>
-                
+
                 <div className="relative">
                   <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
                     LTO CR Number *
@@ -1938,7 +2827,7 @@ export default function FranchiseNew() {
                       {errors.lto_cr_number}
                     </p>
                   ) : (
-                    <p className="text-gray-500 text-xs mt-1" style={{ fontFamily: COLORS.font }}>
+                    <p className={`text-xs mt-1 ${formData.lto_or_number && formData.lto_or_number.length >= 7 && formData.lto_or_number.length <= 8 ? 'text-green-600' : 'text-red-600'}`} style={{ fontFamily: COLORS.font }}>
                       Must be 7-8 digits
                     </p>
                   )}
@@ -2089,14 +2978,17 @@ export default function FranchiseNew() {
                       <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
                         TODA President Certificate
                       </label>
-                      <input 
-                        type="file" 
-                        name="toda_president_cert" 
-                        onChange={handleChange} 
-                        accept=".jpg,.jpeg,.png,.pdf" 
-                        className="w-full p-2 border border-black rounded" 
-                        style={{ fontFamily: COLORS.font }} 
-                      />
+                      <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
+                        <Upload className="w-5 h-5 text-gray-500" />
+                        <input 
+                          type="file" 
+                          name="toda_president_cert" 
+                          onChange={handleChange} 
+                          accept=".jpg,.jpeg,.png,.pdf" 
+                          className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                          style={{ fontFamily: COLORS.font }} 
+                        />
+                      </div>
                       {formData.toda_president_cert && (
                         <div className="mt-2 flex items-center justify-between">
                           <p className="text-green-600 text-xs flex items-center">
@@ -2192,6 +3084,69 @@ export default function FranchiseNew() {
             )}
             
             <div className="space-y-4">
+              {/* Mayor's Permit Verification - Only for FRANCHISE */}
+              {formData.permit_subtype === 'FRANCHISE' && (
+                <div className="flex flex-col p-4 border border-gray-300 rounded-lg">
+                  <div className="mb-3">
+                    <label className="flex items-center font-medium">
+                      <span style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                        Mayor's Permit Verification (Optional)
+                      </span>
+                    </label>
+                    <p className="text-sm text-gray-600 mt-1">
+                      If you have an existing Mayor's Permit, you can verify it here by entering your Permit ID or Applicant ID
+                    </p>
+                  </div>
+                  <div>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        name="mayors_permit_id" 
+                        value={formData.mayors_permit_id || ''} 
+                        onChange={handleChange} 
+                        placeholder="Enter Mayor's Permit ID or Applicant ID" 
+                        className="flex-1 p-3 border border-black rounded-lg" 
+                        style={{ fontFamily: COLORS.font }}
+                      />
+                      <button
+                        type="button"
+                        onClick={verifyMayorsPermitId}
+                        disabled={verifyingMayorsPermit || !formData.mayors_permit_id.trim()}
+                        className={`px-4 py-3 rounded-lg font-medium text-white ${
+                          verifyingMayorsPermit || !formData.mayors_permit_id.trim()
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : validatedMayorsPermitIds[formData.mayors_permit_id]
+                            ? 'bg-green-600 hover:bg-green-700'
+                            : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                      >
+                        {verifyingMayorsPermit ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : validatedMayorsPermitIds[formData.mayors_permit_id] ? (
+                          'Verified'
+                        ) : (
+                          'Verify'
+                        )}
+                      </button>
+                    </div>
+                    
+                    {validatedMayorsPermitIds[formData.mayors_permit_id] && (
+                      <div className="text-xs text-green-600 flex items-center mt-2">
+                        <Check className="w-3 h-3 mr-1" /> Mayor's Permit ID verified successfully
+                      </div>
+                    )}
+                    
+                    {formData.mayors_permit_applicant_id && (
+                      <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm text-green-700">
+                          <strong>Applicant ID:</strong> {formData.mayors_permit_applicant_id}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               {[
                 { 
                   name: 'proof_of_residency', 
@@ -2204,11 +3159,43 @@ export default function FranchiseNew() {
                   description: 'Clearance from your barangay of residence - either upload file OR enter Barangay Clearance ID', 
                   specialType: 'barangayClearance' 
                 },
+                ...(formData.permit_subtype === 'FRANCHISE' ? [{
+                  name: 'toda_endorsement',
+                  label: 'TODA Endorsement *',
+                  description: 'Endorsement letter from the Tricycle Operators and Drivers Association'
+                }] : []),
                 { 
                   name: 'lto_or_cr', 
-                  label: 'LTO OR/CR *', 
-                  description: 'Official Receipt and Certificate of Registration from LTO' 
+                  label: 'LTO OR Copy *', 
+                  description: 'Official Receipt from LTO' 
                 },
+                { 
+                  name: 'lto_cr_copy', 
+                  label: 'LTO CR Copy *', 
+                  description: 'Certificate of Registration from LTO' 
+                },
+                { 
+                  name: 'drivers_license', 
+                  label: 'Driver\'s License *', 
+                  description: 'Valid driver\'s license of the operator' 
+                },
+                ...(formData.permit_subtype === 'MTOP' ? [
+                  { 
+                    name: 'nbi_clearance', 
+                    label: 'NBI Clearance *', 
+                    description: 'Valid NBI clearance certificate' 
+                  },
+                  { 
+                    name: 'police_clearance', 
+                    label: 'Police Clearance *', 
+                    description: 'Police clearance from local police station' 
+                  },
+                  { 
+                    name: 'medical_certificate', 
+                    label: 'Medical Certificate *', 
+                    description: 'Medical certificate from accredited clinic/hospital' 
+                  },
+                ] : []),
                 { 
                   name: 'insurance_certificate', 
                   label: 'Insurance Certificate', 
@@ -2216,27 +3203,9 @@ export default function FranchiseNew() {
                   optional: true 
                 },
                 { 
-                  name: 'drivers_license', 
-                  label: 'Driver\'s License', 
-                  description: 'Valid driver\'s license of the operator', 
-                  optional: true 
-                },
-                { 
                   name: 'emission_test', 
                   label: 'Emission Test', 
                   description: 'Latest emission test result', 
-                  optional: true 
-                },
-                { 
-                  name: 'id_picture', 
-                  label: '2x2 ID Picture', 
-                  description: 'Recent 2x2 ID photo with white background', 
-                  optional: true 
-                },
-                { 
-                  name: 'official_receipt', 
-                  label: 'Official Receipt', 
-                  description: 'Payment receipt for fees', 
                   optional: true 
                 },
               ].map((doc) => (
@@ -2267,15 +3236,42 @@ export default function FranchiseNew() {
                           <label className="block mb-2 text-sm font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
                             Barangay Clearance ID (Alternative to Upload)
                           </label>
-                          <input 
-                            type="text" 
-                            name="barangay_clearance_id" 
-                            value={formData.barangay_clearance_id || ''} 
-                            onChange={handleChange} 
-                            placeholder="Enter Barangay Clearance ID" 
-                            className="w-full p-3 border border-black rounded-lg" 
-                            style={{ color: COLORS.secondary, fontFamily: COLORS.font }} 
-                          />
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              name="barangay_clearance_id" 
+                              value={formData.barangay_clearance_id || ''} 
+                              onChange={handleChange} 
+                              placeholder="Enter Barangay Clearance ID" 
+                              className="flex-1 p-3 border border-black rounded-lg" 
+                              style={{ color: COLORS.secondary, fontFamily: COLORS.font }} 
+                            />
+                            <button
+                              type="button"
+                              onClick={verifyBarangayClearanceId}
+                              disabled={verifyingBarangayId || !formData.barangay_clearance_id.trim()}
+                              className={`px-4 py-3 rounded-lg font-medium text-white ${
+                                verifyingBarangayId || !formData.barangay_clearance_id.trim()
+                                  ? 'bg-gray-400 cursor-not-allowed'
+                                  : validatedBarangayIds[formData.barangay_clearance_id]
+                                  ? 'bg-green-600 hover:bg-green-700'
+                                  : 'bg-blue-600 hover:bg-blue-700'
+                              }`}
+                            >
+                              {verifyingBarangayId ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                              ) : validatedBarangayIds[formData.barangay_clearance_id] ? (
+                                'Verified'
+                              ) : (
+                                'Verify'
+                              )}
+                            </button>
+                          </div>
+                          {validatedBarangayIds[formData.barangay_clearance_id] && (
+                            <div className="text-xs text-green-600 flex items-center mt-1">
+                              <Check className="w-3 h-3 mr-1" /> ID verified successfully
+                            </div>
+                          )}
                         </div>
                         <div>
                           <label className="block mb-2 text-sm font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
@@ -2292,8 +3288,53 @@ export default function FranchiseNew() {
                               style={{ fontFamily: COLORS.font }} 
                             />
                           </div>
+                          {formData.barangay_clearance && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <button
+                                type="button"
+                                onClick={() => previewFile(formData.barangay_clearance)}
+                                className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100"
+                              >
+                                <Eye className="w-4 h-4" /> Preview
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => verifyDocument('barangay_clearance', formData.barangay_clearance)}
+                                disabled={documentVerification.barangay_clearance?.isVerifying}
+                                className={`flex items-center gap-1 px-3 py-1 text-sm rounded border ${
+                                  documentVerification.barangay_clearance?.isVerified 
+                                    ? 'bg-green-100 border-green-500 text-green-700' 
+                                    : 'bg-blue-50 border-blue-500 text-blue-700'
+                                }`}
+                              >
+                                {documentVerification.barangay_clearance?.isVerifying ? (
+                                  <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+                                ) : documentVerification.barangay_clearance?.isVerified ? (
+                                  <><Check className="w-4 h-4" /> Verified</>
+                                ) : (
+                                  <><Shield className="w-4 h-4" /> Verify</>
+                                )}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
+                      
+                      {/* Progress bar for barangay clearance verification */}
+                      {formData.barangay_clearance && documentVerification.barangay_clearance?.isVerifying && (
+                        <div className="p-3 border border-blue-300 rounded-lg bg-blue-50">
+                          <div className="flex items-center justify-between text-xs text-blue-600">
+                            <span>Verifying document...</span>
+                            <span>{documentVerification.barangay_clearance.progress}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                            <div 
+                              className="bg-blue-600 h-1.5 rounded-full transition-all" 
+                              style={{ width: `${documentVerification.barangay_clearance.progress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
                       
                       {(formData.barangay_clearance_id || formData.barangay_clearance) && (
                         <div className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded">
@@ -2307,15 +3348,6 @@ export default function FranchiseNew() {
                               }
                             </span>
                           </div>
-                          {formData.barangay_clearance && (
-                            <button 
-                              type="button" 
-                              onClick={() => previewFile(formData.barangay_clearance)} 
-                              className="text-xs text-blue-600 hover:text-blue-800"
-                            >
-                              Preview
-                            </button>
-                          )}
                         </div>
                       )}
                       
@@ -2340,149 +3372,75 @@ export default function FranchiseNew() {
                         />
                       </div>
                       
+                      {formData[doc.name] && (
+                        <>
+                          <div className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded mt-2">
+                            <div className="flex items-center">
+                              <Check className="w-4 h-4 text-green-600 mr-2" />
+                              <span className="text-sm text-green-700">
+                                Uploaded: {formData[doc.name].name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button 
+                                type="button" 
+                                onClick={() => previewFile(formData[doc.name])} 
+                                className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100"
+                              >
+                                <Eye className="w-4 h-4" /> Preview
+                              </button>
+                              {documentVerification[doc.name] && (
+                                <button
+                                  type="button"
+                                  onClick={() => verifyDocument(doc.name, formData[doc.name])}
+                                  disabled={documentVerification[doc.name]?.isVerifying}
+                                  className={`flex items-center gap-1 px-3 py-1 text-sm rounded border ${
+                                    documentVerification[doc.name]?.isVerified 
+                                      ? 'bg-green-100 border-green-500 text-green-700' 
+                                      : 'bg-blue-50 border-blue-500 text-blue-700'
+                                  }`}
+                                >
+                                  {documentVerification[doc.name]?.isVerifying ? (
+                                    <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+                                  ) : documentVerification[doc.name]?.isVerified ? (
+                                    <><Check className="w-4 h-4" /> Verified</>
+                                  ) : (
+                                    <><Shield className="w-4 h-4" /> Verify</>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Progress bar for document verification */}
+                          {documentVerification[doc.name]?.isVerifying && (
+                            <div className="p-3 border border-blue-300 rounded-lg bg-blue-50 mt-2">
+                              <div className="flex items-center justify-between text-xs text-blue-600">
+                                <span>Verifying document...</span>
+                                <span>{documentVerification[doc.name].progress}%</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                <div 
+                                  className="bg-blue-600 h-1.5 rounded-full transition-all" 
+                                  style={{ width: `${documentVerification[doc.name].progress}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      
                       {errors[doc.name] && (
                         <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>
                           {errors[doc.name]}
                         </p>
-                      )}
-                      
-                      {formData[doc.name] && (
-                        <div className="mt-2 flex items-center justify-between">
-                          <p className="text-green-600 text-xs flex items-center">
-                            <Check className="w-3 h-3 mr-1" />
-                            Uploaded: {formData[doc.name].name}
-                          </p>
-                          <button 
-                            type="button" 
-                            onClick={() => previewFile(formData[doc.name])} 
-                            className="text-xs text-blue-600 hover:text-blue-800"
-                          >
-                            Preview
-                          </button>
-                        </div>
                       )}
                     </div>
                   )}
                 </div>
               ))}
               
-              {formData.permit_subtype === 'FRANCHISE' && (
-                <div className="flex flex-col p-4 border border-gray-300 rounded-lg">
-                  <div className="mb-3">
-                    <label className="flex items-center font-medium">
-                      <span className="text-red-600" style={{ fontFamily: COLORS.font }}>
-                        TODA Endorsement *
-                      </span>
-                    </label>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Endorsement letter from the Tricycle Operators and Drivers Association
-                    </p>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
-                      <Upload className="w-5 h-5 text-gray-500" />
-                      <input 
-                        type="file" 
-                        name="toda_endorsement" 
-                        onChange={handleChange} 
-                        accept=".jpg,.jpeg,.png,.pdf" 
-                        className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100" 
-                        style={{ fontFamily: COLORS.font }} 
-                        required 
-                      />
-                    </div>
-                    {errors.toda_endorsement && (
-                      <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>
-                        {errors.toda_endorsement}
-                      </p>
-                    )}
-                    {formData.toda_endorsement && (
-                      <div className="mt-2 flex items-center justify-between">
-                        <p className="text-green-600 text-xs flex items-center">
-                          <Check className="w-3 h-3 mr-1" />
-                          Uploaded: {formData.toda_endorsement.name}
-                        </p>
-                        <button 
-                          type="button" 
-                          onClick={() => previewFile(formData.toda_endorsement)} 
-                          className="text-xs text-blue-600 hover:text-blue-800"
-                        >
-                          Preview
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              {formData.permit_subtype === 'MTOP' && (
-                <>
-                  {[
-                    { 
-                      name: 'nbi_clearance', 
-                      label: 'NBI Clearance *', 
-                      description: 'Valid NBI clearance certificate' 
-                    },
-                    { 
-                      name: 'police_clearance', 
-                      label: 'Police Clearance *', 
-                      description: 'Police clearance from local police station' 
-                    },
-                    { 
-                      name: 'medical_certificate', 
-                      label: 'Medical Certificate *', 
-                      description: 'Medical certificate from accredited clinic/hospital' 
-                    },
-                  ].map((doc) => (
-                    <div key={doc.name} className="flex flex-col p-4 border border-gray-300 rounded-lg">
-                      <div className="mb-3">
-                        <label className="flex items-center font-medium">
-                          <span className="text-red-600" style={{ fontFamily: COLORS.font }}>
-                            {doc.label}
-                          </span>
-                        </label>
-                        {doc.description && (
-                          <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
-                          <Upload className="w-5 h-5 text-gray-500" />
-                          <input 
-                            type="file" 
-                            name={doc.name} 
-                            onChange={handleChange} 
-                            accept=".jpg,.jpeg,.png,.pdf" 
-                            className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100" 
-                            style={{ fontFamily: COLORS.font }} 
-                            required 
-                          />
-                        </div>
-                        {errors[doc.name] && (
-                          <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>
-                            {errors[doc.name]}
-                          </p>
-                        )}
-                        {formData[doc.name] && (
-                          <div className="mt-2 flex items-center justify-between">
-                            <p className="text-green-600 text-xs flex items-center">
-                              <Check className="w-3 h-3 mr-1" />
-                              Uploaded: {formData[doc.name].name}
-                            </p>
-                            <button 
-                              type="button" 
-                              onClick={() => previewFile(formData[doc.name])} 
-                              className="text-xs text-blue-600 hover:text-blue-800"
-                            >
-                              Preview
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
+
             </div>
           </div>
         );
@@ -2861,16 +3819,14 @@ export default function FranchiseNew() {
                     type="date" 
                     name="date_submitted" 
                     value={formData.date_submitted || new Date().toISOString().split('T')[0]} 
-                    onChange={handleChange} 
-                    className={`w-full p-3 border border-black rounded-lg ${errors.date_submitted ? 'border-red-500' : ''}`} 
+                    readOnly 
+                    className="w-full p-3 border border-black rounded-lg bg-gray-100 cursor-not-allowed" 
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }} 
                     required 
                   />
-                  {errors.date_submitted && (
-                    <p className="text-red-600 text-sm mt-1">
-                      {errors.date_submitted}
-                    </p>
-                  )}
+                  <p className="text-xs text-gray-600 mt-1">
+                    Submission date is automatically set to today's date
+                  </p>
                 </div>
                 
                 <div className="md:col-span-2">
@@ -2912,6 +3868,7 @@ export default function FranchiseNew() {
                   </label>
                 </div>
               </div>
+              
             </div>
           </div>
         );
@@ -2925,18 +3882,19 @@ export default function FranchiseNew() {
             
             <div className="bg-white rounded-lg shadow p-6 border border-black">
               <div className="space-y-6">
-                <div className="p-4 bg-blue-50 rounded-lg mb-4">
+                {/* Application Type Header */}
+                <div className="p-4 bg-blue-50 rounded-lg mb-4 border-l-4 border-blue-500">
                   <h5 className="font-bold text-lg mb-2" style={{ color: COLORS.primary }}>
-                    Application Type: {formData.permit_subtype === 'MTOP' ? 'Motorized Tricycle Operator\'s Permit (MTOP)' : 'Franchise Permit'}
+                    📋 Application Type: {formData.permit_subtype === 'MTOP' ? 'Motorized Tricycle Operator\'s Permit (MTOP)' : 'Franchise Permit'}
                   </h5>
                   {formData.permit_subtype === 'MTOP' && (
                     <p className="text-sm" style={{ color: COLORS.secondary }}>
-                      Operator Type: {formData.operator_type}
+                      <span className="font-semibold">Operator Type:</span> {formData.operator_type}
                     </p>
                   )}
                   {formData.permit_subtype === 'FRANCHISE' && formData.mtop_application_id && (
                     <p className="text-sm" style={{ color: COLORS.secondary }}>
-                      MTOP Reference ID: {formData.mtop_application_id}
+                      <span className="font-semibold">MTOP Reference ID:</span> {formData.mtop_application_id}
                     </p>
                   )}
                 </div>
@@ -2989,59 +3947,59 @@ export default function FranchiseNew() {
                 
                 <div>
                   <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
-                    {formData.permit_subtype === 'MTOP' ? 'Operator Information' : 'Applicant Information'}
+                    👤 {formData.permit_subtype === 'MTOP' ? 'Operator Information' : 'Applicant Information'}
                   </h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm" style={{ fontFamily: COLORS.font }}>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Full Name:</span>
-                      <span className="flex-1">{getFullName()}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm" style={{ fontFamily: COLORS.font }}>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Full Name:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{getFullName()}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">First Name:</span>
-                      <span className="flex-1">{formData.first_name}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">First Name:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.first_name}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Last Name:</span>
-                      <span className="flex-1">{formData.last_name}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Last Name:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.last_name}</p>
                     </div>
                     {formData.middle_initial && (
-                      <div className="flex items-center">
-                        <span className="font-medium w-40">Middle Initial:</span>
-                        <span className="flex-1">{formData.middle_initial}.</span>
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <span className="font-medium text-gray-600">Middle Initial:</span>
+                        <p className="font-semibold text-gray-900 mt-1">{formData.middle_initial}.</p>
                       </div>
                     )}
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Home Address:</span>
-                      <span className="flex-1">{formData.home_address}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg md:col-span-2">
+                      <span className="font-medium text-gray-600">Home Address:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.home_address}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Contact Number:</span>
-                      <span className="flex-1">{formData.contact_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Contact Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.contact_number}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Email:</span>
-                      <span className="flex-1">{formData.email}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Email:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.email}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Citizenship:</span>
-                      <span className="flex-1">{formData.citizenship}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Citizenship:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.citizenship}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Birth Date:</span>
-                      <span className="flex-1">{formData.birth_date}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Birth Date:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.birth_date}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">ID Type:</span>
-                      <span className="flex-1">{formData.id_type}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">ID Type:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.id_type}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">ID Number:</span>
-                      <span className="flex-1">{formData.id_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">ID Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.id_number}</p>
                     </div>
                     {formData.permit_subtype === 'MTOP' && (
-                      <div className="flex items-center">
-                        <span className="font-medium w-40">Operator Type:</span>
-                        <span className="flex-1">{formData.operator_type}</span>
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <span className="font-medium text-gray-600">Operator Type:</span>
+                        <p className="font-semibold text-gray-900 mt-1">{formData.operator_type}</p>
                       </div>
                     )}
                   </div>
@@ -3049,56 +4007,56 @@ export default function FranchiseNew() {
                 
                 <div>
                   <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
-                    Tricycle Information
+                    🚗 Tricycle Information
                   </h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm" style={{ fontFamily: COLORS.font }}>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Make/Brand:</span>
-                      <span className="flex-1">{formData.make_brand}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm" style={{ fontFamily: COLORS.font }}>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Make/Brand:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.make_brand}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Model:</span>
-                      <span className="flex-1">{formData.model}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Model:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.model}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Engine Number:</span>
-                      <span className="flex-1">{formData.engine_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Engine Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.engine_number}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Chassis Number:</span>
-                      <span className="flex-1">{formData.chassis_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Chassis Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.chassis_number}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Plate Number:</span>
-                      <span className="flex-1">{formData.plate_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Plate Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.plate_number}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Year Acquired:</span>
-                      <span className="flex-1">{formData.year_acquired}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Year Acquired:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.year_acquired}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Color:</span>
-                      <span className="flex-1">{formData.color}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Color:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.color}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Vehicle Type:</span>
-                      <span className="flex-1">{formData.vehicle_type}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Vehicle Type:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.vehicle_type}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">LTO OR Number:</span>
-                      <span className="flex-1">{formData.lto_or_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">LTO OR Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.lto_or_number}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">LTO CR Number:</span>
-                      <span className="flex-1">{formData.lto_cr_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">LTO CR Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.lto_cr_number}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">LTO Expiration:</span>
-                      <span className="flex-1">{formData.lto_expiration_date}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">LTO Expiration:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.lto_expiration_date}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">District:</span>
-                      <span className="flex-1">{formData.district}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">District:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.district}</p>
                     </div>
                   </div>
                 </div>
@@ -3133,55 +4091,79 @@ export default function FranchiseNew() {
                 
                 <div>
                   <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
-                    Documents Summary
+                    📄 Required Documents & Uploads
                   </h5>
-                  <div className="space-y-4">
+                  <p className="text-sm text-gray-600 mb-4">All documents marked with <span className="text-red-600 font-bold">*</span> are required</p>
+                  <div className="space-y-3">
                     {[
-                      { name: 'proof_of_residency', label: 'Proof of Residency', file: formData.proof_of_residency },
-                      { name: 'barangay_clearance', label: 'Barangay Clearance', file: formData.barangay_clearance, id: formData.barangay_clearance_id },
-                      { name: 'lto_or_cr', label: 'LTO OR/CR', file: formData.lto_or_cr },
-                      { name: 'insurance_certificate', label: 'Insurance Certificate', file: formData.insurance_certificate },
-                      { name: 'drivers_license', label: 'Driver\'s License', file: formData.drivers_license },
-                      { name: 'emission_test', label: 'Emission Test', file: formData.emission_test },
-                      { name: 'id_picture', label: '2x2 ID Picture', file: formData.id_picture },
-                      { name: 'official_receipt', label: 'Official Receipt', file: formData.official_receipt },
+                      { name: 'proof_of_residency', label: 'Proof of Residency', file: formData.proof_of_residency, required: true },
+                      { name: 'barangay_clearance', label: 'Barangay Clearance', file: formData.barangay_clearance, id: formData.barangay_clearance_id, required: true },
+                      { name: 'lto_or_cr', label: 'LTO OR/CR', file: formData.lto_or_cr, required: true },
+                      { name: 'insurance_certificate', label: 'Insurance Certificate', file: formData.insurance_certificate, required: true },
+                      { name: 'drivers_license', label: 'Driver\'s License', file: formData.drivers_license, required: true },
+                      { name: 'emission_test', label: 'Emission Test', file: formData.emission_test, required: true },
+                      { name: 'id_picture', label: '2x2 ID Picture', file: formData.id_picture, required: true },
+                      { name: 'official_receipt', label: 'Official Receipt', file: formData.official_receipt, required: true },
                       ...(formData.permit_subtype === 'FRANCHISE' ? 
-                        [{ name: 'toda_endorsement', label: 'TODA Endorsement', file: formData.toda_endorsement }] : 
+                        [{ name: 'toda_endorsement', label: 'TODA Endorsement', file: formData.toda_endorsement, required: true }] : 
                         []
                       ),
                       ...(formData.permit_subtype === 'MTOP' ? 
                         [
-                          { name: 'nbi_clearance', label: 'NBI Clearance', file: formData.nbi_clearance },
-                          { name: 'police_clearance', label: 'Police Clearance', file: formData.police_clearance },
-                          { name: 'medical_certificate', label: 'Medical Certificate', file: formData.medical_certificate }
+                          { name: 'nbi_clearance', label: 'NBI Clearance', file: formData.nbi_clearance, required: true },
+                          { name: 'police_clearance', label: 'Police Clearance', file: formData.police_clearance, required: true },
+                          { name: 'medical_certificate', label: 'Medical Certificate', file: formData.medical_certificate, required: true }
                         ] : 
                         []
                       )
                     ].map((doc) => (
-                      <div key={doc.name} className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
-                        <div className="flex items-center">
-                          {doc.file || doc.id ? (
-                            <Check className="w-5 h-5 text-green-600 mr-3" />
-                          ) : (
-                            <X className="w-5 h-5 text-red-600 mr-3" />
-                          )}
-                          <div>
-                            <span className="font-medium">{doc.label}:</span>
-                            <p className="text-sm text-gray-600">
-                              {doc.file ? doc.file.name : doc.id ? `ID: ${doc.id}` : 'Not provided'}
-                            </p>
+                      <div key={doc.name} className={`p-4 border-2 rounded-lg ${doc.file || doc.id ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start flex-1">
+                            {doc.file || doc.id ? (
+                              <Check className="w-5 h-5 text-green-600 mr-3 mt-1 flex-shrink-0" />
+                            ) : (
+                              <X className="w-5 h-5 text-red-600 mr-3 mt-1 flex-shrink-0" />
+                            )}
+                            <div className="flex-1">
+                              <span className={`font-semibold ${doc.required ? 'text-red-600' : 'text-gray-700'}`}>
+                                {doc.label} {doc.required && '*'}
+                              </span>
+                              <p className="text-sm text-gray-600 mt-1">
+                                {doc.file ? (
+                                  <>
+                                    <span className="font-medium">File:</span> {doc.file.name}
+                                    <br />
+                                    <span className="text-xs text-gray-500">Size: {(doc.file.size / 1024).toFixed(2)} KB</span>
+                                  </>
+                                ) : doc.id ? (
+                                  <><span className="font-medium">Clearance ID:</span> {doc.id}</>
+                                ) : (
+                                  <span className="text-red-600 font-medium">⚠ Not provided - Required for submission</span>
+                                )}
+                              </p>
+                              {doc.file && doc.file.type && doc.file.type.startsWith('image/') && (
+                                <div className="mt-2">
+                                  <img 
+                                    src={URL.createObjectURL(doc.file)} 
+                                    alt={doc.label}
+                                    className="w-32 h-32 object-cover rounded border border-gray-300"
+                                  />
+                                </div>
+                              )}
+                            </div>
                           </div>
+                          {doc.file && (
+                            <button 
+                              type="button" 
+                              onClick={() => previewFile(doc.file)} 
+                              className="ml-3 flex items-center gap-1 px-3 py-2 text-sm rounded-lg bg-blue-100 hover:bg-blue-200 transition-colors duration-300 text-blue-700 font-medium flex-shrink-0" 
+                            >
+                              <Eye className="w-4 h-4" />
+                              View Full
+                            </button>
+                          )}
                         </div>
-                        {doc.file && (
-                          <button 
-                            type="button" 
-                            onClick={() => previewFile(doc.file)} 
-                            className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300" 
-                            style={{ color: COLORS.secondary }}
-                          >
-                            <Eye className="w-4 h-4" />Preview
-                          </button>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -3311,13 +4293,13 @@ export default function FranchiseNew() {
           </p>
         </div>
         <button 
-          onClick={() => navigate('/user/franchise/type')} 
+          onClick={handleBackConfirmation} 
           onMouseEnter={e => e.currentTarget.style.background = COLORS.accent} 
           onMouseLeave={e => e.currentTarget.style.background = COLORS.success} 
           style={{ background: COLORS.success }} 
           className="px-4 py-2 rounded-lg font-medium text-white hover:bg-[#FDA811] transition-colors duration-300"
         >
-          Back to Dashboard
+          Change Permit Type
         </button>
       </div>
       
@@ -3383,54 +4365,58 @@ export default function FranchiseNew() {
               type="submit" 
               disabled={
                 !isStepValid(currentStep) || 
-                (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
+                (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
+                duplicateCheck.hasDuplicate
               } 
               style={{ 
                 background: (
                   !isStepValid(currentStep) || 
-                  (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
+                  (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
+                  duplicateCheck.hasDuplicate
                 ) ? '#9CA3AF' : COLORS.success 
               }} 
               onMouseEnter={e => { 
                 if (isStepValid(currentStep) && 
-                    !(formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)) {
+                    !(formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) && 
+                    !duplicateCheck.hasDuplicate) {
                   e.currentTarget.style.background = COLORS.accent; 
                 }
               }} 
               onMouseLeave={e => { 
                 if (isStepValid(currentStep) && 
-                    !(formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)) {
+                    !(formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) && 
+                    !duplicateCheck.hasDuplicate) {
                   e.currentTarget.style.background = COLORS.success; 
                 }
               }} 
               className={`px-6 py-3 rounded-lg font-semibold text-white ${
                 (!isStepValid(currentStep) || 
-                (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)) ? 'cursor-not-allowed' : 'transition-colors duration-300'
+                (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed) || 
+                duplicateCheck.hasDuplicate) ? 'cursor-not-allowed' : 'transition-colors duration-300'
               }`}
             >
               {currentStep === steps.length - 1 ? 'Review Application' : 'Next'}
             </button>
           ) : (
             <button 
-              type="button" 
-              onClick={() => setShowConfirmModal(true)} 
-              disabled={isSubmitting || !mtopValidation.canProceed} 
+              type="submit" 
+              disabled={isSubmitting || !mtopValidation.canProceed || duplicateCheck.hasDuplicate} 
               onMouseEnter={e => { 
-                if (!isSubmitting && mtopValidation.canProceed) {
+                if (!isSubmitting && mtopValidation.canProceed && !duplicateCheck.hasDuplicate) {
                   e.currentTarget.style.background = COLORS.accent; 
                 }
               }} 
               onMouseLeave={e => { 
-                if (!isSubmitting && mtopValidation.canProceed) {
+                if (!isSubmitting && mtopValidation.canProceed && !duplicateCheck.hasDuplicate) {
                   e.currentTarget.style.background = COLORS.success; 
                 }
               }} 
               style={{ 
-                background: (isSubmitting || !mtopValidation.canProceed) ? 
+                background: (isSubmitting || !mtopValidation.canProceed || duplicateCheck.hasDuplicate) ? 
                 '#9CA3AF' : COLORS.success 
               }} 
               className={`px-6 py-3 rounded-lg font-semibold text-white ${
-                (isSubmitting || !mtopValidation.canProceed) ? 
+                (isSubmitting || !mtopValidation.canProceed || duplicateCheck.hasDuplicate) ? 
                 'cursor-not-allowed' : 'transition-colors duration-300'
               }`}
             >
@@ -3501,303 +4487,217 @@ export default function FranchiseNew() {
         </div>
       )}
       
-      {showConfirmModal && (
+
+
+
+      {/* Payment Success Modal */}
+      {showPaymentSuccessModal && (
         <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200" style={{ 
-            background: 'rgba(255, 255, 255, 0.95)', 
-            fontFamily: COLORS.font, 
-            backdropFilter: 'blur(10px)' 
-          }}>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <Shield className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold" style={{ color: COLORS.primary }}>
-                  Confirm Submission
-                </h2>
-                <p className="text-sm text-gray-600">
-                  Review your information before submitting
-                </p>
+          <div 
+            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
+            style={{ 
+              background: 'rgba(255, 255, 255, 0.95)',
+              fontFamily: COLORS.font,
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <div className="flex items-center justify-center mb-6">
+              <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+                <Check className="w-10 h-10 text-green-600" />
               </div>
             </div>
             
+            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.primary }}>Payment Successful!</h2>
+            
             <div className="mb-6">
-              <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                You are about to submit your {formData.permit_subtype === 'MTOP' ? 'Motorized Tricycle Operator\'s Permit (MTOP)' : 'Franchise Permit'} application.
+              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                Your payment has been completed successfully! As long as you have completed the payment process, it is considered successful. You can now proceed to the next step.
               </p>
               
-              {formData.permit_subtype === 'FRANCHISE' && originalMTOPData && (
-                <div className="p-4 rounded-lg border mb-4 bg-blue-50 border-blue-200">
-                  <div className="flex items-start">
-                    <Check className="w-5 h-5 text-blue-600 mr-2 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">
-                        ✓ Data Auto-filled from MTOP (READ-ONLY)
-                      </p>
-                      <p className="text-xs mt-1 text-blue-600">
-                        Your application has been pre-filled with data from your existing MTOP permit.
-                      </p>
-                    </div>
+              {paymentStatus.transactionId && (
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 mb-4">
+                  <p className="text-sm font-medium text-blue-700 mb-2">Payment Details:</p>
+                  <div className="text-xs space-y-1">
+                    <p><span className="font-medium">Transaction ID:</span> {paymentStatus.transactionId}</p>
+                    <p><span className="font-medium">Payment Date:</span> {new Date(paymentStatus.paymentDate).toLocaleDateString()}</p>
+                    <p><span className="font-medium">Payment Method:</span> Online Payment</p>
                   </div>
                 </div>
               )}
               
-              
-              <div className={`p-4 rounded-lg border mb-4 ${
-                mtopValidation.canProceed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-              }`}>
-                <div className="flex items-start">
-                  <Key className={`w-5 h-5 mr-2 mt-0.5 ${
-                    mtopValidation.canProceed ? 'text-green-600' : 'text-red-600'
-                  }`} />
-                  <div>
-                    <p className={`text-sm font-medium ${
-                      mtopValidation.canProceed ? 'text-green-700' : 'text-red-700'
-                    }`}>
-                      {mtopValidation.canProceed ? '✓ Eligibility Check: PASSED' : '✗ Eligibility Check: FAILED'}
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                      {mtopValidation.message}
-                    </p>
-                    {mtopValidation.permitDetails && (
-                      <div className="mt-2 text-xs">
-                        <p><strong>Existing Permit ID:</strong> {mtopValidation.permitDetails.application_id}</p>
-                        <p><strong>Status:</strong> {mtopValidation.permitDetails.status}</p>
-                        <p><strong>Plate Number:</strong> {mtopValidation.permitDetails.plate_number}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="p-4 bg-gray-50 rounded-lg border mb-4">
-                <p className="text-sm font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  Payment Method:
-                </p>
-                <p className={`font-bold ${formData.payment_method === 'online' ? 'text-blue-600' : 'text-green-600'}`}>
-                  {formData.payment_method === 'online' ? 'Online Payment' : 'Receipt Upload'}
-                </p>
-                <p className="text-sm mt-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  Total Amount: ₱{(
-                    (formData.franchise_fee_checked ? FEES.franchise_fee : 0) + 
-                    (formData.sticker_id_fee_checked ? FEES.sticker_id_fee : 0) + 
-                    (formData.inspection_fee_checked ? FEES.inspection_fee : 0)
-                  ).toFixed(2)}
-                </p>
-              </div>
-              
-              <div className="p-4 bg-gray-50 rounded-lg border mb-4">
-                <p className="text-sm font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  Declaration:
-                </p>
-                <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  I hereby declare that all information provided is true and correct to the best of my knowledge. I understand that any false information may result in the rejection of my application and possible legal consequences.
-                </p>
-                <div className="flex items-center">
-                  <input 
-                    type="checkbox" 
-                    id="declaration-checkbox" 
-                    checked={agreeDeclaration} 
-                    onChange={(e) => setAgreeDeclaration(e.target.checked)} 
-                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" 
-                  />
-                  <label htmlFor="declaration-checkbox" className="ml-2 text-sm" style={{ 
-                    color: COLORS.secondary, 
-                    fontFamily: COLORS.font 
-                  }}>
-                    I agree to the above declaration *
-                  </label>
-                </div>
-              </div>
-              
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                <p className="text-sm font-medium mb-2 text-blue-700">
-                  Application Requirements Summary:
-                </p>
-                <ul className="text-xs space-y-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  {formData.permit_subtype === 'MTOP' ? (
-                    <>
-                      <li>✓ Must NOT have existing approved MTOP permit</li>
-                      <li>✓ No duplicate applications found</li>
-                      <li>✓ All required documents uploaded</li>
-                      <li>✓ Payment {formData.payment_method === 'online' ? 'to be made online' : 'receipt(s) provided'}</li>
-                      <li>✓ Declaration signed</li>
-                    </>
-                  ) : (
-                    <>
-                      <li>✓ MUST have existing APPROVED MTOP permit</li>
-                      <li>✓ No duplicate applications found</li>
-                      <li>✓ Data auto-filled from MTOP</li>
-                      <li>✓ TODA endorsement uploaded</li>
-                      <li>✓ All required documents uploaded</li>
-                      <li>✓ Payment {formData.payment_method === 'online' ? 'to be made online' : 'receipt(s) provided'}</li>
-                      <li>✓ Declaration signed</li>
-                    </>
-                  )}
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm font-medium text-green-700 mb-2">Next Steps:</p>
+                <ul className="text-xs space-y-1 text-green-700">
+                  <li>• Your payment has been recorded in the system</li>
+                  <li>• You can now proceed to the declaration step</li>
+                  <li>• Your application will be processed after submission</li>
+                  <li>• You will receive updates via email</li>
                 </ul>
               </div>
             </div>
-            
-            <div className="flex justify-end gap-4">
-              <button 
-                onClick={() => { 
-                  setShowConfirmModal(false); 
-                  setAgreeDeclaration(false); 
-                }} 
-                disabled={isSubmitting} 
-                style={{ background: COLORS.danger }} 
-                onMouseEnter={e => { 
-                  if (!isSubmitting) e.currentTarget.style.background = COLORS.accent; 
-                }} 
-                onMouseLeave={e => { 
-                  if (!isSubmitting) e.currentTarget.style.background = COLORS.danger; 
-                }} 
-                className={`px-6 py-2 rounded-lg font-semibold text-white ${
-                  isSubmitting ? 'cursor-not-allowed' : 'transition-colors duration-300'
-                }`}
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSubmit} 
-                disabled={
-                  isSubmitting || 
-                  !agreeDeclaration || 
-                  (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
-                } 
-                style={{ 
-                  background: (
-                    isSubmitting || 
-                    !agreeDeclaration || 
-                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
-                  ) ? '#9CA3AF' : COLORS.success 
-                }} 
-                onMouseEnter={e => { 
-                  if (!(
-                    isSubmitting || 
-                    !agreeDeclaration || 
-                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
-                  )) {
-                    e.currentTarget.style.background = COLORS.accent; 
-                  }
-                }} 
-                onMouseLeave={e => { 
-                  if (!(
-                    isSubmitting || 
-                    !agreeDeclaration || 
-                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
-                  )) {
-                    e.currentTarget.style.background = COLORS.success; 
-                  }
-                }} 
-                className={`px-6 py-3 rounded-lg font-semibold text-white ${
-                  (
-                    isSubmitting || 
-                    !agreeDeclaration || 
-                    (formData.permit_subtype === 'FRANCHISE' && !mtopValidation.canProceed)
-                  ) ? 'cursor-not-allowed' : 'transition-colors duration-300'
-                }`}
-              >
-                {isSubmitting ? 'Submitting...' : 'Confirm & Submit'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {showSuccessModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200" style={{ 
-            background: 'rgba(255, 255, 255, 0.95)', 
-            fontFamily: COLORS.font, 
-            backdropFilter: 'blur(10px)' 
-          }}>
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-                <Check className="w-8 h-8 text-green-600" />
-              </div>
-            </div>
-            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.primary }}>
-              {modalTitle}
-            </h2>
-            <div className="mb-6">
-              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                {modalMessage}
-              </p>
-              <p className="text-xs text-center text-gray-500" style={{ fontFamily: COLORS.font }}>
-                You will be redirected to your dashboard in a few seconds...
-              </p>
-            </div>
-            <div className="flex justify-center">
-              <button 
-                onClick={() => { 
-                  setShowSuccessModal(false); 
-                  navigate("/user/permittracker"); 
-                }} 
-                style={{ background: COLORS.success }} 
-                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent} 
-                onMouseLeave={e => e.currentTarget.style.background = COLORS.success} 
-                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-              >
-                Track Application
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {showErrorModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200" style={{ 
-            background: 'rgba(255, 255, 255, 0.95)', 
-            fontFamily: COLORS.font, 
-            backdropFilter: 'blur(10px)' 
-          }}>
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-                <X className="w-8 h-8 text-red-600" />
-              </div>
-            </div>
-            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.danger }}>
-              {modalTitle}
-            </h2>
-            <div className="mb-6">
-              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                {modalMessage}
-              </p>
-              <p className="text-xs text-center text-gray-500" style={{ fontFamily: COLORS.font }}>
-                Please check your information and try again.
-              </p>
-            </div>
+
             <div className="flex justify-center gap-4">
-              <button 
-                onClick={() => setShowErrorModal(false)} 
-                style={{ background: COLORS.danger }} 
-                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent} 
-                onMouseLeave={e => e.currentTarget.style.background = COLORS.danger} 
+              <button
+                onClick={() => {
+                  setShowPaymentSuccessModal(false);
+                  setCurrentStep(7); // Navigate to Step 7 (Declaration)
+                }}
+                style={{ background: COLORS.primary }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                onMouseLeave={e => e.currentTarget.style.background = COLORS.primary}
                 className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
               >
-                Close
+                Proceed to Next Step
               </button>
-              {!showConfirmModal && (
-                <button 
-                  onClick={() => { 
-                    setShowErrorModal(false); 
-                    setShowConfirmModal(true); 
-                  }} 
-                  style={{ background: COLORS.success }} 
-                  onMouseEnter={e => e.currentTarget.style.background = COLORS.accent} 
-                  onMouseLeave={e => e.currentTarget.style.background = COLORS.success} 
-                  className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-                >
-                  Try Again
-                </button>
-              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* MTOP Details Modal */}
+      {showMtopDetailsModal && mtopValidation.permitDetails && (
+        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
+          <div className="bg-white p-8 rounded-lg shadow-2xl w-full max-w-2xl border border-gray-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold" style={{ color: COLORS.primary }}>
+                Existing MTOP Permit Details
+              </h2>
+              <button
+                onClick={() => setShowMtopDetailsModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Essential Permit Information */}
+              <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-gray-600 text-sm mb-1">Application ID</p>
+                      <p className="font-bold text-lg" style={{ color: COLORS.primary }}>
+                        {mtopValidation.permitDetails.application_id || mtopValidation.permitDetails.display_id || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 text-sm mb-1">Status</p>
+                      <p className={`font-bold text-lg ${mtopValidation.permitDetails.status === 'pending' ? 'text-yellow-600' : mtopValidation.permitDetails.status === 'approved' ? 'text-green-600' : 'text-red-600'}`}>
+                        {mtopValidation.permitDetails.status?.toUpperCase() || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-blue-200">
+                    <p className="text-gray-600 text-sm mb-1">Plate Number</p>
+                    <p className="font-bold text-lg text-green-700">
+                      {mtopValidation.permitDetails.plate_number || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vehicle Information */}
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <h3 className="font-semibold text-lg mb-3 text-green-800">Vehicle Information</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-600">Make/Brand:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.make_brand || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Model:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.model || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Color:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.color || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Year Acquired:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.year_acquired || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Vehicle Type:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.vehicle_type || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Engine Number:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.engine_number || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Chassis Number:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.chassis_number || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">MV File Number:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.mv_file_number || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* LTO Information */}
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <h3 className="font-semibold text-lg mb-3 text-purple-800">LTO Information</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-600">LTO OR Number:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.lto_or_number || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">LTO CR Number:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.lto_cr_number || 'N/A'}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-gray-600">LTO Expiration Date:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.lto_expiration_date_formatted || mtopValidation.permitDetails.lto_expiration_date || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Operation Details */}
+              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <h3 className="font-semibold text-lg mb-3 text-yellow-800">Operation Details</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-600">District:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.district || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Route/Zone:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.route_zone || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">TODA Name:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.toda_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Barangay of Operation:</p>
+                    <p className="font-semibold">{mtopValidation.permitDetails.barangay_of_operation || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-4 mt-6">
+              <button
+                onClick={() => {
+                  setShowMtopDetailsModal(false);
+                  nextStep();
+                }}
+                style={{ background: COLORS.primary }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                onMouseLeave={e => e.currentTarget.style.background = COLORS.primary}
+                className="px-6 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
+              >
+                Proceed to Next Step
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

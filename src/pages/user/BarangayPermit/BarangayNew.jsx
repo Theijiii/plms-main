@@ -606,7 +606,7 @@ export default function BarangayNew() {
 
       console.log("Submitting barangay permit application...");
 
-      const response = await fetch("/backend/barangay_permit/barangay_permit.php", {
+      const response = await fetch("http://localhost/plms-main/backend/barangay_permit/barangay_permit.php", {
         method: "POST",
         body: formDataToSend,
       });
@@ -1549,7 +1549,7 @@ export default function BarangayNew() {
           </p>
         </div>
         <button
-          onClick={() => navigate('/user/barangay/type')}
+          onClick={() => navigate('/user/dashboard')}
           onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
           onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
           style={{ background: COLORS.success }}

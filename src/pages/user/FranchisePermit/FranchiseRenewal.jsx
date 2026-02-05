@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Upload, Check, X, Eye, FileText, AlertCircle, Shield, Key, RefreshCw, Calendar, Receipt, UserCheck } from "lucide-react";
+import { Upload, Check, X, Eye, FileText, AlertCircle, Shield, Key, RefreshCw, Calendar, Receipt, UserCheck, Loader2 } from "lucide-react";
+import Swal from 'sweetalert2';
+import { createWorker } from 'tesseract.js';
+import * as pdfjsLib from 'pdfjs-dist/webpack';
 
 // Design constants
 const COLORS = {
@@ -36,12 +39,6 @@ export default function FranchiseRenewal() {
   const [autoFilledFields, setAutoFilledFields] = useState({});
   const [renewalType, setRenewalType] = useState('MTOP');
   const [isLoadingPermit, setIsLoadingPermit] = useState(false);
-  const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
-  const [showPaymentCompletionModal, setShowPaymentCompletionModal] = useState(false);
-  const [barangayClearanceMethod, setBarangayClearanceMethod] = useState('id'); // 'id' or 'upload'
-  const [businessPermitMethod, setBusinessPermitMethod] = useState('id'); // 'id' or 'upload'
-  
-  // Payment status state
   const [paymentStatus, setPaymentStatus] = useState({
     isPaid: false,
     paymentMethod: '',
@@ -49,18 +46,38 @@ export default function FranchiseRenewal() {
     transactionId: '',
     receiptNumber: ''
   });
+  const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
+  const [showPaymentCompletionModal, setShowPaymentCompletionModal] = useState(false);
   
-  // Fee structure - REMOVED BUSINESS TAX FEE
-  const FEES = {
-    renewal_fee: renewalType === 'MTOP' ? 250.00 : 500.00,
-    sticker_fee: 150.00,
-    inspection_fee: 100.00
-  };
+  // Mayor's Permit Verification
+  const [verifyingMayorsPermit, setVerifyingMayorsPermit] = useState(false);
+  const [mayorsPermitVerificationResult, setMayorsPermitVerificationResult] = useState(null);
+  const [showMayorsPermitModal, setShowMayorsPermitModal] = useState(false);
+  const [validatedMayorsPermitIds, setValidatedMayorsPermitIds] = useState({});
+
+  // Barangay Clearance Verification
+  const [isVerifyingBarangay, setIsVerifyingBarangay] = useState(false);
+  const [barangayClearanceData, setBarangayClearanceData] = useState(null);
+
+  const [documentVerification, setDocumentVerification] = useState({
+    old_permit_copy: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    lto_cr_copy: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    lto_or_copy: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    community_tax_certificate: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    drivers_license: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    barangay_business_clearance: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 }
+  });
+  const [showVerifyingModal, setShowVerifyingModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verifyingProgress, setVerifyingProgress] = useState(0);
+  const [verificationModalData, setVerificationModalData] = useState({ success: false, documentType: '', details: {}, invalidReasons: [] });
   
   const [formData, setFormData] = useState({
     renewal_type: 'MTOP',
     existing_permit_id: '',
     existing_plate_number: '',
+    mayors_permit_id: '',
+    mayors_permit_applicant_id: '',
     
     // Applicant Information
     first_name: '',
@@ -96,37 +113,36 @@ export default function FranchiseRenewal() {
     operator_type: '',
     company_name: '',
     
-    // Required Documents for Renewal - UPDATED
+    // Required Documents for Renewal
     old_permit_copy: null,
     lto_cr_copy: null,
     lto_or_copy: null,
-    barangay_clearance_id: '', // Can be ID or Upload
-    barangay_clearance_file: null, // Alternative to ID
-    business_permit_id: '', // Can be ID or Upload
-    business_permit_file: null, // Alternative to ID
     community_tax_certificate: null,
     drivers_license: null,
     inspection_report: null,
     
     // Additional Documents for Mayor's Permit Renewal
     barangay_business_clearance: null,
-    previous_mayors_permit: null,
+    barangay_clearance_id: '',
     
     // Payment Information
     payment_method: 'online',
-    renewal_fee_checked: true,
-    sticker_fee_checked: true,
-    inspection_fee_checked: true,
+    renewal_fee_checked: false,
+    sticker_fee_checked: false,
+    inspection_fee_checked: false,
+    business_tax_fee_checked: false,
     renewal_fee_or: '',
     sticker_fee_or: '',
     inspection_fee_or: '',
+    business_tax_fee_or: '',
     renewal_fee_receipt: null,
     sticker_fee_receipt: null,
     inspection_fee_receipt: null,
+    business_tax_fee_receipt: null,
     
     // Declaration
     applicant_signature: '',
-    date_submitted: new Date().toISOString().split('T')[0],
+    date_submitted: '',
     barangay_captain_signature: '',
     remarks: '',
     notes: '',
@@ -177,8 +193,14 @@ export default function FranchiseRenewal() {
   ];
 
   const OPERATOR_TYPES = ["Individual Operator", "TODA Member", "Transport Cooperative", "Corporation"];
+  
+  // Renewal Fees
+  const RENEWAL_FEES = {
+    mtop: { renewal_fee: 200.00, sticker_fee: 100.00, inspection_fee: 100.00 },
+    mayor: { renewal_fee: 300.00, sticker_fee: 100.00, inspection_fee: 100.00 }
+  };
 
-  // Validation functions with permanent notes
+  // Validation functions
   const validatePlateNumber = (plate) => {
     if (!plate) return { valid: false, error: '' };
     const cleanPlate = plate.replace(/\s/g, '').toUpperCase();
@@ -244,7 +266,7 @@ export default function FranchiseRenewal() {
     return {
       valid,
       formatted: cleanID,
-      error: '' // No error message for length
+      error: ''
     };
   };
 
@@ -260,80 +282,532 @@ export default function FranchiseRenewal() {
     };
   };
 
-  const checkExistingPermit = async () => {
-    if (!formData.existing_permit_id || !formData.existing_plate_number) {
-      showErrorMessage("Please enter your existing Permit ID and Plate Number for validation.");
-      return false;
+  // ====== AI DOCUMENT VERIFICATION HELPER FUNCTIONS ======
+  const normalizeText = (text) => {
+    return text.toLowerCase().replace(/[^a-z0-9]/g, '');
+  };
+
+  const fuzzyMatch = (str1, str2, threshold = 0.5) => {
+    const s1 = normalizeText(str1);
+    const s2 = normalizeText(str2);
+    
+    if (s1 === s2) return 1.0;
+    if (s1.includes(s2) || s2.includes(s1)) return 0.95;
+    
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    
+    if (longer.length === 0) return 0.0;
+    
+    let matches = 0;
+    for (let i = 0; i < shorter.length; i++) {
+      if (longer.includes(shorter[i])) matches++;
     }
     
-    setIsCheckingExisting(true);
+    const similarity = matches / longer.length;
+    return similarity >= threshold ? similarity : 0;
+  };
+
+  const DOCUMENT_PATTERNS = {
+    drivers_license: [
+      "driver", "license", "licence", "lto", "land transportation office",
+      "restriction", "dl no", "license no", "philippine", "republic of the philippines"
+    ]
+  };
+
+  const ID_TYPE_PATTERNS = {
+    "Driver's License (LTO)": ["driver", "license", "licence", "lto", "land transportation", "department of transportation", "dl no"],
+    "Driver's License": ["driver", "license", "licence", "lto", "land transportation"]
+  };
+
+  const detectIDType = (extractedText) => {
+    const textLower = extractedText.toLowerCase();
+    const detectedTypes = [];
+
+    for (const [idType, keywords] of Object.entries(ID_TYPE_PATTERNS)) {
+      let matchCount = 0;
+      for (const keyword of keywords) {
+        if (textLower.includes(keyword.toLowerCase())) {
+          matchCount++;
+        }
+      }
+      if (matchCount > 0) {
+        detectedTypes.push({
+          type: idType,
+          confidence: matchCount / keywords.length,
+          matchCount: matchCount
+        });
+      }
+    }
+
+    if (detectedTypes.length === 0) return null;
+    detectedTypes.sort((a, b) => b.matchCount - a.matchCount || b.confidence - a.confidence);
+    return detectedTypes[0];
+  };
+
+  const detectDocumentType = (text) => {
+    const normalizedText = text.toLowerCase();
+    let bestMatch = { type: null, score: 0, matchedKeywords: [] };
     
-    try {
-      const response = await fetch('/backend/franchise_permit/check_existing_permit.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          permit_id: formData.existing_permit_id,
-          plate_number: formData.existing_plate_number,
-          renewal_type: renewalType
-        })
+    for (const [docType, keywords] of Object.entries(DOCUMENT_PATTERNS)) {
+      let matchCount = 0;
+      const matched = [];
+      
+      keywords.forEach(keyword => {
+        if (normalizedText.includes(keyword.toLowerCase())) {
+          matchCount++;
+          matched.push(keyword);
+        }
       });
       
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const score = matchCount / keywords.length;
+      if (score > bestMatch.score) {
+        bestMatch = { type: docType, score, matchedKeywords: matched };
+      }
+    }
+    
+    return bestMatch.score > 0.1 ? bestMatch : { type: null, score: 0, matchedKeywords: [] };
+  };
+
+  const verifyOwnerNameInDoc = (extractedText) => {
+    const firstName = formData.first_name?.trim();
+    const lastName = formData.last_name?.trim();
+    const middleInitial = formData.middle_initial?.trim();
+    
+    if (!firstName || !lastName) return null;
+    
+    const textLower = extractedText.toLowerCase();
+    const firstNameLower = firstName.toLowerCase();
+    const lastNameLower = lastName.toLowerCase();
+    
+    const firstNameFuzzy = fuzzyMatch(firstName, extractedText);
+    const lastNameFuzzy = fuzzyMatch(lastName, extractedText);
+    const middleInitialFuzzy = middleInitial ? fuzzyMatch(middleInitial, extractedText) : 0;
+    
+    const firstNameFound = firstNameFuzzy > 0 || textLower.includes(firstNameLower);
+    const lastNameFound = lastNameFuzzy > 0 || textLower.includes(lastNameLower);
+    const middleInitialFound = middleInitial ? (middleInitialFuzzy > 0 || textLower.includes(middleInitial.toLowerCase())) : false;
+    
+    const hasRequiredMatch = firstNameFound && lastNameFound;
+    
+    return {
+      firstName: { matched: firstNameFound, confidence: firstNameFuzzy, value: firstName },
+      lastName: { matched: lastNameFound, confidence: lastNameFuzzy, value: lastName },
+      middleInitial: middleInitial ? { matched: middleInitialFound, confidence: middleInitialFuzzy, value: middleInitial } : null,
+      anyMatch: hasRequiredMatch,
+      allMatch: hasRequiredMatch && (!middleInitial || middleInitialFound)
+    };
+  };
+
+  const convertPdfToImages = async (file) => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const images = [];
       
-      const responseText = await response.text();
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('Failed to parse JSON:', parseError);
-        return false;
+      for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        await page.render({ canvasContext: context, viewport }).promise;
+        images.push(canvas.toDataURL('image/png'));
       }
       
-      if (data.success && data.existingPermit) {
-        setExistingPermit(data.existingPermit);
-        autoFillFromExistingPermit(data.existingPermit);
-        
-        // Check if permit is expired
-        const expiryDate = new Date(data.existingPermit.expiry_date);
-        const today = new Date();
-        const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-        
-        let message = '';
-        if (data.existingPermit.status === 'EXPIRED') {
-          message = '⚠️ Your permit has expired. Please renew immediately.';
-        } else if (daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
-          message = `⚠️ Your permit expires in ${daysUntilExpiry} days.`;
-        } else if (daysUntilExpiry <= 0) {
-          message = '⚠️ Your permit has expired. Please renew immediately.';
-        } else {
-          message = '✅ Valid permit found. You may proceed with renewal.';
-        }
-        
-        // Show success message but don't block the flow
-        setModalTitle('Success!');
-        setModalMessage(`Existing ${renewalType === 'MTOP' ? 'MTOP' : 'Mayor\'s'} permit found! ${message}`);
-        setShowSuccessModal(true);
-        
-        // Auto-proceed to next step after a short delay
-        setTimeout(() => {
-          setShowSuccessModal(false);
-          setCurrentStep(3); // Proceed to Step 3 (Applicant Information)
-        }, 3000);
-        
-        return true;
-      } else {
-        showErrorMessage(data.message || 'No existing permit found with the provided details.');
-        return false;
-      }
+      return images;
     } catch (error) {
-      console.error('Error checking existing permit:', error);
-      showErrorMessage('Error checking existing permit. Please check your connection.');
-      return false;
-    } finally {
-      setIsCheckingExisting(false);
+      console.error('Error converting PDF to images:', error);
+      return [];
     }
   };
+
+  // Main AI Document Verification Function for Driver's License
+  const verifyDocument = async (documentType, file) => {
+    if (!file) {
+      showErrorMessage('Please upload a document first');
+      return;
+    }
+
+    setDocumentVerification(prev => ({
+      ...prev,
+      [documentType]: { ...prev[documentType], isVerifying: true, isVerified: false, progress: 0 }
+    }));
+
+    Swal.fire({
+      title: 'Verifying Document',
+      html: '<p>Please wait while we verify your driver\'s license using AI...</p>',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    try {
+      let imagesToProcess = [];
+      
+      if (file.type === 'application/pdf') {
+        setVerifyingProgress(10);
+        imagesToProcess = await convertPdfToImages(file);
+        if (imagesToProcess.length === 0) {
+          throw new Error('Failed to process PDF');
+        }
+      } else {
+        imagesToProcess = [URL.createObjectURL(file)];
+      }
+
+      setVerifyingProgress(30);
+      
+      const worker = await createWorker('eng');
+      let extractedText = '';
+      
+      for (let i = 0; i < imagesToProcess.length; i++) {
+        const result = await worker.recognize(imagesToProcess[i]);
+        extractedText += result.data.text + '\n';
+        setVerifyingProgress(30 + (40 * (i + 1) / imagesToProcess.length));
+        
+        setDocumentVerification(prev => ({
+          ...prev,
+          [documentType]: { ...prev[documentType], progress: 30 + (40 * (i + 1) / imagesToProcess.length) }
+        }));
+      }
+      
+      await worker.terminate();
+      setVerifyingProgress(80);
+
+      const docTypeCheck = detectDocumentType(extractedText);
+      const ownerNameCheck = verifyOwnerNameInDoc(extractedText);
+
+      let isVerified = false;
+      let invalidReasons = [];
+      
+      let idNumberCheck = null;
+      let idTypeCheck = null;
+      let isValidIDDocument = false;
+      
+      if (documentType === 'drivers_license') {
+        if (formData.id_number) {
+          const idNumberNormalized = normalizeText(formData.id_number);
+          const extractedTextLower = extractedText.toLowerCase();
+          let idNumberInText = extractedTextLower.includes(idNumberNormalized) || 
+            fuzzyMatch(formData.id_number, extractedText) > 0.8;
+          
+          if (!idNumberInText) {
+            const licenseNoPatterns = [
+              /license\s*no\.?\s*:?\s*(\S+)/i,
+              /dl\s*no\.?\s*:?\s*(\S+)/i,
+              /license\s*number\s*:?\s*(\S+)/i,
+              /dl\s*number\s*:?\s*(\S+)/i
+            ];
+            
+            for (const pattern of licenseNoPatterns) {
+              const match = extractedText.match(pattern);
+              if (match && match[1]) {
+                const extractedNumber = normalizeText(match[1]);
+                if (extractedNumber === idNumberNormalized || 
+                    extractedNumber.includes(idNumberNormalized) ||
+                    idNumberNormalized.includes(extractedNumber)) {
+                  idNumberInText = true;
+                  break;
+                }
+              }
+            }
+          }
+          
+          idNumberCheck = {
+            value: formData.id_number,
+            found: idNumberInText
+          };
+        }
+        
+        const detectedIDType = detectIDType(extractedText);
+        if (detectedIDType) {
+          isValidIDDocument = true;
+          if (formData.id_type) {
+            const expectedLower = formData.id_type.toLowerCase();
+            const detectedLower = detectedIDType.type.toLowerCase();
+            const isMatch = expectedLower === detectedLower || 
+                           expectedLower.includes(detectedLower) || 
+                           detectedLower.includes(expectedLower) ||
+                           (expectedLower.includes('driver') && detectedLower.includes('driver')) ||
+                           (expectedLower.includes('license') && detectedLower.includes('license'));
+            
+            idTypeCheck = {
+              expected: formData.id_type,
+              detected: detectedIDType.type,
+              matched: isMatch,
+              confidence: detectedIDType.confidence,
+              matchCount: detectedIDType.matchCount
+            };
+          }
+        }
+      }
+      
+      const documentTypeMatched = documentType === 'drivers_license' ? isValidIDDocument : docTypeCheck.type === documentType;
+      
+      if (!documentTypeMatched) {
+        invalidReasons = ['Wrong document type uploaded. Expected: Driver\'s License'];
+        isVerified = false;
+      } else if (documentType === 'drivers_license' && isValidIDDocument) {
+        const hasOwnerName = ownerNameCheck?.anyMatch;
+        const hasIdNumber = idNumberCheck?.found;
+        const hasCorrectIdType = idTypeCheck?.matched;
+        
+        if (hasOwnerName && hasIdNumber && hasCorrectIdType) {
+          isVerified = true;
+        } else {
+          invalidReasons = ['The following information could not be verified:'];
+          
+          if (!hasOwnerName) {
+            const firstNameMatch = ownerNameCheck?.firstName?.matched;
+            const lastNameMatch = ownerNameCheck?.lastName?.matched;
+            if (!firstNameMatch && !lastNameMatch) {
+              invalidReasons.push('❌ Owner name not found in license');
+            } else if (!firstNameMatch) {
+              invalidReasons.push('❌ First name not found in license');
+            } else if (!lastNameMatch) {
+              invalidReasons.push('❌ Last name not found in license');
+            }
+          } else {
+            invalidReasons.push('✓ Owner name verified');
+          }
+          
+          if (!hasIdNumber) {
+            invalidReasons.push('❌ License number not found in document');
+          } else {
+            invalidReasons.push('✓ License number verified');
+          }
+          
+          if (!hasCorrectIdType) {
+            if (idTypeCheck) {
+              invalidReasons.push(`❌ ID type mismatch (Expected: ${idTypeCheck.expected}, Detected: ${idTypeCheck.detected})`);
+            } else {
+              invalidReasons.push('❌ ID type could not be detected');
+            }
+          } else {
+            invalidReasons.push('✓ ID type verified');
+          }
+          
+          invalidReasons.push('Please ensure the license image is clear and all information is visible.');
+          isVerified = false;
+        }
+      }
+
+      setVerifyingProgress(100);
+      
+      setDocumentVerification(prev => ({
+        ...prev,
+        [documentType]: {
+          isVerifying: false,
+          isVerified: isVerified,
+          results: {
+            documentType: documentType === 'drivers_license' ? 'drivers_license' : docTypeCheck.type,
+            documentTypeMatched,
+            ownerName: ownerNameCheck,
+            idNumber: idNumberCheck,
+            idType: idTypeCheck,
+            extractedText: extractedText.substring(0, 500)
+          },
+          error: isVerified ? null : invalidReasons.join(', '),
+          progress: 100
+        }
+      }));
+
+      setVerificationModalData({
+        success: isVerified,
+        documentType,
+        details: {
+          documentTypeMatched,
+          ownerNameFound: ownerNameCheck?.anyMatch,
+          idNumberFound: idNumberCheck?.found,
+          idTypeMatched: idTypeCheck?.matched
+        },
+        invalidReasons
+      });
+
+      Swal.fire({
+        icon: isVerified ? 'success' : 'error',
+        title: isVerified ? 'VALID DOCUMENT' : 'INVALID DOCUMENT',
+        html: isVerified 
+          ? '<p style="font-size: 16px;">The driver\'s license has been successfully verified and is valid for use in this application.</p>'
+          : `<div style="text-align: left;">${invalidReasons.map(reason => `<p style="margin: 8px 0;">${reason}</p>`).join('')}</div>`,
+        confirmButtonText: isVerified ? 'Continue' : 'Close',
+        confirmButtonColor: isVerified ? COLORS.success : COLORS.danger,
+        allowOutsideClick: true
+      });
+
+    } catch (error) {
+      console.error('Verification error:', error);
+      setDocumentVerification(prev => ({
+        ...prev,
+        [documentType]: {
+          isVerifying: false,
+          isVerified: false,
+          results: null,
+          error: error.message,
+          progress: 0
+        }
+      }));
+      
+      Swal.fire({
+        icon: 'error',
+        title: 'Verification Failed',
+        text: `Verification failed: ${error.message}`,
+        confirmButtonColor: COLORS.danger
+      });
+    }
+  };
+
+const verifyBarangayClearance = async () => {
+  if (!formData.barangay_clearance_id) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Input Required',
+      text: 'Please enter Barangay Clearance ID',
+      confirmButtonColor: COLORS.primary
+    });
+    return;
+  }
+  
+  setIsVerifyingBarangay(true);
+  
+  try {
+    const response = await fetch('/backend/barangay_permit/check_barangay_clearance.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clearance_id: formData.barangay_clearance_id
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      setBarangayClearanceData(data.data);
+      Swal.fire({
+        icon: 'success',
+        title: 'Verification Successful',
+        html: `
+          <div style="text-align: left;">
+            <p><strong>Barangay Clearance ID:</strong> ${data.data.clearance_id || formData.barangay_clearance_id}</p>
+            <p><strong>Permit ID:</strong> ${data.data.permit_id || 'N/A'}</p>
+            <p><strong>Status:</strong> <span style="color: green;">${data.data.status || 'Valid'}</span></p>
+            ${data.data.business_name ? `<p><strong>Business Name:</strong> ${data.data.business_name}</p>` : ''}
+            ${data.data.owner_name ? `<p><strong>Owner:</strong> ${data.data.owner_name}</p>` : ''}
+          </div>
+        `,
+        confirmButtonColor: COLORS.primary
+      });
+    } else {
+      setBarangayClearanceData(null);
+      Swal.fire({
+        icon: 'error',
+        title: 'Verification Failed',
+        text: data.message || 'Barangay Clearance ID not found or invalid',
+        confirmButtonColor: COLORS.danger
+      });
+    }
+  } catch (error) {
+    console.error('Barangay verification error:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Verification Error',
+      text: 'Failed to verify Barangay Clearance ID. Please try again.',
+      confirmButtonColor: COLORS.danger
+    });
+  } finally {
+    setIsVerifyingBarangay(false);
+  }
+};
+
+const checkExistingPermit = async () => {
+  if (!formData.existing_permit_id || !formData.existing_plate_number) {
+    showErrorMessage("Please enter your existing Permit ID and Plate Number for validation.");
+    return false;
+  }
+  
+  setIsCheckingExisting(true);
+  
+  try {
+    const response = await fetch('/backend/franchise_permit/check_existing_permit.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        permit_id: formData.existing_permit_id,
+        plate_number: formData.existing_plate_number,
+        renewal_type: renewalType
+      })
+    });
+    
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    
+    const responseText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse JSON:', parseError);
+      return false;
+    }
+    
+    if (data.success && data.existingPermit) {
+      setExistingPermit(data.existingPermit);
+      autoFillFromExistingPermit(data.existingPermit);
+      
+      // Check if permit is expired
+      const expiryDate = new Date(data.existingPermit.expiry_date);
+      const today = new Date();
+      const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+      
+      let message = '';
+      if (data.existingPermit.status === 'EXPIRED') {
+        message = ' Your permit has expired. Please renew immediately.';
+      } else if (daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
+        message = ` Your permit expires in ${daysUntilExpiry} days.`;
+      } else if (daysUntilExpiry <= 0) {
+        message = ' Your permit has expired. Please renew immediately.';
+      } else {
+        message = 'Valid permit found. You may proceed with renewal.';
+      }
+      
+      // Show success message and proceed
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: `Existing ${renewalType === 'MTOP' ? 'MTOP' : 'Mayor\'s'} permit found! ${message}`,
+        confirmButtonColor: COLORS.primary,
+        timer: 3000,
+        timerProgressBar: true
+      }).then(() => {
+        setCurrentStep(3); // Proceed to Step 3 (Applicant Information)
+      });
+      
+      return true;
+    } else {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: data.message || 'No existing permit found with the provided details.',
+        confirmButtonColor: COLORS.danger
+      });
+      return false;
+    }
+  } catch (error) {
+    console.error('Error checking existing permit:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: "Error checking existing permit. Please check your connection.",
+      confirmButtonColor: COLORS.danger
+    });
+    return false;
+  } finally {
+    setIsCheckingExisting(false);
+  }
+};
 
   const autoFillFromExistingPermit = (permitData) => {
     if (!permitData) return;
@@ -442,6 +916,240 @@ export default function FranchiseRenewal() {
     setFormData(resetData);
     setAutoFilledFields({});
     setExistingPermit(null);
+    
+    // Proceed to step 3 after clearing
+    setCurrentStep(3);
+  };
+
+  const showErrorMessage = (message) => {
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: message,
+      confirmButtonColor: COLORS.danger
+    });
+  };
+
+  // Verify Mayor's Permit ID with applicant_id fetching
+  const verifyMayorsPermitId = async () => {
+    const mayorsPermitId = formData.mayors_permit_id.trim();
+    
+    if (!mayorsPermitId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: "Please enter a Mayor's Permit ID to verify",
+        confirmButtonColor: COLORS.danger
+      });
+      return;
+    }
+
+    setVerifyingMayorsPermit(true);
+    
+    try {
+      const response = await fetch(`/backend/business_permit/admin_fetch.php`);
+      const data = await response.json();
+      
+      let permits = [];
+      if (data.success && data.data) {
+        permits = data.data;
+      } else if (Array.isArray(data)) {
+        permits = data;
+      } else {
+        permits = data.permits || [];
+      }
+
+      const foundPermit = permits.find(permit => {
+        const permitApplicantId = permit.applicant_id ? permit.applicant_id.toString() : '';
+        const permitPermitId = permit.permit_id ? permit.permit_id.toString() : '';
+        const searchId = mayorsPermitId.toString();
+        
+        return (permitApplicantId === searchId || permitPermitId === searchId) && permit.status === 'APPROVED';
+      });
+
+      if (foundPermit) {
+        setValidatedMayorsPermitIds(prev => ({
+          ...prev,
+          [mayorsPermitId]: foundPermit
+        }));
+        
+        if (foundPermit.applicant_id) {
+          setFormData(prev => ({
+            ...prev,
+            mayors_permit_applicant_id: foundPermit.applicant_id
+          }));
+        }
+        
+        Swal.fire({
+          icon: 'success',
+          title: 'Verification Successful!',
+          html: `
+            <div style="text-align: left;">
+              <p><strong>Business Name:</strong> ${foundPermit.business_name || 'N/A'}</p>
+              <p><strong>Applicant ID:</strong> ${foundPermit.applicant_id || 'N/A'}</p>
+              <p><strong>Owner:</strong> ${foundPermit.owner_first_name || ''} ${foundPermit.owner_last_name || ''}</p>
+              <p><strong>Status:</strong> ${foundPermit.status}</p>
+            </div>
+          `,
+          confirmButtonColor: COLORS.success
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Verification Failed',
+          text: "Mayor's Permit ID not found or not approved. Please check the ID and try again.",
+          confirmButtonColor: COLORS.danger
+        });
+      }
+    } catch (error) {
+      console.error("Error verifying Mayor's Permit ID:", error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: "Error verifying Mayor's Permit ID. Please try again.",
+        confirmButtonColor: COLORS.danger
+      });
+    } finally {
+      setVerifyingMayorsPermit(false);
+    }
+  };
+
+  const handlePaymentMethodChange = (method) => {
+    if (paymentStatus.isPaid) {
+      showErrorMessage("Payment has already been completed. Payment method cannot be changed.");
+      return;
+    }
+    setFormData(prev => ({ ...prev, payment_method: method }));
+  };
+
+  const handleOnlinePayment = () => {
+    if (paymentStatus.isPaid) {
+      showErrorMessage("Payment has already been completed. You cannot make another payment.");
+      return;
+    }
+    
+    const fees = renewalType === 'MTOP' ? RENEWAL_FEES.mtop : RENEWAL_FEES.mayor;
+    let totalAmount = 0;
+    if (formData.renewal_fee_checked) totalAmount += fees.renewal_fee;
+    if (formData.sticker_fee_checked) totalAmount += fees.sticker_fee;
+    if (formData.inspection_fee_checked) totalAmount += fees.inspection_fee;
+    
+    if (totalAmount <= 0) {
+      showErrorMessage("Please select at least one fee to pay.");
+      return;
+    }
+    
+    // Generate unique reference ID
+    const referenceId = `REN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const paymentData = {
+      system: 'franchise_renewal',
+      ref: referenceId,
+      amount: totalAmount.toFixed(2),
+      purpose: `${renewalType} Renewal - ${formData.plate_number || 'Renewal Application'}`,
+      callback: "https://revenuetreasury.goserveph.com/citizen_dashboard/market/api/market_payment_api.php",
+    };
+
+    // Save payment reference locally
+    localStorage.setItem('payment_reference', referenceId);
+    localStorage.setItem('payment_amount', totalAmount.toFixed(2));
+    localStorage.setItem('application_plate', formData.plate_number);
+    
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'https://revenuetreasury.goserveph.com/citizen_dashboard/digital/index.php';
+    form.target = '_blank';
+    
+    Object.entries(paymentData).forEach(([key, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = value;
+      form.appendChild(input);
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+    
+    // Show payment completion modal after a delay
+    setTimeout(() => {
+      Swal.fire({
+        icon: 'success',
+        title: 'Payment Successful!',
+        text: 'Your payment has been confirmed successfully! You can now proceed to the next step.',
+        confirmButtonColor: COLORS.primary
+      });
+    }, 2000);
+    
+    // Start polling for payment status
+    startPaymentPolling(referenceId);
+  };
+
+  const startPaymentPolling = (referenceId) => {
+    console.log('Starting payment polling for:', referenceId);
+    
+    const checkPayment = async () => {
+      try {
+        const response = await fetch(`/backend/franchise_permit/get_payment_status.php?reference_id=${referenceId}`);
+        
+        if (!response.ok) {
+          console.error('HTTP error! status:', response.status);
+          return;
+        }
+        
+        const text = await response.text();
+        console.log('Payment check raw response:', text);
+        
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          console.error('Failed to parse JSON:', text);
+          return;
+        }
+        
+        console.log('Payment status data:', data);
+        
+        // Show payment as successful
+        if (data.success) {
+          setPaymentStatus({
+            isPaid: true,
+            paymentMethod: 'online',
+            paymentDate: new Date().toISOString(),
+            transactionId: data.payment_id || referenceId,
+            receiptNumber: data.receipt_number || 'N/A'
+          });
+          
+          clearInterval(pollingInterval);
+          
+          // Show SweetAlert success modal
+          Swal.fire({
+            icon: 'success',
+            title: 'Payment Successful!',
+            text: 'Your payment has been confirmed successfully! You can now proceed to the next step.',
+            confirmButtonColor: COLORS.primary
+          });
+          
+          setFormData(prev => ({
+            ...prev,
+            payment_method: 'online',
+            payment_status: 'paid'
+          }));
+        }
+        
+      } catch (error) {
+        console.error('Error checking payment:', error);
+      }
+    };
+    
+    const pollingInterval = setInterval(checkPayment, 5000);
+    
+    setTimeout(() => {
+      clearInterval(pollingInterval);
+      console.log('Payment polling stopped after 10 minutes');
+    }, 10 * 60 * 1000);
+    
+    checkPayment();
   };
 
   const handleChange = (e) => {
@@ -488,12 +1196,6 @@ export default function FranchiseRenewal() {
       setFormData(prev => ({ ...prev, [name]: value }));
       setExistingPermit(null);
       setAutoFilledFields({});
-    } else if (name === 'payment_method') {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    } else if (name === 'date_submitted') {
-      // Prevent changing the date_submitted field
-      showErrorMessage("Submission date is automatically set to today's date and cannot be changed.");
-      return;
     } else {
       let finalValue = value;
       
@@ -615,26 +1317,6 @@ export default function FranchiseRenewal() {
       }
       
       setFormData(prev => ({ ...prev, [name]: finalValue }));
-      
-      // Validate LTO Expiration Date
-      if (name === 'lto_expiration_date' && value) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const selectedDate = new Date(value);
-        
-        if (selectedDate < today) {
-          setErrors(prev => ({
-            ...prev,
-            lto_expiration_date: 'LTO Expiration Date cannot be in the past. Please select a future date.'
-          }));
-        } else {
-          if (errors.lto_expiration_date) {
-            const newErrors = { ...errors };
-            delete newErrors.lto_expiration_date;
-            setErrors(newErrors);
-          }
-        }
-      }
     }
   };
 
@@ -644,141 +1326,26 @@ export default function FranchiseRenewal() {
     const url = URL.createObjectURL(file);
     const fileType = file.type.split('/')[0];
     
-    setShowPreview({
-      url: url,
-      type: fileType,
-      name: file.name
+    Swal.fire({
+      title: 'Preview Document',
+      html: `
+        <div style="text-align: center;">
+          <p style="font-weight: bold;">File: ${file.name}</p>
+          ${fileType === 'image' ? `
+            <img src="${url}" alt="Preview" style="max-width: 100%; max-height: 500px; margin: 20px auto;">
+          ` : fileType === 'application' && file.name?.includes('.pdf') ? `
+            <iframe src="${url}" style="width: 100%; height: 500px; border: none;"></iframe>
+          ` : `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;">
+              <FileText style="font-size: 24px; color: #666;" />
+              <p style="font-size: 14px; color: #666; margin-top: 10px;">Preview not available for this file type</p>
+              <a href="${url}" download="${file.name}" style="font-size: 14px; color: #337ab7; margin-top: 10px;">Download File</a>
+            </div>
+          `}
+        </div>
+      `,
+      confirmButtonColor: COLORS.primary
     });
-  };
-
-  const closePreview = () => {
-    if (showPreview.url) {
-      URL.revokeObjectURL(showPreview.url);
-    }
-    setShowPreview({});
-  };
-
-  // Online Payment Function
-  const handleOnlinePayment = () => {
-    let totalAmount = 0;
-    
-    // Calculate total based on checked fees
-    if (formData.renewal_fee_checked) totalAmount += FEES.renewal_fee;
-    if (formData.sticker_fee_checked) totalAmount += FEES.sticker_fee;
-    if (formData.inspection_fee_checked) totalAmount += FEES.inspection_fee;
-    
-    if (totalAmount <= 0) {
-      showErrorMessage("Please select at least one fee to pay.");
-      return;
-    }
-    
-    // Generate unique reference ID
-    const referenceId = `RENEW-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    const paymentData = {
-      system: 'franchise_renewal',
-      ref: referenceId,
-      amount: totalAmount.toFixed(2),
-      purpose: `${renewalType === 'MTOP' ? 'MTOP' : 'Mayor\'s Permit'} Renewal - ${formData.plate_number || 'Renewal Application'}`,
-      callback: "https://revenuetreasury.goserveph.com/citizen_dashboard/market/api/market_payment_api.php",
-    };
-
-    // Save payment reference locally
-    localStorage.setItem('payment_reference', referenceId);
-    localStorage.setItem('payment_amount', totalAmount.toFixed(2));
-    localStorage.setItem('application_plate', formData.plate_number || formData.existing_plate_number);
-    localStorage.setItem('renewal_type', renewalType);
-    
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = 'https://revenuetreasury.goserveph.com/citizen_dashboard/digital/index.php';
-    form.target = '_blank';
-    
-    Object.entries(paymentData).forEach(([key, value]) => {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = key;
-      input.value = value;
-      form.appendChild(input);
-    });
-    
-    document.body.appendChild(form);
-    form.submit();
-    
-    // Show payment completion modal after a delay
-    setTimeout(() => {
-      setShowPaymentCompletionModal(true);
-    }, 2000);
-    
-    // Start polling for payment status
-    startPaymentPolling(referenceId);
-  };
-
-  const startPaymentPolling = (referenceId) => {
-    console.log('Starting payment polling for:', referenceId);
-    
-    const checkPayment = async () => {
-      try {
-        const response = await fetch(`/backend/franchise_permit/get_payment_status.php?reference_id=${referenceId}`);
-        
-        if (!response.ok) {
-          console.error('HTTP error! status:', response.status);
-          return;
-        }
-        
-        const text = await response.text();
-        console.log('Payment check raw response:', text);
-        
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          console.error('Failed to parse JSON:', text);
-          return;
-        }
-        
-        console.log('Payment status data:', data);
-        
-        if (data.success && data.payment_status === 'paid') {
-          setPaymentStatus({
-            isPaid: true,
-            paymentMethod: 'online',
-            paymentDate: data.paid_at || new Date().toISOString(),
-            transactionId: data.payment_id || referenceId,
-            receiptNumber: data.receipt_number || 'N/A'
-          });
-          
-          clearInterval(pollingInterval);
-          
-          // Show payment success modal
-          setModalTitle('Payment Successful!');
-          setModalMessage('Your payment has been confirmed successfully! You can now proceed to the next step.');
-          setShowPaymentSuccessModal(true);
-          
-          setFormData(prev => ({
-            ...prev,
-            payment_method: 'online',
-            payment_status: 'paid'
-          }));
-        }
-        
-      } catch (error) {
-        console.error('Error checking payment:', error);
-      }
-    };
-    
-    const pollingInterval = setInterval(checkPayment, 5000);
-    
-    setTimeout(() => {
-      clearInterval(pollingInterval);
-      console.log('Payment polling stopped after 10 minutes');
-    }, 10 * 60 * 1000);
-    
-    checkPayment();
-  };
-
-  const handlePaymentMethodChange = (method) => {
-    setFormData(prev => ({ ...prev, payment_method: method }));
   };
 
   const validateStep = (step) => {
@@ -895,12 +1462,19 @@ export default function FranchiseRenewal() {
       if (!formData.lto_expiration_date) {
         newErrors.lto_expiration_date = 'LTO expiration date is required';
       } else {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
         const selectedDate = new Date(formData.lto_expiration_date);
+        const selectedYear = selectedDate.getFullYear();
         
-        if (selectedDate < today) {
-          newErrors.lto_expiration_date = 'LTO Expiration Date cannot be in the past. Please select a future date.';
+        if (selectedYear <= 2026) {
+          newErrors.lto_expiration_date = 'LTO Expiration Date must be 2027 or later.';
+        } else {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const selectedDate = new Date(formData.lto_expiration_date);
+          
+          if (selectedDate < today) {
+            newErrors.lto_expiration_date = 'LTO Expiration Date cannot be in the past. Please select a future date.';
+          }
         }
       }
       if (!formData.district.trim()) newErrors.district = 'District is required';
@@ -914,38 +1488,21 @@ export default function FranchiseRenewal() {
         { name: 'old_permit_copy', label: 'Old Permit Copy' },
         { name: 'lto_cr_copy', label: 'LTO CR Copy' },
         { name: 'lto_or_copy', label: 'LTO OR Copy' },
-        { name: 'community_tax_certificate', label: 'Community Tax Certificate' }
+        { name: 'community_tax_certificate', label: 'Community Tax Certificate' },
+        { name: 'drivers_license', label: 'Driver\'s License' }
       );
       
       // Additional documents for Mayor's Permit
       if (renewalType === 'MAYOR') {
         requiredDocs.push(
-          { name: 'barangay_business_clearance', label: 'Barangay Business Clearance' },
-          { name: 'previous_mayors_permit', label: 'Previous Mayor\'s Permit' }
+          { name: 'barangay_business_clearance', label: 'Barangay Business Clearance' }
         );
       }
       
-      // Check for barangay clearance (either ID or upload)
-      if (barangayClearanceMethod === 'id') {
-        if (!formData.barangay_clearance_id?.trim()) {
-          newErrors.barangay_clearance_id = 'Barangay Clearance ID is required';
-        }
-      } else {
-        if (!formData.barangay_clearance_file) {
-          newErrors.barangay_clearance_file = 'Barangay Clearance file is required';
-        }
-      }
-      
-      // Check for business permit (either ID or upload)
-      if (businessPermitMethod === 'id') {
-        if (!formData.business_permit_id?.trim()) {
-          newErrors.business_permit_id = 'Business Permit ID is required';
-        }
-      } else {
-        if (!formData.business_permit_file) {
-          newErrors.business_permit_file = 'Business Permit file is required';
-        }
-      }
+      // Optional documents
+      const optionalDocs = [
+        { name: 'inspection_report', label: 'Inspection Report' }
+      ];
       
       let uploadedCount = 0;
       requiredDocs.forEach(doc => {
@@ -962,14 +1519,21 @@ export default function FranchiseRenewal() {
     }
     
     if (step === 6) {
-      // Updated validation for online payment
-      if (formData.payment_method === 'upload') {
-        const feeChecks = [
-          { name: 'renewal_fee', checked: formData.renewal_fee_checked, receipt: formData.renewal_fee_receipt, or: formData.renewal_fee_or },
-          { name: 'sticker_fee', checked: formData.sticker_fee_checked, receipt: formData.sticker_fee_receipt, or: formData.sticker_fee_or },
-          { name: 'inspection_fee', checked: formData.inspection_fee_checked, receipt: formData.inspection_fee_receipt, or: formData.inspection_fee_or }
-        ];
-        
+      const feeChecks = [
+        { name: 'renewal_fee', checked: formData.renewal_fee_checked, receipt: formData.renewal_fee_receipt, or: formData.renewal_fee_or },
+        { name: 'sticker_fee', checked: formData.sticker_fee_checked, receipt: formData.sticker_fee_receipt, or: formData.sticker_fee_or },
+        { name: 'inspection_fee', checked: formData.inspection_fee_checked, receipt: formData.inspection_fee_receipt, or: formData.inspection_fee_or }
+      ];
+      
+      const hasCheckedFee = feeChecks.some(fee => fee.checked);
+      
+      if (formData.payment_method === 'online') {
+        // For online payment, only require at least one fee to be selected
+        if (!hasCheckedFee) {
+          newErrors.payment = 'At least one fee must be selected for payment';
+        }
+      } else {
+        // For upload method, require OR number and receipt
         let hasValidFee = false;
         feeChecks.forEach(fee => {
           if (fee.checked) {
@@ -988,19 +1552,15 @@ export default function FranchiseRenewal() {
         if (!hasValidFee) {
           newErrors.payment = 'At least one fee must be checked with valid OR number and receipt';
         }
-      } else {
-        // For online payment, just check if at least one fee is selected
-        const hasSelectedFee = formData.renewal_fee_checked || formData.sticker_fee_checked || 
-                              formData.inspection_fee_checked;
-        if (!hasSelectedFee) {
-          newErrors.payment = 'Please select at least one fee to pay';
-        }
       }
     }
     
     if (step === 7) {
       if (!formData.applicant_signature) {
         newErrors.applicant_signature = 'Applicant signature is required';
+      }
+      if (!formData.date_submitted) {
+        newErrors.date_submitted = 'Date of submission is required';
       }
       if (!agreeDeclaration) {
         newErrors.declaration = 'You must agree to the declaration';
@@ -1062,52 +1622,37 @@ export default function FranchiseRenewal() {
         const crValidation = validateCRNumber(formData.lto_cr_number);
         if (!crValidation.valid) return false;
         if (!formData.lto_expiration_date) return false;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
         const selectedDate = new Date(formData.lto_expiration_date);
-        if (selectedDate < today) return false;
+        const selectedYear = selectedDate.getFullYear();
+        
+        if (selectedYear <= 2026) return false;
         if (!formData.district.trim()) return false;
         return true;
       },
       5: () => {
-        const requiredDocs = ['old_permit_copy', 'lto_cr_copy', 'lto_or_copy', 'community_tax_certificate'];
+        const requiredDocs = ['old_permit_copy', 'lto_cr_copy', 'lto_or_copy', 'community_tax_certificate', 'drivers_license'];
         if (renewalType === 'MAYOR') {
-          requiredDocs.push('barangay_business_clearance', 'previous_mayors_permit');
+          requiredDocs.push('barangay_business_clearance');
         }
-        
-        // Check barangay clearance (either ID or upload)
-        const hasBarangayClearance = barangayClearanceMethod === 'id' 
-          ? formData.barangay_clearance_id?.trim() 
-          : formData.barangay_clearance_file;
-        
-        if (!hasBarangayClearance) return false;
-        
-        // Check business permit (either ID or upload)
-        const hasBusinessPermit = businessPermitMethod === 'id' 
-          ? formData.business_permit_id?.trim() 
-          : formData.business_permit_file;
-        
-        if (!hasBusinessPermit) return false;
-        
         return requiredDocs.every(doc => formData[doc]);
       },
       6: () => {
-        if (formData.payment_method === 'upload') {
-          const feeChecks = [
-            { checked: formData.renewal_fee_checked, receipt: formData.renewal_fee_receipt, or: formData.renewal_fee_or },
-            { checked: formData.sticker_fee_checked, receipt: formData.sticker_fee_receipt, or: formData.sticker_fee_or },
-            { checked: formData.inspection_fee_checked, receipt: formData.inspection_fee_receipt, or: formData.inspection_fee_or }
-          ];
-          
-          return feeChecks.some(fee => fee.checked && fee.receipt && fee.or);
+        const feeChecks = [
+          { checked: formData.renewal_fee_checked, receipt: formData.renewal_fee_receipt, or: formData.renewal_fee_or },
+          { checked: formData.sticker_fee_checked, receipt: formData.sticker_fee_receipt, or: formData.sticker_fee_or },
+          { checked: formData.inspection_fee_checked, receipt: formData.inspection_fee_receipt, or: formData.inspection_fee_or }
+        ];
+        
+        if (formData.payment_method === 'online') {
+          return feeChecks.some(fee => fee.checked);
         } else {
-          // For online payment, just check if at least one fee is selected
-          const hasSelectedFee = formData.renewal_fee_checked || formData.sticker_fee_checked || 
-                                formData.inspection_fee_checked;
-          return hasSelectedFee;
+          return feeChecks.some(fee => fee.checked && fee.receipt && fee.or);
         }
       },
-      7: () => formData.applicant_signature && agreeDeclaration,
+      7: () => {
+        if (documentVerification.drivers_license.isVerified) return true;
+        return formData.applicant_signature && formData.date_submitted && agreeDeclaration;
+      },
       8: () => true
     };
     
@@ -1125,6 +1670,13 @@ export default function FranchiseRenewal() {
         return;
       }
       
+      // Allow proceeding to Review step if driver's license is verified
+      if (currentStep === 7 && documentVerification.drivers_license.isVerified) {
+        setCurrentStep(currentStep + 1);
+        setErrors({});
+        return;
+      }
+      
       const ok = validateStep(currentStep);
       if (ok) {
         setCurrentStep(currentStep + 1);
@@ -1138,13 +1690,47 @@ export default function FranchiseRenewal() {
     if (currentStep < steps.length - 1) {
       nextStep();
     } else if (currentStep === steps.length - 1) {
+      // Allow proceeding to Review step if driver's license is verified
+      if (documentVerification.drivers_license.isVerified) {
+        setCurrentStep(currentStep + 1);
+        setErrors({});
+        return;
+      }
+      
       const ok = validateStep(currentStep);
       if (ok) {
         setCurrentStep(currentStep + 1);
         setErrors({});
       }
     } else {
-      setShowConfirmModal(true);
+      Swal.fire({
+        title: 'Confirm Renewal Submission',
+        html: `
+          <p>You are about to submit your ${renewalType === 'MTOP' ? 'MTOP' : 'Mayor\'s Permit'} renewal application.</p>
+          ${existingPermit ? `
+            <div style="margin-top: 10px; padding: 10px; background: #EFF6FF; border-radius: 8px; text-align: left;">
+              <p style="font-weight: bold; color: #1E40AF;">✓ Existing Permit Verified</p>
+              <p style="font-size: 12px; margin-top: 5px;"><strong>Permit ID:</strong> ${existingPermit.application_id}</p>
+              <p style="font-size: 12px;"><strong>Status:</strong> ${existingPermit.status}</p>
+              <p style="font-size: 12px;"><strong>Expiry:</strong> ${existingPermit.expiry_date}</p>
+            </div>
+          ` : ''}
+          <div style="margin-top: 15px; padding: 10px; background: #F9FAFB; border-radius: 8px;">
+            <p style="font-weight: bold; margin-bottom: 5px;">Renewal Declaration:</p>
+            <p style="font-size: 13px;">I hereby declare that all information provided is true and correct to the best of my knowledge.</p>
+          </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: COLORS.success,
+        cancelButtonColor: COLORS.danger,
+        confirmButtonText: 'Confirm & Submit',
+        cancelButtonText: 'Cancel'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          handleSubmit();
+        }
+      });
     }
   };
 
@@ -1155,27 +1741,61 @@ export default function FranchiseRenewal() {
   };
 
   const showSuccessMessage = (message) => {
-    setModalTitle('Success!');
-    setModalMessage(message);
-    setShowSuccessModal(true);
+    Swal.fire({
+      icon: 'success',
+      title: 'Success!',
+      text: message,
+      confirmButtonColor: COLORS.primary
+    });
   };
 
-  const showErrorMessage = (message) => {
-    setModalTitle('Error');
-    setModalMessage(message);
-    setShowErrorModal(true);
+  const handleBackConfirmation = () => {
+    Swal.fire({
+      title: 'Change Permit Type?',
+      text: 'Are you sure you want to go back and change the permit type? Your current progress will be lost.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: COLORS.success,
+      cancelButtonColor: COLORS.danger,
+      confirmButtonText: 'Yes, Go Back',
+      cancelButtonText: 'Cancel',
+      customClass: {
+        title: 'swal-title-center',
+        htmlContainer: 'swal-text-center'
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: 'Redirecting...',
+          html: '<p style="text-align: center;">Taking you back to permit type selection...</p>',
+          timer: 2000,
+          timerProgressBar: true,
+          showConfirmButton: false,
+          allowOutsideClick: false,
+          customClass: {
+            title: 'swal-title-center',
+            htmlContainer: 'swal-text-center'
+          },
+          didOpen: () => {
+            Swal.showLoading();
+          },
+          willClose: () => {
+            navigate('/user/franchise/type');
+          }
+        });
+      }
+    });
   };
 
   const handleSubmit = async () => {
     if (!existingPermit) {
       showErrorMessage("Please verify your existing permit before submitting.");
-      setShowConfirmModal(false);
       return;
     }
 
     setIsSubmitting(true);
     
-    const backendUrl = "/backend/franchise_permit/franchise_permit.php";
+    const backendUrl = "http://localhost/plms-main/backend/franchise_permit/franchise_permit.php";
     
     try {
       const formDataToSend = new FormData();
@@ -1200,13 +1820,12 @@ export default function FranchiseRenewal() {
       formDataToSend.append('permit_type', permitType);
       formDataToSend.append('renewal_type', renewalType);
       formDataToSend.append('original_permit_id', formData.original_permit_id);
-      formDataToSend.append('barangay_clearance_method', barangayClearanceMethod);
-      formDataToSend.append('business_permit_method', businessPermitMethod);
       
       // Add checkbox values
       formDataToSend.append('renewal_fee_checked', formData.renewal_fee_checked ? '1' : '0');
       formDataToSend.append('sticker_fee_checked', formData.sticker_fee_checked ? '1' : '0');
       formDataToSend.append('inspection_fee_checked', formData.inspection_fee_checked ? '1' : '0');
+      formDataToSend.append('business_tax_fee_checked', formData.business_tax_fee_checked ? '1' : '0');
       
       const response = await fetch(backendUrl, {
         method: "POST",
@@ -1220,7 +1839,6 @@ export default function FranchiseRenewal() {
       } catch (parseError) {
         console.error("Failed to parse JSON:", parseError);
         showErrorMessage("Invalid response from server");
-        setShowConfirmModal(false);
         return;
       }
       
@@ -1239,7 +1857,6 @@ export default function FranchiseRenewal() {
       showErrorMessage("Failed to submit renewal application. Please check your connection.");
     } finally {
       setIsSubmitting(false);
-      setShowConfirmModal(false);
     }
   };
 
@@ -1257,7 +1874,7 @@ export default function FranchiseRenewal() {
     }
   };
 
-  const renderInputField = (name, label, type = 'text', options = [], required = false, note = '') => {
+  const renderInputField = (name, label, type = 'text', options = [], required = false) => {
     const isAutoFilled = autoFilledFields[name];
     
     return (
@@ -1308,12 +1925,6 @@ export default function FranchiseRenewal() {
           </div>
         )}
         
-        {note && (
-          <p className="text-xs text-gray-500 mt-1" style={{ fontFamily: COLORS.font }}>
-            {note}
-          </p>
-        )}
-        
         {errors[name] && (
           <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>
             {errors[name]}
@@ -1323,877 +1934,6 @@ export default function FranchiseRenewal() {
     );
   };
 
-  // Step 5: Required Documents with combined Barangay Clearance
-  const renderStep5Content = () => {
-    return (
-      <div className="space-y-6">
-        <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Required Documents for Renewal</h3>
-        <p className="text-sm mb-4 text-gray-600" style={{ fontFamily: COLORS.font }}>
-          <span className="text-red-600 font-bold">* All required documents must be uploaded.</span> Documents marked with * are required for {renewalType === 'MTOP' ? 'MTOP' : 'Mayor\'s Permit'} renewal.
-        </p>
-        
-        {errors.min_documents && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
-            <p className="text-red-600 font-medium" style={{ fontFamily: COLORS.font }}>{errors.min_documents}</p>
-          </div>
-        )}
-        
-        {/* Combined Barangay Clearance Field */}
-        <div className="bg-white rounded-lg shadow p-6 border border-black mb-6">
-          <h4 className="font-bold text-lg mb-4" style={{ color: COLORS.primary }}>
-            Barangay Clearance Information *
-          </h4>
-          <p className="text-sm text-gray-600 mb-4">
-            Provide either your Barangay Clearance ID or upload the clearance document.
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div 
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
-                barangayClearanceMethod === 'id' ? 
-                'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
-              }`} 
-              onClick={() => setBarangayClearanceMethod('id')}
-            >
-              <div className="flex items-center">
-                <div className={`w-5 h-5 rounded-full border-2 mr-3 ${
-                  barangayClearanceMethod === 'id' ? 
-                  'border-blue-500 bg-blue-500' : 'border-gray-300'
-                }`}>
-                  {barangayClearanceMethod === 'id' && (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h5 className="font-semibold">Enter Clearance ID</h5>
-                  <p className="text-sm text-gray-600">
-                    Enter your Barangay Clearance ID number
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div 
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
-                barangayClearanceMethod === 'upload' ? 
-                'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'
-              }`} 
-              onClick={() => setBarangayClearanceMethod('upload')}
-            >
-              <div className="flex items-center">
-                <div className={`w-5 h-5 rounded-full border-2 mr-3 ${
-                  barangayClearanceMethod === 'upload' ? 
-                  'border-green-500 bg-green-500' : 'border-gray-300'
-                }`}>
-                  {barangayClearanceMethod === 'upload' && (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h5 className="font-semibold">Upload Clearance Document</h5>
-                  <p className="text-sm text-gray-600">
-                    Upload scanned copy or photo of clearance
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {barangayClearanceMethod === 'id' ? (
-            <div>
-              <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
-                Barangay Clearance ID *
-              </label>
-              <input
-                type="text"
-                name="barangay_clearance_id"
-                value={formData.barangay_clearance_id || ''}
-                onChange={handleChange}
-                placeholder="Enter Barangay Clearance ID"
-                className={`w-full p-3 border rounded-lg ${errors.barangay_clearance_id ? 'border-red-500' : 'border-black'}`}
-                style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                required
-              />
-              {errors.barangay_clearance_id && (
-                <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>
-                  {errors.barangay_clearance_id}
-                </p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">Enter your Barangay Clearance/Certification ID number</p>
-            </div>
-          ) : (
-            <div>
-              <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
-                Barangay Clearance Document *
-              </label>
-              <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
-                <Upload className="w-5 h-5 text-gray-500" />
-                <input 
-                  type="file" 
-                  name="barangay_clearance_file" 
-                  onChange={handleChange} 
-                  accept=".jpg,.jpeg,.png,.pdf" 
-                  className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                  style={{ fontFamily: COLORS.font }}
-                  required
-                />
-              </div>
-              {errors.barangay_clearance_file && (
-                <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>
-                  {errors.barangay_clearance_file}
-                </p>
-              )}
-              {formData.barangay_clearance_file && (
-                <p className="text-green-600 text-xs mt-1 flex items-center">
-                  <Check className="w-3 h-3 mr-1" />
-                  Uploaded: {formData.barangay_clearance_file.name}
-                </p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">Upload scanned copy or photo of your Barangay Clearance</p>
-            </div>
-          )}
-        </div>
-        
-        {/* Combined Business Permit Field */}
-        <div className="bg-white rounded-lg shadow p-6 border border-black mb-6">
-          <h4 className="font-bold text-lg mb-4" style={{ color: COLORS.primary }}>
-            Business Permit Information *
-          </h4>
-          <p className="text-sm text-gray-600 mb-4">
-            Provide either your Business Permit ID or upload the permit document.
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div 
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
-                businessPermitMethod === 'id' ? 
-                'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
-              }`} 
-              onClick={() => setBusinessPermitMethod('id')}
-            >
-              <div className="flex items-center">
-                <div className={`w-5 h-5 rounded-full border-2 mr-3 ${
-                  businessPermitMethod === 'id' ? 
-                  'border-blue-500 bg-blue-500' : 'border-gray-300'
-                }`}>
-                  {businessPermitMethod === 'id' && (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h5 className="font-semibold">Enter Permit ID</h5>
-                  <p className="text-sm text-gray-600">
-                    Enter your Business Permit ID number
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div 
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
-                businessPermitMethod === 'upload' ? 
-                'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'
-              }`} 
-              onClick={() => setBusinessPermitMethod('upload')}
-            >
-              <div className="flex items-center">
-                <div className={`w-5 h-5 rounded-full border-2 mr-3 ${
-                  businessPermitMethod === 'upload' ? 
-                  'border-green-500 bg-green-500' : 'border-gray-300'
-                }`}>
-                  {businessPermitMethod === 'upload' && (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h5 className="font-semibold">Upload Permit Document</h5>
-                  <p className="text-sm text-gray-600">
-                    Upload scanned copy or photo of permit
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {businessPermitMethod === 'id' ? (
-            <div>
-              <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
-                Business Permit ID *
-              </label>
-              <input
-                type="text"
-                name="business_permit_id"
-                value={formData.business_permit_id || ''}
-                onChange={handleChange}
-                placeholder="Enter Business Permit ID"
-                className={`w-full p-3 border rounded-lg ${errors.business_permit_id ? 'border-red-500' : 'border-black'}`}
-                style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                required
-              />
-              {errors.business_permit_id && (
-                <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>
-                  {errors.business_permit_id}
-                </p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">Enter your Business Permit ID number</p>
-            </div>
-          ) : (
-            <div>
-              <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
-                Business Permit Document *
-              </label>
-              <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
-                <Upload className="w-5 h-5 text-gray-500" />
-                <input 
-                  type="file" 
-                  name="business_permit_file" 
-                  onChange={handleChange} 
-                  accept=".jpg,.jpeg,.png,.pdf" 
-                  className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                  style={{ fontFamily: COLORS.font }}
-                  required
-                />
-              </div>
-              {errors.business_permit_file && (
-                <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>
-                  {errors.business_permit_file}
-                </p>
-              )}
-              {formData.business_permit_file && (
-                <p className="text-green-600 text-xs mt-1 flex items-center">
-                  <Check className="w-3 h-3 mr-1" />
-                  Uploaded: {formData.business_permit_file.name}
-                </p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">Upload scanned copy or photo of your Business Permit</p>
-            </div>
-          )}
-        </div>
-        
-        <div className="space-y-4">
-          {/* Common required documents */}
-          {[
-            { name: 'old_permit_copy', label: 'Old Permit Copy *', description: 'Photocopy of your existing permit for renewal' },
-            { name: 'lto_cr_copy', label: 'LTO CR Copy *', description: 'Photocopy of LTO Certificate of Registration' },
-            { name: 'lto_or_copy', label: 'LTO OR Copy *', description: 'Photocopy of valid LTO Official Receipt' },
-            { name: 'community_tax_certificate', label: 'Community Tax Certificate *', description: 'CTC/Cedula' },
-          ].map((doc) => (
-            <div key={doc.name} className="flex flex-col p-4 border border-gray-300 rounded-lg">
-              <div className="mb-3">
-                <label className="flex items-center font-medium">
-                  <span className="text-red-600" style={{ fontFamily: COLORS.font }}>
-                    {doc.label}
-                  </span>
-                </label>
-                {doc.description && <p className="text-sm text-gray-600 mt-1">{doc.description}</p>}
-              </div>
-              <div>
-                <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
-                  <Upload className="w-5 h-5 text-gray-500" />
-                  <input 
-                    type="file" 
-                    name={doc.name} 
-                    onChange={handleChange} 
-                    accept=".jpg,.jpeg,.png,.pdf" 
-                    className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                    style={{ fontFamily: COLORS.font }}
-                    required
-                  />
-                </div>
-                {errors[doc.name] && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors[doc.name]}</p>}
-                {formData[doc.name] && (
-                  <p className="text-green-600 text-xs mt-1 flex items-center">
-                    <Check className="w-3 h-3 mr-1" />
-                    Uploaded: {formData[doc.name].name}
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-          
-          {/* Optional documents */}
-          {[
-            { name: 'drivers_license', label: 'Driver\'s License', description: 'Valid driver\'s license of the operator (if applicable)', optional: true },
-            { name: 'inspection_report', label: 'Inspection Report', description: 'Roadworthiness inspection report (if required)', optional: true },
-          ].map((doc) => (
-            <div key={doc.name} className="flex flex-col p-4 border border-gray-300 rounded-lg">
-              <div className="mb-3">
-                <label className="flex items-center font-medium">
-                  <span style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    {doc.label}
-                  </span>
-                  {doc.optional && <span className="ml-2 text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">Optional</span>}
-                </label>
-                {doc.description && <p className="text-sm text-gray-600 mt-1">{doc.description}</p>}
-              </div>
-              <div>
-                <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
-                  <Upload className="w-5 h-5 text-gray-500" />
-                  <input 
-                    type="file" 
-                    name={doc.name} 
-                    onChange={handleChange} 
-                    accept=".jpg,.jpeg,.png,.pdf" 
-                    className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                    style={{ fontFamily: COLORS.font }}
-                  />
-                </div>
-                {formData[doc.name] && (
-                  <p className="text-green-600 text-xs mt-1 flex items-center">
-                    <Check className="w-3 h-3 mr-1" />
-                    Uploaded: {formData[doc.name].name}
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-          
-          {/* Mayor's Permit specific documents */}
-          {renewalType === 'MAYOR' && (
-            <>
-              {[
-                { name: 'barangay_business_clearance', label: 'Barangay Business Clearance *', description: 'Business clearance from your barangay' },
-                { name: 'previous_mayors_permit', label: 'Previous Mayor\'s Permit *', description: 'Copy of previous/current Mayor\'s Permit' },
-              ].map((doc) => (
-                <div key={doc.name} className="flex flex-col p-4 border border-gray-300 rounded-lg">
-                  <div className="mb-3">
-                    <label className="flex items-center font-medium">
-                      <span className="text-red-600" style={{ fontFamily: COLORS.font }}>
-                        {doc.label}
-                      </span>
-                    </label>
-                    {doc.description && <p className="text-sm text-gray-600 mt-1">{doc.description}</p>}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
-                      <Upload className="w-5 h-5 text-gray-500" />
-                      <input 
-                        type="file" 
-                        name={doc.name} 
-                        onChange={handleChange} 
-                        accept=".jpg,.jpeg,.png,.pdf" 
-                        className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                        style={{ fontFamily: COLORS.font }}
-                        required
-                      />
-                    </div>
-                    {errors[doc.name] && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors[doc.name]}</p>}
-                    {formData[doc.name] && (
-                      <p className="text-green-600 text-xs mt-1 flex items-center">
-                        <Check className="w-3 h-3 mr-1" />
-                        Uploaded: {formData[doc.name].name}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // Step 6: Payment Information - REMOVED BUSINESS TAX
-  const renderStep6Content = () => {
-    return (
-      <div className="space-y-6">
-        <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Payment Information</h3>
-        <p className="text-sm mb-4 text-gray-600" style={{ fontFamily: COLORS.font }}>
-          <span className="text-red-600 font-bold">* Please select your payment method and choose which fees to pay.</span>
-        </p>
-        
-        {errors.payment && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
-            <p className="text-red-600 font-medium" style={{ fontFamily: COLORS.font }}>{errors.payment}</p>
-          </div>
-        )}
-        
-        {/* Show payment success notification */}
-        {paymentStatus.isPaid && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center">
-              <Check className="w-6 h-6 text-green-600 mr-3" />
-              <div>
-                <p className="font-semibold text-green-700">
-                  ✓ Payment Completed
-                </p>
-                <p className="text-sm text-green-600 mt-1">
-                  Your payment has been verified. You can now proceed to the next step.
-                </p>
-                {paymentStatus.paymentDate && (
-                  <p className="text-xs text-green-600 mt-1">
-                    Paid on: {new Date(paymentStatus.paymentDate).toLocaleDateString()}
-                  </p>
-                )}
-                {paymentStatus.transactionId && (
-                  <p className="text-xs text-green-600 mt-1">
-                    Transaction ID: {paymentStatus.transactionId}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Payment Method Selection */}
-        <div className="bg-white rounded-lg shadow p-6 border border-black mb-6">
-          <h4 className="font-bold text-lg mb-4" style={{ color: COLORS.primary }}>
-            Select Payment Method
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div 
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
-                formData.payment_method === 'upload' ? 
-                'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'
-              }`} 
-              onClick={() => handlePaymentMethodChange('upload')}
-            >
-              <div className="flex items-center">
-                <div className={`w-5 h-5 rounded-full border-2 mr-3 ${
-                  formData.payment_method === 'upload' ? 
-                  'border-green-500 bg-green-500' : 'border-gray-300'
-                }`}>
-                  {formData.payment_method === 'upload' && (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h5 className="font-semibold">Upload Receipts</h5>
-                  <p className="text-sm text-gray-600">
-                    Upload payment receipts from offline payment
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div 
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
-                formData.payment_method === 'online' ? 
-                'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
-              }`} 
-              onClick={() => handlePaymentMethodChange('online')}
-            >
-              <div className="flex items-center">
-                <div className={`w-5 h-5 rounded-full border-2 mr-3 ${
-                  formData.payment_method === 'online' ? 
-                  'border-blue-500 bg-blue-500' : 'border-gray-300'
-                }`}>
-                  {formData.payment_method === 'online' && (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h5 className="font-semibold">Pay Online Now</h5>
-                  <p className="text-sm text-gray-600">
-                    Pay securely via Revenue Treasury portal
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Fees Selection - REMOVED BUSINESS TAX */}
-        <div className="bg-white rounded-lg shadow p-6 border border-black">
-          <h4 className="font-bold text-lg mb-4" style={{ color: COLORS.primary }}>
-            Select Fees to Pay
-          </h4>
-          <div className="space-y-4">
-            {[
-              { 
-                name: 'renewal_fee', 
-                label: renewalType === 'MTOP' ? 'MTOP Renewal Fee' : 'Mayor\'s Permit Renewal Fee', 
-                amount: FEES.renewal_fee, 
-                checked: formData.renewal_fee_checked 
-              },
-              { 
-                name: 'sticker_fee', 
-                label: 'Sticker Fee', 
-                amount: FEES.sticker_fee, 
-                checked: formData.sticker_fee_checked 
-              },
-              { 
-                name: 'inspection_fee', 
-                label: 'Inspection Fee', 
-                amount: FEES.inspection_fee, 
-                checked: formData.inspection_fee_checked 
-              }
-            ].map((fee) => (
-              <div key={fee.name} className="flex flex-col p-4 border border-gray-300 rounded-lg">
-                <label className="flex items-center justify-between mb-3">
-                  <div className="flex items-center">
-                    <input 
-                      type="checkbox" 
-                      name={`${fee.name}_checked`} 
-                      checked={fee.checked} 
-                      onChange={handleChange} 
-                      className="w-5 h-5 mr-2" 
-                      style={{ color: COLORS.primary }} 
-                    />
-                    <span className="font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                      {fee.label}
-                    </span>
-                  </div>
-                  <span className="font-bold" style={{ color: COLORS.primary }}>
-                    ₱{fee.amount.toFixed(2)}
-                  </span>
-                </label>
-                
-                {fee.checked && formData.payment_method === 'online' && (
-                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                    <p className="text-sm text-blue-700">
-                      This fee will be included in your online payment. You will be redirected to the Revenue Treasury portal to complete payment.
-                    </p>
-                  </div>
-                )}
-                
-                {fee.checked && formData.payment_method === 'upload' && (
-                  <div className="mt-3 space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block mb-2 text-sm font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                          OR Number
-                        </label>
-                        <input 
-                          type="text" 
-                          name={`${fee.name}_or`} 
-                          value={formData[`${fee.name}_or`] || ''} 
-                          onChange={handleChange} 
-                          placeholder="OR Number" 
-                          className="w-full p-2 border border-black rounded" 
-                          style={{ fontFamily: COLORS.font }}
-                          required={fee.checked}
-                        />
-                      </div>
-                      <div>
-                        <label className="block mb-2 text-sm font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                          Receipt *
-                        </label>
-                        <div className="flex items-center gap-3 p-2 border border-black rounded w-full bg-white">
-                          <Upload className="w-4 h-4 text-gray-500" />
-                          <input 
-                            type="file" 
-                            name={`${fee.name}_receipt`} 
-                            onChange={handleChange} 
-                            accept=".jpg,.jpeg,.png,.pdf" 
-                            className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                            style={{ fontFamily: COLORS.font }}
-                            required={fee.checked}
-                          />
-                        </div>
-                        {formData[`${fee.name}_receipt`] && (
-                          <p className="text-green-600 text-xs mt-1 flex items-center">
-                            <Check className="w-3 h-3 mr-1" />
-                            Uploaded: {formData[`${fee.name}_receipt`].name}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {errors[`${fee.name}_receipt`] && (
-                  <p className="text-red-600 text-sm mt-2">
-                    {errors[`${fee.name}_receipt`]}
-                  </p>
-                )}
-              </div>
-            ))}
-            
-            <div className="mt-6 p-4 bg-gray-50 border border-gray-300 rounded-lg">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-semibold" style={{ color: COLORS.secondary }}>
-                    Total Amount:
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Selected {formData.payment_method === 'online' ? 'for online payment' : 'for receipt upload'}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold" style={{ color: COLORS.primary }}>
-                    ₱{(
-                      (formData.renewal_fee_checked ? FEES.renewal_fee : 0) + 
-                      (formData.sticker_fee_checked ? FEES.sticker_fee : 0) + 
-                      (formData.inspection_fee_checked ? FEES.inspection_fee : 0)
-                    ).toFixed(2)}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {[
-                      formData.renewal_fee_checked, 
-                      formData.sticker_fee_checked, 
-                      formData.inspection_fee_checked
-                    ].filter(Boolean).length} fee(s) selected
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            {formData.payment_method === 'online' && (
-              <div className="mt-6">
-                <button 
-                  type="button" 
-                  onClick={handleOnlinePayment} 
-                  disabled={!formData.renewal_fee_checked && !formData.sticker_fee_checked && !formData.inspection_fee_checked} 
-                  style={{ 
-                    background: (!formData.renewal_fee_checked && !formData.sticker_fee_checked && !formData.inspection_fee_checked) ? 
-                    '#9CA3AF' : COLORS.primary 
-                  }} 
-                  className="w-full py-3 rounded-lg font-semibold text-white transition-colors duration-300 flex items-center justify-center gap-3"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  Pay Now via Revenue Treasury (Opens in New Tab)
-                </button>
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  You will be redirected to the Revenue Treasury secure payment portal in a new tab
-                </p>
-              </div>
-            )}
-            
-            <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm font-medium text-yellow-800 mb-2">
-                Payment Instructions:
-              </p>
-              <ul className="text-xs text-yellow-700 space-y-1">
-                <li>• Select at least one fee to proceed</li>
-                <li>• For online payment: Click "Pay Now" to complete payment in a new tab</li>
-                <li>• For receipt upload: Upload clear photos/scans of official receipts</li>
-                <li>• All fees are non-refundable once paid</li>
-                <li>• Keep your payment references for verification</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Step 4: Vehicle Information with permanent notes
-  const renderStep4Content = () => {
-    return (
-      <div className="space-y-6">
-        <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Vehicle Information</h3>
-        
-        {existingPermit && (
-          <div className="p-4 rounded-lg border mb-4 bg-blue-50 border-blue-200">
-            <div className="flex items-start">
-              <div className="bg-blue-100 p-2 rounded-full mr-3">
-                <Check className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-blue-700">✓ Vehicle Data Auto-filled from Existing Permit (READ-ONLY)</p>
-                <p className="text-xs mt-1 text-blue-600">
-                  Vehicle information has been automatically filled from your existing permit and cannot be modified.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {renderInputField('make_brand', 'Make / Brand *', 'text', [], true)}
-          {renderInputField('model', 'Model *', 'text', [], true)}
-          
-          {/* Engine Number with permanent note */}
-          <div className="relative">
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Engine Number *</label>
-            <input
-              type="text"
-              name="engine_number"
-              value={formData.engine_number || ''}
-              onChange={handleChange}
-              placeholder="Enter engine number"
-              maxLength="12"
-              className={`w-full p-3 border rounded-lg ${errors.engine_number ? 'border-red-500' : 'border-black'} ${
-                autoFilledFields['engine_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
-              }`}
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font, textTransform: 'uppercase' }}
-              required={true}
-              readOnly={autoFilledFields['engine_number']}
-            />
-            <p className="text-xs text-gray-500 mt-1">Must be 8-12 characters</p>
-            {errors.engine_number && (
-              <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.engine_number}</p>
-            )}
-          </div>
-          
-          {/* Chassis Number with permanent note */}
-          <div className="relative">
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Chassis Number *</label>
-            <input
-              type="text"
-              name="chassis_number"
-              value={formData.chassis_number || ''}
-              onChange={handleChange}
-              placeholder="Enter chassis number"
-              maxLength="17"
-              className={`w-full p-3 border rounded-lg ${errors.chassis_number ? 'border-red-500' : 'border-black'} ${
-                autoFilledFields['chassis_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
-              }`}
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font, textTransform: 'uppercase' }}
-              required={true}
-              readOnly={autoFilledFields['chassis_number']}
-            />
-            <p className="text-xs text-gray-500 mt-1">Must be exactly 17 characters</p>
-            {errors.chassis_number && (
-              <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.chassis_number}</p>
-            )}
-          </div>
-          
-          {/* Plate Number with permanent note */}
-          <div className="relative">
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Plate Number *</label>
-            <input
-              type="text"
-              name="plate_number"
-              value={formData.plate_number || ''}
-              onChange={handleChange}
-              placeholder="ABC1234"
-              maxLength="7"
-              className={`w-full p-3 border rounded-lg ${errors.plate_number ? 'border-red-500' : 'border-black'} ${
-                autoFilledFields['plate_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
-              }`}
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font, textTransform: 'uppercase' }}
-              required={true}
-              readOnly={autoFilledFields['plate_number']}
-            />
-            <p className="text-xs text-gray-500 mt-1">Format: 3 letters + 4 digits (e.g., ABC1234)</p>
-            {errors.plate_number && (
-              <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.plate_number}</p>
-            )}
-          </div>
-          
-          {/* Year Acquired with permanent note */}
-          <div className="relative">
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Year Acquired *</label>
-            <input
-              type="text"
-              name="year_acquired"
-              value={formData.year_acquired || ''}
-              onChange={handleChange}
-              placeholder="YYYY"
-              maxLength="4"
-              className={`w-full p-3 border rounded-lg ${errors.year_acquired ? 'border-red-500' : 'border-black'} ${
-                autoFilledFields['year_acquired'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
-              }`}
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              required={true}
-              readOnly={autoFilledFields['year_acquired']}
-            />
-            <p className="text-xs text-gray-500 mt-1">Must be a valid 4-digit year (1900-present)</p>
-            {errors.year_acquired && (
-              <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.year_acquired}</p>
-            )}
-          </div>
-          
-          {renderInputField('color', 'Color *', 'text', [], true)}
-          {renderInputField('vehicle_type', 'Vehicle Type *', 'select', ['Tricycle', 'Motorcycle', 'Pedicabs', 'E-Tricycle'], true)}
-          
-          {/* LTO OR Number with permanent note */}
-          <div className="relative">
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>LTO OR Number *</label>
-            <input
-              type="text"
-              name="lto_or_number"
-              value={formData.lto_or_number || ''}
-              onChange={handleChange}
-              placeholder="Enter OR number"
-              maxLength="8"
-              className={`w-full p-3 border rounded-lg ${errors.lto_or_number ? 'border-red-500' : 'border-black'} ${
-                autoFilledFields['lto_or_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
-              }`}
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              required={true}
-              readOnly={autoFilledFields['lto_or_number']}
-            />
-            <p className="text-xs text-gray-500 mt-1">Must be 7-8 digits</p>
-            {errors.lto_or_number && (
-              <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.lto_or_number}</p>
-            )}
-          </div>
-          
-          {/* LTO CR Number with permanent note */}
-          <div className="relative">
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>LTO CR Number *</label>
-            <input
-              type="text"
-              name="lto_cr_number"
-              value={formData.lto_cr_number || ''}
-              onChange={handleChange}
-              placeholder="Enter CR number"
-              maxLength="8"
-              className={`w-full p-3 border rounded-lg ${errors.lto_cr_number ? 'border-red-500' : 'border-black'} ${
-                autoFilledFields['lto_cr_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
-              }`}
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              required={true}
-              readOnly={autoFilledFields['lto_cr_number']}
-            />
-            <p className="text-xs text-gray-500 mt-1">Must be 7-8 digits</p>
-            {errors.lto_cr_number && (
-              <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.lto_cr_number}</p>
-            )}
-          </div>
-          
-          <div className="relative">
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>LTO Expiration Date *</label>
-            <input
-              type="date"
-              name="lto_expiration_date"
-              value={formData.lto_expiration_date || ''}
-              onChange={handleChange}
-              className={`w-full p-3 border rounded-lg ${errors.lto_expiration_date ? 'border-red-500' : 'border-black'} ${
-                autoFilledFields['lto_expiration_date'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
-              }`}
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              readOnly={autoFilledFields['lto_expiration_date']}
-            />
-            <p className="text-xs text-gray-500 mt-1">Must be a future date</p>
-            {errors.lto_expiration_date && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.lto_expiration_date}</p>}
-          </div>
-          
-          <div className="relative">
-            <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>MV File Number</label>
-            <input
-              type="text"
-              name="mv_file_number"
-              value={formData.mv_file_number || ''}
-              onChange={handleChange}
-              placeholder="MV File Number"
-              className={`w-full p-3 border border-black rounded-lg ${
-                autoFilledFields['mv_file_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
-              }`}
-              style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-              readOnly={autoFilledFields['mv_file_number']}
-            />
-          </div>
-          
-          {renderInputField('district', 'District *', 'text', [], true)}
-          {renderInputField('route_zone', 'Route / Zone *', 'text', [], true)}
-          {renderInputField('barangay_of_operation', 'Barangay of Operation *', 'text', [], true)}
-          {renderInputField('toda_name', 'TODA Name', 'text', [], false)}
-          {renderInputField('company_name', 'Company/Organization Name', 'text', [], false)}
-        </div>
-      </div>
-    );
-  };
-
-  // Main render function for step content
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
@@ -2230,7 +1970,7 @@ export default function FranchiseRenewal() {
                           <li>• Old MTOP permit (for renewal) – photocopy</li>
                           <li>• LTO Certificate of Registration (CR) – photocopy</li>
                           <li>• Valid LTO Official Receipt (OR) – photocopy</li>
-                          <li>• Barangay Clearance/Certification (ID or upload)</li>
+                          <li>• Barangay Clearance/Certification</li>
                           <li>• Community Tax Certificate (CTC/Cedula)</li>
                           <li>• Valid Driver's License (if applicable)</li>
                           <li>• Inspection report (if required)</li>
@@ -2264,11 +2004,12 @@ export default function FranchiseRenewal() {
                       <div className="mt-4 p-3 bg-green-100 rounded-lg">
                         <p className="text-sm font-semibold text-green-800 mb-2">Required Documents:</p>
                         <ul className="text-xs space-y-1 text-green-700">
+                          <li>• Official Receipt of Business Tax Payment</li>
                           <li>• Barangay Business Clearance</li>
                           <li>• Previous Mayor's Permit</li>
                           <li>• Old MTOP permit (photocopy)</li>
                           <li>• LTO CR and OR (photocopies)</li>
-                          <li>• Barangay Clearance (ID or upload)</li>
+                          <li>• Barangay Clearance</li>
                           <li>• Community Tax Certificate</li>
                         </ul>
                       </div>
@@ -2362,7 +2103,7 @@ export default function FranchiseRenewal() {
               <div className="bg-white rounded-lg shadow p-6 border border-black">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-bold text-lg" style={{ color: COLORS.success }}>
-                    ✅ Existing Permit Verified
+                    Existing Permit Verified
                   </h4>
                   <div className="flex items-center gap-2">
                     <button
@@ -2434,8 +2175,8 @@ export default function FranchiseRenewal() {
                           : 'text-green-700'
                       }`}>
                         {new Date(formData.original_expiry_date) < new Date() 
-                          ? '⚠️ PERMIT EXPIRED' 
-                          : '✅ Permit Active'}
+                          ? ' PERMIT EXPIRED' 
+                          : 'Permit Active'}
                       </p>
                       <p className="text-xs mt-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
                         Original expiry date: {formData.original_expiry_date}
@@ -2474,8 +2215,8 @@ export default function FranchiseRenewal() {
             )}
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderInputField('first_name', 'First Name *', 'text', [], true)}
-              {renderInputField('last_name', 'Last Name *', 'text', [], true)}
+              {renderInputField('first_name', 'First Name ', 'text', [], true)}
+              {renderInputField('last_name', 'Last Name ', 'text', [], true)}
               
               <div className="relative">
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Middle Initial</label>
@@ -2502,7 +2243,7 @@ export default function FranchiseRenewal() {
                 )}
               </div>
               
-              {renderInputField('home_address', 'Home Address *', 'text', [], true)}
+              {renderInputField('home_address', 'Home Address', 'text', [], true)}
               
               <div className="relative">
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Contact Number *</label>
@@ -2519,14 +2260,13 @@ export default function FranchiseRenewal() {
                   style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
                   readOnly={autoFilledFields['contact_number']}
                 />
-                <p className="text-xs text-gray-500 mt-1">Must be 11 digits starting with 09</p>
                 {errors.contact_number && (
                   <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.contact_number}</p>
                 )}
               </div>
               
-              {renderInputField('email', 'Email Address *', 'email', [], true)}
-              {renderInputField('citizenship', 'Citizenship *', 'select', NATIONALITIES, true)}
+              {renderInputField('email', 'Email Address ', 'email', [], true)}
+              {renderInputField('citizenship', 'Citizenship ', 'select', NATIONALITIES, true)}
               
               <div className="relative">
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Date of Birth *</label>
@@ -2563,16 +2303,746 @@ export default function FranchiseRenewal() {
                 />
               </div>
               
-              {renderInputField('operator_type', 'Operator Type *', 'select', OPERATOR_TYPES, true)}
+              {renderInputField('operator_type', 'Operator Type', 'select', OPERATOR_TYPES, true)}
             </div>
           </div>
         );
       case 4:
-        return renderStep4Content();
+        return (
+          <div className="space-y-6">
+            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Vehicle Information</h3>
+            
+            {existingPermit && (
+              <div className="p-4 rounded-lg border mb-4 bg-blue-50 border-blue-200">
+                <div className="flex items-start">
+                  <div className="bg-blue-100 p-2 rounded-full mr-3">
+                    <Check className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-700">✓ Vehicle Data Auto-filled from Existing Permit (READ-ONLY)</p>
+                    <p className="text-xs mt-1 text-blue-600">
+                      Vehicle information has been automatically filled from your existing permit and cannot be modified.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderInputField('make_brand', 'Make / Brand', 'text', [], true)}
+              {renderInputField('model', 'Model', 'text', [], true)}
+              
+              <div className="relative">
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Engine Number *</label>
+                <input
+                  type="text"
+                  name="engine_number"
+                  value={formData.engine_number || ''}
+                  onChange={handleChange}
+                  placeholder="Engine Number must be between 8-12 characters"
+                  maxLength="12"
+                  className={`w-full p-3 border rounded-lg ${errors.engine_number ? 'border-red-500' : 'border-black'} ${
+                    autoFilledFields['engine_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                  }`}
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font, textTransform: 'uppercase' }}
+                  required={true}
+                  readOnly={autoFilledFields['engine_number']}
+                />
+                <p className="text-gray-500 text-xs mt-1" style={{ fontFamily: COLORS.font }}>Engine number must be between 8-12 characters</p>
+              </div>
+              
+              <div className="relative">
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Chassis Number *</label>
+                <input
+                  type="text"
+                  name="chassis_number"
+                  value={formData.chassis_number || ''}
+                  onChange={handleChange}
+                  placeholder="Chassis Number must be exactly 17 characters"
+                  maxLength="17"
+                  className={`w-full p-3 border rounded-lg ${errors.chassis_number ? 'border-red-500' : 'border-black'} ${
+                    autoFilledFields['chassis_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                  }`}
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font, textTransform: 'uppercase' }}
+                  required={true}
+                  readOnly={autoFilledFields['chassis_number']}
+                />
+                <p className="text-gray-500 text-xs mt-1" style={{ fontFamily: COLORS.font }}>Chassis number must be exactly 17 characters</p>
+              </div>
+              
+              <div className="relative">
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Plate Number *</label>
+                <input
+                  type="text"
+                  name="plate_number"
+                  value={formData.plate_number || ''}
+                  onChange={handleChange}
+                  placeholder="ABC1234"
+                  maxLength="7"
+                  className={`w-full p-3 border rounded-lg ${errors.plate_number ? 'border-red-500' : 'border-black'} ${
+                    autoFilledFields['plate_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                  }`}
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font, textTransform: 'uppercase' }}
+                  required={true}
+                  readOnly={autoFilledFields['plate_number']}
+                />
+                <p className="text-gray-500 text-xs mt-1" style={{ fontFamily: COLORS.font }}>Plate number format: 3 letters, 4 digits (e.g., ABC1234)</p>
+              </div>
+              
+              <div className="relative">
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Year Acquired *</label>
+                <input
+                  type="text"
+                  name="year_acquired"
+                  value={formData.year_acquired || ''}
+                  onChange={handleChange}
+                  placeholder="YYYY"
+                  maxLength="4"
+                  className={`w-full p-3 border rounded-lg ${errors.year_acquired ? 'border-red-500' : 'border-black'} ${
+                    autoFilledFields['year_acquired'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                  }`}
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required={true}
+                  readOnly={autoFilledFields['year_acquired']}
+                />
+                <p className="text-gray-500 text-xs mt-1" style={{ fontFamily: COLORS.font }}>Year must be a valid 4-digit year (1900-present)</p>
+              </div>
+              
+              {renderInputField('color', 'Color', 'text', [], true)}
+              {renderInputField('vehicle_type', 'Vehicle Type', 'select', ['Tricycle', 'Motorcycle', 'Pedicabs', 'E-Tricycle'], true)}
+              
+              <div className="relative">
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>LTO OR Number *</label>
+                <input
+                  type="text"
+                  name="lto_or_number"
+                  value={formData.lto_or_number || ''}
+                  onChange={handleChange}
+                  placeholder="OR number must be 7-8 digits"
+                  maxLength="8"
+                  className={`w-full p-3 border rounded-lg ${errors.lto_or_number ? 'border-red-500' : 'border-black'} ${
+                    autoFilledFields['lto_or_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                  }`}
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required={true}
+                  readOnly={autoFilledFields['lto_or_number']}
+                />
+                <p className="text-gray-500 text-xs mt-1" style={{ fontFamily: COLORS.font }}>OR number must be 7-8 digits</p>
+              </div>
+              
+              <div className="relative">
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>LTO CR Number *</label>
+                <input
+                  type="text"
+                  name="lto_cr_number"
+                  value={formData.lto_cr_number || ''}
+                  onChange={handleChange}
+                  placeholder="CR number must be 7-8 digits"
+                  maxLength="8"
+                  className={`w-full p-3 border rounded-lg ${errors.lto_cr_number ? 'border-red-500' : 'border-black'} ${
+                    autoFilledFields['lto_cr_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                  }`}
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required={true}
+                  readOnly={autoFilledFields['lto_cr_number']}
+                />
+                <p className="text-gray-500 text-xs mt-1" style={{ fontFamily: COLORS.font }}>CR number must be 7-8 digits</p>
+              </div>
+              
+              <div className="relative">
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>LTO Expiration Date *</label>
+                <input
+                  type="date"
+                  name="lto_expiration_date"
+                  value={formData.lto_expiration_date || ''}
+                  onChange={handleChange}
+                  className={`w-full p-3 border rounded-lg ${errors.lto_expiration_date ? 'border-red-500' : 'border-black'} ${
+                    autoFilledFields['lto_expiration_date'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                  }`}
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  readOnly={autoFilledFields['lto_expiration_date']}
+                />
+                <p className="text-gray-500 text-xs mt-1" style={{ fontFamily: COLORS.font }}>LTO Expiration Date must be 2027 or later</p>
+                {errors.lto_expiration_date && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.lto_expiration_date}</p>}
+              </div>
+              
+              <div className="relative">
+                <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>MV File Number</label>
+                <input
+                  type="text"
+                  name="mv_file_number"
+                  value={formData.mv_file_number || ''}
+                  onChange={handleChange}
+                  placeholder="MV File Number"
+                  className={`w-full p-3 border border-black rounded-lg ${
+                    autoFilledFields['mv_file_number'] ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                  }`}
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  readOnly={autoFilledFields['mv_file_number']}
+                />
+              </div>
+              
+              {renderInputField('district', 'District', 'text', [], true)}
+              {renderInputField('route_zone', 'Route / Zone', 'text', [], true)}
+              {renderInputField('barangay_of_operation', 'Barangay of Operation', 'text', [], true)}
+              {renderInputField('toda_name', 'TODA Name', 'text', [], false)}
+              {renderInputField('company_name', 'Company/Organization Name', 'text', [], false)}
+            </div>
+          </div>
+        );
       case 5:
-        return renderStep5Content();
+        return (
+          <div className="space-y-6">
+            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>Required Documents for Renewal</h3>
+            <p className="text-sm mb-4 text-gray-600" style={{ fontFamily: COLORS.font }}>
+              <span className="text-red-600 font-bold">* All required documents must be uploaded.</span> Documents marked with * are required for {renewalType === 'MTOP' ? 'MTOP' : 'Mayor\'s Permit'} renewal.
+            </p>
+            
+            {errors.min_documents && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
+                <p className="text-red-600 font-medium" style={{ fontFamily: COLORS.font }}>
+                  {errors.min_documents}
+                </p>
+              </div>
+            )}
+            
+            <div className="space-y-4">
+              {/* Mayor's Permit specific documents - AT THE TOP */}
+              {renewalType === 'MAYOR' && (
+                <div className="flex flex-col p-4 border border-gray-300 rounded-lg">
+                  <div className="mb-3">
+                    <label className="flex items-center font-medium">
+                      <span className="text-red-600" style={{ fontFamily: COLORS.font }}>
+                        Barangay Business Clearance *
+                      </span>
+                    </label>
+                    <p className="text-sm text-gray-600 mt-1">Business clearance from your barangay</p>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block mb-2 text-sm font-medium" style={{ color: COLORS.secondary }}>
+                        Barangay Clearance ID *
+                      </label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          name="barangay_clearance_id" 
+                          value={formData.barangay_clearance_id || ''} 
+                          onChange={handleChange} 
+                          placeholder="Enter Barangay Clearance ID" 
+                          className="flex-1 p-3 border border-black rounded-lg" 
+                          style={{ fontFamily: COLORS.font }}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={verifyBarangayClearance}
+                          disabled={isVerifyingBarangay || !formData.barangay_clearance_id}
+                          className="px-4 py-3 rounded-lg font-semibold text-white transition-colors duration-300 flex items-center gap-2"
+                          style={{ 
+                            background: isVerifyingBarangay || !formData.barangay_clearance_id ? '#9CA3AF' : COLORS.primary,
+                            cursor: isVerifyingBarangay || !formData.barangay_clearance_id ? 'not-allowed' : 'pointer'
+                          }}
+                          onMouseEnter={e => {
+                            if (!isVerifyingBarangay && formData.barangay_clearance_id) {
+                              e.currentTarget.style.background = COLORS.accent;
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (!isVerifyingBarangay && formData.barangay_clearance_id) {
+                              e.currentTarget.style.background = COLORS.primary;
+                            }
+                          }}
+                        >
+                          {isVerifyingBarangay ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Verifying...
+                            </>
+                          ) : (
+                            <>
+                              <Shield className="w-4 h-4" />
+                              Verify
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      {barangayClearanceData && (
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded flex items-center gap-2">
+                          <Check className="w-4 h-4 text-green-600" />
+                          <span className="text-sm text-green-700" style={{ fontFamily: COLORS.font }}>
+                            Verified - Permit ID: {barangayClearanceData.permit_id}
+                          </span>
+                        </div>
+                      )}
+                      {errors.barangay_clearance_id && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.barangay_clearance_id}</p>}
+                    </div>
+                    <div>
+                      <label className="block mb-2 text-sm font-medium" style={{ color: COLORS.secondary }}>
+                        Upload Barangay Clearance Document *
+                      </label>
+                      <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
+                        <Upload className="w-5 h-5 text-gray-500" />
+                        <input 
+                          type="file" 
+                          name="barangay_business_clearance" 
+                          onChange={handleChange} 
+                          accept=".jpg,.jpeg,.png,.pdf" 
+                          className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                          style={{ fontFamily: COLORS.font }}
+                          required
+                        />
+                      </div>
+                      {errors.barangay_business_clearance && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.barangay_business_clearance}</p>}
+                      {formData.barangay_business_clearance && (
+                        <p className="text-green-600 text-xs mt-1 flex items-center">
+                          <Check className="w-3 h-3 mr-1" />
+                          Uploaded: {formData.barangay_business_clearance.name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Common required documents */}
+              {[
+                { name: 'old_permit_copy', label: 'Old Permit Copy *', description: 'Photocopy of your existing permit for renewal' },
+                { name: 'lto_cr_copy', label: 'LTO CR Copy *', description: 'Photocopy of LTO Certificate of Registration' },
+                { name: 'lto_or_copy', label: 'LTO OR Copy *', description: 'Photocopy of valid LTO Official Receipt' },
+                { name: 'community_tax_certificate', label: 'Community Tax Certificate *', description: 'CTC/Cedula' },
+              ].map((doc) => (
+                <div key={doc.name} className="flex flex-col p-4 border border-gray-300 rounded-lg">
+                  <div className="mb-3">
+                    <label className="flex items-center font-medium">
+                      <span className="text-red-600" style={{ fontFamily: COLORS.font }}>
+                        {doc.label}
+                      </span>
+                    </label>
+                    {doc.description && <p className="text-sm text-gray-600 mt-1">{doc.description}</p>}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
+                      <Upload className="w-5 h-5 text-gray-500" />
+                      <input 
+                        type="file" 
+                        name={doc.name} 
+                        onChange={handleChange} 
+                        accept=".jpg,.jpeg,.png,.pdf" 
+                        className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                        style={{ fontFamily: COLORS.font }}
+                        required
+                      />
+                    </div>
+                    {errors[doc.name] && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors[doc.name]}</p>}
+                    {formData[doc.name] && (
+                      <p className="text-green-600 text-xs mt-1 flex items-center">
+                        <Check className="w-3 h-3 mr-1" />
+                        Uploaded: {formData[doc.name].name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              
+              {/* Driver's License - Required */}
+              <div className="flex flex-col p-4 border border-gray-300 rounded-lg">
+                <div className="mb-3">
+                  <label className="flex items-center font-medium">
+                    <span className="text-red-600" style={{ fontFamily: COLORS.font }}>
+                      Driver's License *
+                    </span>
+                  </label>
+                  <p className="text-sm text-gray-600 mt-1">Valid driver's license of the operator</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
+                    <Upload className="w-5 h-5 text-gray-500" />
+                    <input 
+                      type="file" 
+                      name="drivers_license" 
+                      onChange={handleChange} 
+                      accept=".jpg,.jpeg,.png,.pdf" 
+                      className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                      style={{ fontFamily: COLORS.font }}
+                      required
+                    />
+                  </div>
+                  {errors.drivers_license && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.drivers_license}</p>}
+                  {formData.drivers_license && (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-green-600 text-xs flex items-center">
+                        <Check className="w-3 h-3 mr-1" />
+                        Uploaded: {formData.drivers_license.name}
+                      </p>
+                      
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => verifyDocument('drivers_license', formData.drivers_license)}
+                          disabled={documentVerification.drivers_license?.isVerifying}
+                          className={`flex items-center gap-1 px-3 py-1 text-sm rounded border ${
+                            documentVerification.drivers_license?.isVerified 
+                              ? 'bg-green-50 border-green-500 text-green-700' 
+                              : 'bg-blue-50 border-blue-500 text-blue-700 hover:bg-blue-100'
+                          }`}
+                          style={{ fontFamily: COLORS.font }}
+                        >
+                          {documentVerification.drivers_license?.isVerifying ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Verifying...
+                            </>
+                          ) : documentVerification.drivers_license?.isVerified ? (
+                            <>
+                              <Check className="w-4 h-4" />
+                              Verified
+                            </>
+                          ) : (
+                            <>
+                              <Shield className="w-4 h-4" />
+                              Verify with AI
+                            </>
+                          )}
+                        </button>
+                        
+                        {documentVerification.drivers_license?.isVerifying && (
+                          <div className="flex-1">
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${documentVerification.drivers_license?.progress || 0}%` }}
+                              ></div>
+                            </div>
+                            <p className="text-xs text-gray-600 mt-1">
+                              {Math.round(documentVerification.drivers_license?.progress || 0)}% complete
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Optional documents */}
+              {[
+                { name: 'inspection_report', label: 'Inspection Report', description: 'Roadworthiness inspection report (if required)', optional: true },
+              ].map((doc) => (
+                <div key={doc.name} className="flex flex-col p-4 border border-gray-300 rounded-lg">
+                  <div className="mb-3">
+                    <label className="flex items-center font-medium">
+                      <span style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                        {doc.label}
+                      </span>
+                      {doc.optional && <span className="ml-2 text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">Optional</span>}
+                    </label>
+                    {doc.description && <p className="text-sm text-gray-600 mt-1">{doc.description}</p>}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 p-3 border border-black rounded w-full bg-white">
+                      <Upload className="w-5 h-5 text-gray-500" />
+                      <input 
+                        type="file" 
+                        name={doc.name} 
+                        onChange={handleChange} 
+                        accept=".jpg,.jpeg,.png,.pdf" 
+                        className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                        style={{ fontFamily: COLORS.font }}
+                      />
+                    </div>
+                    {formData[doc.name] && (
+                      <p className="text-green-600 text-xs mt-1 flex items-center">
+                        <Check className="w-3 h-3 mr-1" />
+                        Uploaded: {formData[doc.name].name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       case 6:
-        return renderStep6Content();
+        const fees = renewalType === 'MTOP' ? RENEWAL_FEES.mtop : RENEWAL_FEES.mayor;
+        return (
+          <div className="space-y-6">
+            <h3 className="text-xl font-semibold mb-4" style={{ color: COLORS.secondary }}>
+              Payment Information
+            </h3>
+            <p className="text-sm mb-4 text-gray-600" style={{ fontFamily: COLORS.font }}>
+              <span className="text-red-600 font-bold">* Please select your payment method and choose which fees to pay.</span>
+            </p>
+            
+            {errors.payment && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
+                <p className="text-red-600 font-medium" style={{ fontFamily: COLORS.font }}>
+                  {errors.payment}
+                </p>
+              </div>
+            )}
+            
+            <div className="bg-white rounded-lg shadow p-6 border border-black mb-6">
+              <h4 className="font-bold text-lg mb-4" style={{ color: COLORS.primary }}>
+                Select Payment Method
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div 
+                  className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
+                    formData.payment_method === 'upload' ? 
+                    'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'
+                  }`} 
+                  onClick={() => handlePaymentMethodChange('upload')}
+                >
+                  <div className="flex items-center">
+                    <div className={`w-5 h-5 rounded-full border-2 mr-3 ${
+                      formData.payment_method === 'upload' ? 
+                      'border-green-500 bg-green-500' : 'border-gray-300'
+                    }`}>
+                      {formData.payment_method === 'upload' && (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <h5 className="font-semibold">Upload Receipts</h5>
+                      <p className="text-sm text-gray-600">
+                        Upload payment receipts from offline payment
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div 
+                  className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
+                    formData.payment_method === 'online' ? 
+                    'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+                  }`} 
+                  onClick={() => handlePaymentMethodChange('online')}
+                >
+                  <div className="flex items-center">
+                    <div className={`w-5 h-5 rounded-full border-2 mr-3 ${
+                      formData.payment_method === 'online' ? 
+                      'border-blue-500 bg-blue-500' : 'border-gray-300'
+                    }`}>
+                      {formData.payment_method === 'online' && (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <h5 className="font-semibold">Pay Online Now</h5>
+                      <p className="text-sm text-gray-600">
+                        Pay securely via Revenue Treasury portal
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-6 border border-black">
+              <h4 className="font-bold text-lg mb-4" style={{ color: COLORS.primary }}>
+                Select Fees to Pay
+              </h4>
+              <div className="space-y-4">
+                {[
+                  { 
+                    name: 'renewal_fee', 
+                    label: `Renewal Fee`, 
+                    amount: fees.renewal_fee, 
+                    checked: formData.renewal_fee_checked 
+                  },
+                  { 
+                    name: 'sticker_fee', 
+                    label: 'Sticker Fee', 
+                    amount: fees.sticker_fee, 
+                    checked: formData.sticker_fee_checked 
+                  },
+                  { 
+                    name: 'inspection_fee', 
+                    label: 'Inspection Fee', 
+                    amount: fees.inspection_fee, 
+                    checked: formData.inspection_fee_checked 
+                  }
+                ].map((fee) => (
+                  <div key={fee.name} className="flex flex-col p-4 border border-gray-300 rounded-lg">
+                    <label className="flex items-center justify-between mb-3">
+                      <div className="flex items-center">
+                        <input 
+                          type="checkbox" 
+                          name={`${fee.name}_checked`} 
+                          checked={fee.checked} 
+                          onChange={handleChange} 
+                          className="w-5 h-5 mr-2" 
+                          style={{ color: COLORS.primary }} 
+                        />
+                        <span className="font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                          {fee.label}
+                        </span>
+                      </div>
+                      <span className="font-bold" style={{ color: COLORS.primary }}>
+                        ₱{fee.amount.toFixed(2)}
+                      </span>
+                    </label>
+                    
+                    {fee.checked && formData.payment_method === 'online' && (
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <p className="text-sm text-blue-700">
+                          This fee will be included in your online payment. You will be redirected to the Revenue Treasury portal to complete payment.
+                        </p>
+                      </div>
+                    )}
+                    
+                    {fee.checked && formData.payment_method === 'upload' && (
+                      <div className="mt-3 space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block mb-2 text-sm font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                              OR Number
+                            </label>
+                            <input 
+                              type="text" 
+                              name={`${fee.name}_or`} 
+                              value={formData[`${fee.name}_or`] || ''} 
+                              onChange={handleChange} 
+                              placeholder="OR Number" 
+                              className="w-full p-2 border border-black rounded" 
+                              style={{ fontFamily: COLORS.font }}
+                              required={fee.checked}
+                            />
+                          </div>
+                          <div>
+                            <label className="block mb-2 text-sm font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                              Receipt *
+                            </label>
+                            <div className="flex items-center gap-3 p-2 border border-black rounded w-full bg-white">
+                              <Upload className="w-4 h-4 text-gray-500" />
+                              <input 
+                                type="file" 
+                                name={`${fee.name}_receipt`} 
+                                onChange={handleChange} 
+                                accept=".jpg,.jpeg,.png,.pdf" 
+                                className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                                style={{ fontFamily: COLORS.font }}
+                                required={fee.checked}
+                              />
+                            </div>
+                            {formData[`${fee.name}_receipt`] && (
+                              <p className="text-green-600 text-xs mt-1 flex items-center">
+                                <Check className="w-3 h-3 mr-1" />
+                                Uploaded: {formData[`${fee.name}_receipt`].name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {errors[`${fee.name}_receipt`] && (
+                      <p className="text-red-600 text-sm mt-2">
+                        {errors[`${fee.name}_receipt`]}
+                      </p>
+                    )}
+                  </div>
+                ))}
+                
+                <div className="mt-6 p-4 bg-gray-50 border border-gray-300 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold" style={{ color: COLORS.secondary }}>
+                        Total Amount:
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Selected {formData.payment_method === 'online' ? 'for online payment' : 'for receipt upload'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold" style={{ color: COLORS.primary }}>
+                        ₱{(
+                          (formData.renewal_fee_checked ? fees.renewal_fee : 0) + 
+                          (formData.sticker_fee_checked ? fees.sticker_fee : 0) + 
+                          (formData.inspection_fee_checked ? fees.inspection_fee : 0)
+                        ).toFixed(2)}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {[
+                          formData.renewal_fee_checked, 
+                          formData.sticker_fee_checked, 
+                          formData.inspection_fee_checked
+                        ].filter(Boolean).length} fee(s) selected
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {paymentStatus.isPaid && (
+                  <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center">
+                      <Check className="w-6 h-6 text-green-600 mr-3" />
+                      <div>
+                        <p className="font-semibold text-green-700">
+                          ✓ Payment Completed
+                        </p>
+                        <p className="text-sm text-green-600 mt-1">
+                          Payment Method: {paymentStatus.paymentMethod === 'online' ? 'Online Payment' : 'Receipt Upload'}
+                        </p>
+                        {paymentStatus.paymentDate && (
+                          <p className="text-xs text-green-600 mt-1">
+                            Paid on: {paymentStatus.paymentDate}
+                          </p>
+                        )}
+                        {paymentStatus.transactionId && (
+                          <p className="text-xs text-green-600 mt-1">
+                            Transaction ID: {paymentStatus.transactionId}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {formData.payment_method === 'online' && (
+                  <div className="mt-6">
+                    <button 
+                      type="button" 
+                      onClick={handleOnlinePayment} 
+                      disabled={!formData.renewal_fee_checked && !formData.sticker_fee_checked && !formData.inspection_fee_checked} 
+                      style={{ 
+                        background: (!formData.renewal_fee_checked && !formData.sticker_fee_checked && !formData.inspection_fee_checked) ? 
+                        '#9CA3AF' : COLORS.primary 
+                      }} 
+                      className="w-full py-3 rounded-lg font-semibold text-white transition-colors duration-300 flex items-center justify-center gap-3"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      Pay Now via Revenue Treasury (Opens in New Tab)
+                    </button>
+                    <p className="text-xs text-gray-500 mt-2 text-center">
+                      You will be redirected to the Revenue Treasury secure payment portal in a new tab
+                    </p>
+                  </div>
+                )}
+                
+                <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm font-medium text-yellow-800 mb-2">
+                    Payment Instructions:
+                  </p>
+                  <ul className="text-xs text-yellow-700 space-y-1">
+                    <li>• Select at least one fee to proceed</li>
+                    <li>• For online payment: Click "Pay Now" to complete payment in a new tab</li>
+                    <li>• For receipt upload: Upload clear photos/scans of official receipts</li>
+                    <li>• All fees are non-refundable once paid</li>
+                    <li>• Keep your payment references for verification</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
       case 7:
         return (
           <div className="space-y-6">
@@ -2659,12 +3129,13 @@ export default function FranchiseRenewal() {
                   <input
                     type="date"
                     name="date_submitted"
-                    value={formData.date_submitted}
-                    readOnly
-                    className="w-full p-3 border border-black rounded-lg bg-gray-50 cursor-not-allowed"
+                    value={new Date().toISOString().split('T')[0]}
+                    className="w-full p-3 border border-black rounded-lg bg-gray-100 cursor-not-allowed"
                     style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                    readOnly
+                    disabled
                   />
-                  <p className="text-xs text-gray-500 mt-1">Automatically set to today's date</p>
+                  <p className="text-xs text-gray-500 mt-1">Date is automatically set to today</p>
                 </div>
 
                 <div className="md:col-span-2">
@@ -2683,20 +3154,6 @@ export default function FranchiseRenewal() {
                   />
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>
-                    Remarks / Additional Notes
-                  </label>
-                  <textarea
-                    name="remarks"
-                    value={formData.remarks}
-                    onChange={handleChange}
-                    placeholder="Any additional information or special requests..."
-                    rows="3"
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  />
-                </div>
               </div>
 
               <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -2747,7 +3204,7 @@ export default function FranchiseRenewal() {
                         <Check className="w-5 h-5 text-blue-600" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-blue-700">✓ Data Auto-filled from Existing Permit</p>
+                        <p className="text-sm font-medium text-blue-700"> Data Auto-filled from Existing Permit</p>
                         <p className="text-xs mt-1 text-blue-600">
                           Your application has been pre-filled with data from your existing permit
                         </p>
@@ -2757,133 +3214,440 @@ export default function FranchiseRenewal() {
                 )}
                 
                 <div>
-                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Applicant Information</h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm" style={{ fontFamily: COLORS.font }}>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Full Name:</span>
-                      <span className="flex-1">{getFullName()}</span>
+                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
+                    Applicant Information
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm" style={{ fontFamily: COLORS.font }}>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Full Name:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{getFullName()}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Contact Number:</span>
-                      <span className="flex-1">{formData.contact_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Contact Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.contact_number}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Email:</span>
-                      <span className="flex-1">{formData.email}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg md:col-span-2">
+                      <span className="font-medium text-gray-600">Home Address:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.home_address}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Operator Type:</span>
-                      <span className="flex-1">{formData.operator_type}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Email:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.email}</p>
                     </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Vehicle Information</h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm" style={{ fontFamily: COLORS.font }}>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Plate Number:</span>
-                      <span className="flex-1">{formData.plate_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Citizenship:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.citizenship}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Make/Model:</span>
-                      <span className="flex-1">{formData.make_brand} {formData.model}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Birth Date:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.birth_date}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Engine Number:</span>
-                      <span className="flex-1">{formData.engine_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">ID Type:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.id_type}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="font-medium w-40">Chassis Number:</span>
-                      <span className="flex-1">{formData.chassis_number}</span>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">ID Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.id_number}</p>
                     </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Payment Summary</h5>
-                  <div className="space-y-4">
-                    {[
-                      { 
-                        name: 'renewal_fee', 
-                        label: renewalType === 'MTOP' ? 'MTOP Renewal Fee' : 'Mayor\'s Permit Renewal Fee', 
-                        checked: formData.renewal_fee_checked 
-                      },
-                      { 
-                        name: 'sticker_fee', 
-                        label: 'Sticker Fee', 
-                        checked: formData.sticker_fee_checked 
-                      },
-                      { 
-                        name: 'inspection_fee', 
-                        label: 'Inspection Fee', 
-                        checked: formData.inspection_fee_checked 
-                      }
-                    ].map((fee) => (
-                      <div key={fee.name} className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
-                        <div className="flex items-center">
-                          {fee.checked ? (
-                            <Check className="w-5 h-5 text-green-600 mr-3" />
-                          ) : (
-                            <div className="w-5 h-5 border border-gray-300 rounded mr-3"></div>
-                          )}
-                          <div>
-                            <span className="font-medium">{fee.label}:</span>
-                            <p className="text-sm text-gray-600">
-                              {fee.checked ? 'Selected' : 'Not selected'}
-                            </p>
-                          </div>
-                        </div>
-                        {fee.checked && (
-                          <span className="font-bold" style={{ color: COLORS.primary }}>
-                            ₱{FEES[fee.name].toFixed(2)}
-                          </span>
-                        )}
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Operator Type:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.operator_type}</p>
+                    </div>
+                    {formData.company_name && (
+                      <div className="p-3 bg-gray-50 rounded-lg md:col-span-2">
+                        <span className="font-medium text-gray-600">Company Name:</span>
+                        <p className="font-semibold text-gray-900 mt-1">{formData.company_name}</p>
                       </div>
-                    ))}
-                    
-                    <div className="p-4 bg-gray-50 rounded-lg border">
-                      <div className="flex justify-between items-center">
-                        <p className="font-semibold">Total Amount:</p>
-                        <p className="text-2xl font-bold" style={{ color: COLORS.primary }}>
-                          ₱{(
-                            (formData.renewal_fee_checked ? FEES.renewal_fee : 0) + 
-                            (formData.sticker_fee_checked ? FEES.sticker_fee : 0) + 
-                            (formData.inspection_fee_checked ? FEES.inspection_fee : 0)
-                          ).toFixed(2)}
-                        </p>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-2">
-                        Payment Method: <span className={`font-bold ${formData.payment_method === 'online' ? 'text-blue-600' : 'text-green-600'}`}>
-                          {formData.payment_method === 'online' ? 'Online Payment' : 'Receipt Upload'}
-                        </span>
-                      </p>
-                      {paymentStatus.isPaid && (
-                        <p className="text-sm text-green-600 mt-1">
-                          ✓ Payment Status: <span className="font-semibold">Paid</span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>Barangay Clearance</h5>
-                  <div className="p-3 border border-gray-300 rounded-lg">
-                    <p className="text-sm">
-                      <span className="font-medium">Method:</span> {barangayClearanceMethod === 'id' ? 'ID Entry' : 'Document Upload'}
-                    </p>
-                    {barangayClearanceMethod === 'id' ? (
-                      <p className="text-sm mt-1">
-                        <span className="font-medium">Clearance ID:</span> {formData.barangay_clearance_id || 'Not provided'}
-                      </p>
-                    ) : (
-                      <p className="text-sm mt-1">
-                        <span className="font-medium">File:</span> {formData.barangay_clearance_file?.name || 'Not uploaded'}
-                      </p>
                     )}
                   </div>
                 </div>
+                
+                <div>
+                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
+                    Vehicle Information
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm" style={{ fontFamily: COLORS.font }}>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Make/Brand:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.make_brand}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Model:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.model}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Plate Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.plate_number}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Engine Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.engine_number}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Chassis Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.chassis_number}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Year Acquired:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.year_acquired}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Color:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.color}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Vehicle Type:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.vehicle_type}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">LTO OR Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.lto_or_number}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">LTO CR Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.lto_cr_number}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">LTO Expiration Date:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.lto_expiration_date}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">MV File Number:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.mv_file_number || 'N/A'}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">District:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.district}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
+                    Operation Information
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm" style={{ fontFamily: COLORS.font }}>
+                    <div className="p-3 bg-gray-50 rounded-lg md:col-span-2">
+                      <span className="font-medium text-gray-600">Route/Zone:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.route_zone}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">Barangay of Operation:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.barangay_of_operation}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-600">TODA Name:</span>
+                      <p className="font-semibold text-gray-900 mt-1">{formData.toda_name}</p>
+                    </div>
+                    {renewalType === 'MAYOR' && formData.mayors_permit_id && (
+                      <>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <span className="font-medium text-gray-600">Mayor's Permit ID:</span>
+                          <p className="font-semibold text-gray-900 mt-1">{formData.mayors_permit_id}</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <span className="font-medium text-gray-600">Barangay Clearance ID:</span>
+                          <p className="font-semibold text-gray-900 mt-1">{formData.barangay_clearance_id || 'N/A'}</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
+                    Uploaded Documents
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {formData.old_permit_copy && (
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-5 h-5 text-blue-600" />
+                            <div>
+                              <p className="font-medium text-gray-700">Old Permit Copy</p>
+                              <p className="text-xs text-gray-500">{formData.old_permit_copy.name}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setShowPreview({ url: URL.createObjectURL(formData.old_permit_copy), type: formData.old_permit_copy.type })}
+                            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                          >
+                            <Eye className="w-4 h-4 text-blue-600" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {formData.lto_cr_copy && (
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-5 h-5 text-blue-600" />
+                            <div>
+                              <p className="font-medium text-gray-700">LTO CR Copy</p>
+                              <p className="text-xs text-gray-500">{formData.lto_cr_copy.name}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setShowPreview({ url: URL.createObjectURL(formData.lto_cr_copy), type: formData.lto_cr_copy.type })}
+                            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                          >
+                            <Eye className="w-4 h-4 text-blue-600" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {formData.lto_or_copy && (
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-5 h-5 text-blue-600" />
+                            <div>
+                              <p className="font-medium text-gray-700">LTO OR Copy</p>
+                              <p className="text-xs text-gray-500">{formData.lto_or_copy.name}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setShowPreview({ url: URL.createObjectURL(formData.lto_or_copy), type: formData.lto_or_copy.type })}
+                            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                          >
+                            <Eye className="w-4 h-4 text-blue-600" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {formData.community_tax_certificate && (
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-5 h-5 text-blue-600" />
+                            <div>
+                              <p className="font-medium text-gray-700">Community Tax Certificate</p>
+                              <p className="text-xs text-gray-500">{formData.community_tax_certificate.name}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setShowPreview({ url: URL.createObjectURL(formData.community_tax_certificate), type: formData.community_tax_certificate.type })}
+                            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                          >
+                            <Eye className="w-4 h-4 text-blue-600" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {formData.drivers_license && (
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-5 h-5 text-blue-600" />
+                            <div>
+                              <p className="font-medium text-gray-700">Driver's License</p>
+                              <p className="text-xs text-gray-500">{formData.drivers_license.name}</p>
+                              {documentVerification.drivers_license.isVerified && (
+                                <span className="inline-flex items-center text-xs text-green-600 mt-1">
+                                  <Check className="w-3 h-3 mr-1" />
+                                  AI Verified
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setShowPreview({ url: URL.createObjectURL(formData.drivers_license), type: formData.drivers_license.type })}
+                            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                          >
+                            <Eye className="w-4 h-4 text-blue-600" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {formData.inspection_report && (
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-5 h-5 text-blue-600" />
+                            <div>
+                              <p className="font-medium text-gray-700">Inspection Report</p>
+                              <p className="text-xs text-gray-500">{formData.inspection_report.name}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setShowPreview({ url: URL.createObjectURL(formData.inspection_report), type: formData.inspection_report.type })}
+                            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                          >
+                            <Eye className="w-4 h-4 text-blue-600" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {renewalType === 'MAYOR' && formData.barangay_business_clearance && (
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-5 h-5 text-blue-600" />
+                            <div>
+                              <p className="font-medium text-gray-700">Barangay Business Clearance</p>
+                              <p className="text-xs text-gray-500">{formData.barangay_business_clearance.name}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setShowPreview({ url: URL.createObjectURL(formData.barangay_business_clearance), type: formData.barangay_business_clearance.type })}
+                            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                          >
+                            <Eye className="w-4 h-4 text-blue-600" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {formData.payment_method === 'upload' && (
+                  <div>
+                    <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
+                      Payment Receipts
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {formData.renewal_fee_checked && formData.renewal_fee_receipt && (
+                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <Receipt className="w-5 h-5 text-green-600" />
+                              <div>
+                                <p className="font-medium text-gray-700">Renewal Fee Receipt</p>
+                                <p className="text-xs text-gray-500">OR: {formData.renewal_fee_or}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setShowPreview({ url: URL.createObjectURL(formData.renewal_fee_receipt), type: formData.renewal_fee_receipt.type })}
+                              className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                            >
+                              <Eye className="w-4 h-4 text-blue-600" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {formData.sticker_fee_checked && formData.sticker_fee_receipt && (
+                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <Receipt className="w-5 h-5 text-green-600" />
+                              <div>
+                                <p className="font-medium text-gray-700">Sticker Fee Receipt</p>
+                                <p className="text-xs text-gray-500">OR: {formData.sticker_fee_or}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setShowPreview({ url: URL.createObjectURL(formData.sticker_fee_receipt), type: formData.sticker_fee_receipt.type })}
+                              className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                            >
+                              <Eye className="w-4 h-4 text-blue-600" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {formData.inspection_fee_checked && formData.inspection_fee_receipt && (
+                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <Receipt className="w-5 h-5 text-green-600" />
+                              <div>
+                                <p className="font-medium text-gray-700">Inspection Fee Receipt</p>
+                                <p className="text-xs text-gray-500">OR: {formData.inspection_fee_or}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setShowPreview({ url: URL.createObjectURL(formData.inspection_fee_receipt), type: formData.inspection_fee_receipt.type })}
+                              className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                            >
+                              <Eye className="w-4 h-4 text-blue-600" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                <div>
+                  <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
+                    Payment Summary
+                  </h5>
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <p className="font-medium mb-2">Payment Method: <span className={`font-bold ${formData.payment_method === 'online' ? 'text-blue-600' : 'text-green-600'}`}>{formData.payment_method === 'online' ? 'Online Payment' : 'Receipt Upload'}</span></p>
+                    <div className="space-y-2 mb-3">
+                      {formData.renewal_fee_checked && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-700">Renewal Fee:</span>
+                          <span className="font-semibold">₱{(renewalType === 'MTOP' ? RENEWAL_FEES.mtop.renewal_fee : RENEWAL_FEES.mayor.renewal_fee).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {formData.sticker_fee_checked && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-700">Sticker Fee:</span>
+                          <span className="font-semibold">₱{(renewalType === 'MTOP' ? RENEWAL_FEES.mtop.sticker_fee : RENEWAL_FEES.mayor.sticker_fee).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {formData.inspection_fee_checked && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-700">Inspection Fee:</span>
+                          <span className="font-semibold">₱{(renewalType === 'MTOP' ? RENEWAL_FEES.mtop.inspection_fee : RENEWAL_FEES.mayor.inspection_fee).toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="border-t pt-3 mt-3">
+                      <p className="font-medium">Total Amount: <span className="text-2xl font-bold" style={{ color: COLORS.primary }}>₱{(
+                        (formData.renewal_fee_checked ? (renewalType === 'MTOP' ? RENEWAL_FEES.mtop.renewal_fee : RENEWAL_FEES.mayor.renewal_fee) : 0) + 
+                        (formData.sticker_fee_checked ? (renewalType === 'MTOP' ? RENEWAL_FEES.mtop.sticker_fee : RENEWAL_FEES.mayor.sticker_fee) : 0) + 
+                        (formData.inspection_fee_checked ? (renewalType === 'MTOP' ? RENEWAL_FEES.mtop.inspection_fee : RENEWAL_FEES.mayor.inspection_fee) : 0)
+                      ).toFixed(2)}</span></p>
+                    </div>
+                  </div>
+                </div>
+
+                {formData.applicant_signature && (
+                  <div>
+                    <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
+                      Declaration & Signature
+                    </h5>
+                    <div className="p-4 bg-gray-50 rounded-lg space-y-3">
+                      <div>
+                        <span className="font-medium text-gray-600">Signature:</span>
+                        <div className="mt-2 border border-gray-300 rounded-lg p-2 bg-white">
+                          <img src={formData.applicant_signature} alt="Signature" className="h-24 object-contain" />
+                        </div>
+                      </div>
+                      {formData.date_submitted && (
+                        <div>
+                          <span className="font-medium text-gray-600">Date Submitted:</span>
+                          <p className="font-semibold text-gray-900 mt-1">{formData.date_submitted}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {(formData.remarks || formData.notes) && (
+                  <div>
+                    <h5 className="font-semibold mb-3 text-lg" style={{ color: COLORS.primary }}>
+                      Additional Information
+                    </h5>
+                    <div className="p-4 bg-gray-50 rounded-lg space-y-3">
+                      {formData.remarks && (
+                        <div>
+                          <span className="font-medium text-gray-600">Remarks:</span>
+                          <p className="text-gray-900 mt-1">{formData.remarks}</p>
+                        </div>
+                      )}
+                      {formData.notes && (
+                        <div>
+                          <span className="font-medium text-gray-600">Notes:</span>
+                          <p className="text-gray-900 mt-1">{formData.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2903,13 +3667,13 @@ export default function FranchiseRenewal() {
           </p>
         </div>
         <button
-          onClick={() => navigate('/user/franchise/type')}
+          onClick={handleBackConfirmation}
           onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
           onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
           style={{ background: COLORS.success }}
           className="px-4 py-2 rounded-lg font-medium text-white hover:bg-[#FDA811] transition-colors duration-300"
         >
-          Back to Dashboard
+          Change Type
         </button>
       </div>
 
@@ -2998,24 +3762,75 @@ export default function FranchiseRenewal() {
           ) : (
             <button
               type="button"
-              onClick={() => setShowConfirmModal(true)}
+              onClick={async () => {
+                const result = await Swal.fire({
+                  title: 'Confirm Renewal Submission',
+                  html: `
+                    <div style="text-align: left;">
+                      <p style="margin-bottom: 15px;">You are about to submit your ${renewalType === 'MTOP' ? 'MTOP' : 'Mayor\'s Permit'} renewal application.</p>
+                      ${existingPermit ? `
+                        <div style="background-color: #EFF6FF; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #BFDBFE;">
+                          <p style="margin: 0; font-weight: 600; color: #1E40AF; margin-bottom: 8px;">✓ Existing Permit Verified</p>
+                          <p style="margin: 0; font-size: 0.875rem;"><strong>Permit ID:</strong> ${existingPermit.application_id}</p>
+                          <p style="margin: 0; font-size: 0.875rem;"><strong>Status:</strong> ${existingPermit.status}</p>
+                          <p style="margin: 0; font-size: 0.875rem;"><strong>Expiry:</strong> ${existingPermit.expiry_date}</p>
+                        </div>
+                      ` : ''}
+                      <div style="background-color: #F9FAFB; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <p style="margin: 0; font-weight: 600; margin-bottom: 8px;">Renewal Declaration:</p>
+                        <p style="margin: 0; font-size: 0.875rem;">I hereby declare that all information provided is true and correct to the best of my knowledge. I understand that any false information may result in the rejection of my renewal application.</p>
+                      </div>
+                      <div style="background-color: #DBEAFE; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 2px solid #3B82F6;">
+                        <div style="display: flex; align-items: start;">
+                          <input type="checkbox" id="swal-confirm-checkbox" style="margin-top: 3px; margin-right: 10px; width: 18px; height: 18px; cursor: pointer;" />
+                          <label for="swal-confirm-checkbox" style="cursor: pointer; font-weight: 600; color: #1E40AF; margin: 0;">
+                            I confirm that I have reviewed all information and documents, and I am ready to submit this renewal application.
+                          </label>
+                        </div>
+                      </div>
+                      <p style="font-size: 0.875rem; color: #6B7280; margin: 0;">Please check the box above to proceed with submission.</p>
+                    </div>
+                  `,
+                  icon: 'question',
+                  showCancelButton: true,
+                  confirmButtonText: 'Confirm & Submit',
+                  cancelButtonText: 'Cancel',
+                  confirmButtonColor: COLORS.success,
+                  cancelButtonColor: COLORS.danger,
+                  reverseButtons: true,
+                  preConfirm: () => {
+                    const checkbox = document.getElementById('swal-confirm-checkbox');
+                    if (!checkbox.checked) {
+                      Swal.showValidationMessage('You must confirm that you have reviewed all information before submitting');
+                      return false;
+                    }
+                    return true;
+                  }
+                });
+
+                if (result.isConfirmed) {
+                  handleSubmit();
+                }
+              }}
               disabled={isSubmitting || !existingPermit}
               onMouseEnter={e => {
-                if (!isSubmitting && existingPermit) e.currentTarget.style.background = COLORS.accent;
+                if (!isSubmitting && existingPermit) {
+                  e.currentTarget.style.background = COLORS.accent;
+                }
               }}
               onMouseLeave={e => {
-                if (!isSubmitting && existingPermit) e.currentTarget.style.background = COLORS.success;
+                if (!isSubmitting && existingPermit) {
+                  e.currentTarget.style.background = COLORS.success;
+                }
               }}
               style={{ 
-                background: (isSubmitting || !existingPermit) 
-                  ? '#9CA3AF' 
-                  : COLORS.success 
+                background: (isSubmitting || !existingPermit) ? '#9CA3AF' : COLORS.success 
               }}
               className={`px-6 py-3 rounded-lg font-semibold text-white ${
                 (isSubmitting || !existingPermit) ? 'cursor-not-allowed' : 'transition-colors duration-300'
               }`}
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Renewal Application'}
+              {isSubmitting ? 'Submitting...' : 'Confirm & Submit Renewal'}
             </button>
           )}
         </div>
@@ -3090,386 +3905,6 @@ export default function FranchiseRenewal() {
                   Close Preview
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Completion Modal */}
-      {showPaymentCompletionModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div 
-            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
-            style={{ 
-              background: 'rgba(255, 255, 255, 0.95)',
-              fontFamily: COLORS.font,
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-                <Check className="w-10 h-10 text-green-600" />
-              </div>
-            </div>
-            
-            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.primary }}>Payment Portal Opened</h2>
-            
-            <div className="mb-6">
-              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                The Revenue Treasury payment portal has been opened in a new tab. Please complete your payment there.
-              </p>
-              
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 mb-4">
-                <p className="text-sm font-medium text-blue-700 mb-2">Next Steps:</p>
-                <ul className="text-xs space-y-2 text-blue-700">
-                  <li className="flex items-start">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2">
-                      <span className="text-xs font-bold">1</span>
-                    </div>
-                    <span>Complete payment in the new tab</span>
-                  </li>
-                  <li className="flex items-start">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2">
-                      <span className="text-xs font-bold">2</span>
-                    </div>
-                    <span>Return to this tab after payment</span>
-                  </li>
-                  <li className="flex items-start">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-2">
-                      <span className="text-xs font-bold">3</span>
-                    </div>
-                    <span>Your payment status will be automatically verified</span>
-                  </li>
-                </ul>
-              </div>
-              
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm font-medium text-yellow-700 mb-2">Important:</p>
-                <ul className="text-xs space-y-1 text-yellow-700">
-                  <li>• Do not close this tab while making payment</li>
-                  <li>• Keep the payment reference number for verification</li>
-                  <li>• You can proceed to the next step once payment is confirmed</li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={() => setShowPaymentCompletionModal(false)}
-                style={{ background: COLORS.primary }}
-                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-                onMouseLeave={e => e.currentTarget.style.background = COLORS.primary}
-                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-              >
-                Return to Application
-              </button>
-            </div>
-            
-            <div className="mt-6">
-              <p className="text-xs text-center text-gray-500" style={{ fontFamily: COLORS.font }}>
-                Your payment status will be checked automatically. You can continue with your application.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Success Modal */}
-      {showPaymentSuccessModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div 
-            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
-            style={{ 
-              background: 'rgba(255, 255, 255, 0.95)',
-              fontFamily: COLORS.font,
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-                <Check className="w-10 h-10 text-green-600" />
-              </div>
-            </div>
-            
-            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.primary }}>{modalTitle}</h2>
-            
-            <div className="mb-6">
-              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                {modalMessage}
-              </p>
-              
-              {paymentStatus.transactionId && (
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 mb-4">
-                  <p className="text-sm font-medium text-blue-700 mb-2">Payment Details:</p>
-                  <div className="text-xs space-y-1">
-                    <p><span className="font-medium">Transaction ID:</span> {paymentStatus.transactionId}</p>
-                    <p><span className="font-medium">Payment Date:</span> {new Date(paymentStatus.paymentDate).toLocaleDateString()}</p>
-                    <p><span className="font-medium">Payment Method:</span> Online Payment</p>
-                  </div>
-                </div>
-              )}
-              
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-sm font-medium text-green-700 mb-2">What happens next:</p>
-                <ul className="text-xs space-y-1 text-green-700">
-                  <li>• Your payment has been recorded in the system</li>
-                  <li>• You can now proceed to the declaration step</li>
-                  <li>• Your application will be processed after submission</li>
-                  <li>• You will receive updates via email</li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={() => setShowPaymentSuccessModal(false)}
-                style={{ background: COLORS.primary }}
-                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-                onMouseLeave={e => e.currentTarget.style.background = COLORS.primary}
-                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-              >
-                Continue to Declaration
-              </button>
-            </div>
-            
-            <div className="mt-6">
-              <p className="text-xs text-center text-gray-500" style={{ fontFamily: COLORS.font }}>
-                You can continue with your renewal application. Your payment status is now verified.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation Modal */}
-      {showConfirmModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div 
-            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
-            style={{ 
-              background: 'rgba(255, 255, 255, 0.95)',
-              fontFamily: COLORS.font,
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <RefreshCw className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold" style={{ color: COLORS.primary }}>Confirm Renewal Submission</h2>
-                <p className="text-sm text-gray-600">Review your information before submitting renewal</p>
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                You are about to submit your {renewalType === 'MTOP' ? 'MTOP' : 'Mayor\'s'} renewal application.
-              </p>
-              
-              {existingPermit && (
-                <div className="p-4 rounded-lg border mb-4 bg-blue-50 border-blue-200">
-                  <div className="flex items-start">
-                    <Check className="w-5 h-5 text-blue-600 mr-2 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">✓ Existing Permit Verified</p>
-                      <div className="text-xs mt-1 space-y-1">
-                        <p><span className="font-medium">Permit ID:</span> {existingPermit.application_id}</p>
-                        <p><span className="font-medium">Status:</span> {existingPermit.status}</p>
-                        <p><span className="font-medium">Expiry:</span> {existingPermit.expiry_date}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div className="p-4 bg-gray-50 rounded-lg border mb-4">
-                <p className="text-sm font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Renewal Declaration:</p>
-                <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  I hereby declare that all information provided is true and correct to the best of my knowledge. I understand that any false information may result in the rejection of my renewal application.
-                </p>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="declaration-checkbox"
-                    checked={agreeDeclaration}
-                    onChange={(e) => setAgreeDeclaration(e.target.checked)}
-                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                  />
-                  <label htmlFor="declaration-checkbox" className="ml-2 text-sm" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    I agree to the above declaration *
-                  </label>
-                </div>
-              </div>
-
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                <p className="text-sm font-medium mb-2 text-blue-700">Renewal Requirements Summary:</p>
-                <ul className="text-xs space-y-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  <li>✓ Existing permit verified</li>
-                  <li>✓ All required documents uploaded</li>
-                  <li>✓ Payment receipt(s) provided</li>
-                  <li>✓ Declaration signed</li>
-                  {renewalType === 'MAYOR' && (
-                    <>
-                      <li>✓ Barangay business clearance uploaded</li>
-                      <li>✓ Previous Mayor's Permit uploaded</li>
-                    </>
-                  )}
-                </ul>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={() => {
-                  setShowConfirmModal(false);
-                  setAgreeDeclaration(false);
-                }}
-                disabled={isSubmitting}
-                style={{ background: COLORS.danger }}
-                onMouseEnter={e => {
-                  if (!isSubmitting) e.currentTarget.style.background = COLORS.accent;
-                }}
-                onMouseLeave={e => {
-                  if (!isSubmitting) e.currentTarget.style.background = COLORS.danger;
-                }}
-                className={`px-6 py-2 rounded-lg font-semibold text-white ${
-                  isSubmitting ? 'cursor-not-allowed' : 'transition-colors duration-300'
-                }`}
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !agreeDeclaration || !existingPermit}
-                style={{ 
-                  background: (isSubmitting || !agreeDeclaration || !existingPermit) 
-                    ? '#9CA3AF' 
-                    : COLORS.success 
-                }}
-                onMouseEnter={e => {
-                  if (!(isSubmitting || !agreeDeclaration || !existingPermit)) {
-                    e.currentTarget.style.background = COLORS.accent;
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (!(isSubmitting || !agreeDeclaration || !existingPermit)) {
-                    e.currentTarget.style.background = COLORS.success;
-                  }
-                }}
-                className={`px-6 py-2 rounded-lg font-semibold text-white ${
-                  (isSubmitting || !agreeDeclaration || !existingPermit) 
-                    ? 'cursor-not-allowed' 
-                    : 'transition-colors duration-300'
-                }`}
-              >
-                {isSubmitting ? 'Submitting...' : 'Confirm & Submit Renewal'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div 
-            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
-            style={{ 
-              background: 'rgba(255, 255, 255, 0.95)',
-              fontFamily: COLORS.font,
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-                <Check className="w-8 h-8 text-green-600" />
-              </div>
-            </div>
-            
-            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.primary }}>{modalTitle}</h2>
-            
-            <div className="mb-6">
-              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                {modalMessage}
-              </p>
-              <p className="text-xs text-center text-gray-500" style={{ fontFamily: COLORS.font }}>
-                Proceeding to applicant information...
-              </p>
-            </div>
-
-            <div className="flex justify-center">
-              <button
-                onClick={() => {
-                  setShowSuccessModal(false);
-                  setCurrentStep(3);
-                }}
-                style={{ background: COLORS.success }}
-                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-                onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-              >
-                Proceed to Next Step
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Error Modal */}
-      {showErrorModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div 
-            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
-            style={{ 
-              background: 'rgba(255, 255, 255, 0.95)',
-              fontFamily: COLORS.font,
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-                <X className="w-8 h-8 text-red-600" />
-              </div>
-            </div>
-            
-            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.danger }}>{modalTitle}</h2>
-            
-            <div className="mb-6">
-              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                {modalMessage}
-              </p>
-              <p className="text-xs text-center text-gray-500" style={{ fontFamily: COLORS.font }}>
-                Please check your information and try again.
-              </p>
-            </div>
-
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={() => setShowErrorModal(false)}
-                style={{ background: COLORS.danger }}
-                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-                onMouseLeave={e => e.currentTarget.style.background = COLORS.danger}
-                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-              >
-                Close
-              </button>
-              
-              {!showConfirmModal && (
-                <button
-                  onClick={() => {
-                    setShowErrorModal(false);
-                    setShowConfirmModal(true);
-                  }}
-                  style={{ background: COLORS.success }}
-                  onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-                  onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-                  className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-                >
-                  Try Again
-                </button>
-              )}
             </div>
           </div>
         </div>
