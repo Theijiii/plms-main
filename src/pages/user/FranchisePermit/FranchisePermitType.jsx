@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft } from "lucide-react";
+import Swal from 'sweetalert2';
 
 const COLORS = {
   primary: '#4A90E2',
@@ -13,10 +14,6 @@ const COLORS = {
 };
 
 export default function FranchisePermitType({ franchise_permit_id }) {
-  const [selectedType, setSelectedType] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-  const [isConfirmBackOpen, setIsConfirmBackOpen] = useState(false); // Back confirmation
   const navigate = useNavigate();
 
   const application_type = [
@@ -32,34 +29,88 @@ export default function FranchisePermitType({ franchise_permit_id }) {
     e.currentTarget.style.backgroundColor = COLORS.success;
   };
 
-  const handleTypeSelection = (typeId) => {
-    if (!franchise_permit_id && typeId !== 'NEW') {
-      setIsConfirmModalOpen(true);
-      return;
-    }
-    setSelectedType(typeId);
-    setIsModalOpen(true);
-  };
-
-  const handleContinue = () => {
-    setIsModalOpen(false);
-    const routeMap = {
-      NEW: '/user/franchise/new',
-      RENEWAL: '/user/franchise/new',
-    };
-    navigate(routeMap[selectedType] || '/user/franchise/new', { 
-      state: { permitType: selectedType } 
+  const handleBackToDashboard = () => {
+    Swal.fire({
+      title: 'Go Back to Dashboard?',
+      text: 'Are you sure you want to return to the dashboard?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: COLORS.success,
+      cancelButtonColor: COLORS.danger,
+      confirmButtonText: 'Yes, Go Back',
+      cancelButtonText: 'Cancel',
+      customClass: {
+        title: 'swal-title-center',
+        htmlContainer: 'swal-text-center'
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: 'Redirecting...',
+          html: '<p style="text-align: center;">Returning to dashboard...</p>',
+          timer: 2000,
+          timerProgressBar: true,
+          showConfirmButton: false,
+          allowOutsideClick: false,
+          customClass: {
+            title: 'swal-title-center',
+            htmlContainer: 'swal-text-center'
+          },
+          didOpen: () => {
+            Swal.showLoading();
+          },
+          willClose: () => {
+            navigate('/user/dashboard');
+          }
+        });
+      }
     });
   };
 
-  const handleConfirmYes = () => {
-    setIsConfirmModalOpen(false);
-    navigate('/user/franchise/new', { state: { permitType: 'NEW' } });
+  const handleTypeSelection = (typeId) => {
+    const selectedApplication = application_type.find(t => t.id === typeId);
+    
+    Swal.fire({
+      title: 'Selected Permit Type',
+      html: `
+        <div style="text-align: center; padding: 10px 0;">
+          <p style="margin-bottom: 10px;">You have selected: <strong style="color: ${COLORS.primary}">${selectedApplication?.title}</strong></p>
+          <p style="font-size: 0.9rem; color: #666;">${selectedApplication?.description}</p>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: COLORS.success,
+      cancelButtonColor: '#9CA3AF',
+      confirmButtonText: 'Continue',
+      cancelButtonText: 'Cancel',
+      customClass: {
+        popup: 'swal-wide',
+        title: 'swal-title-center',
+        htmlContainer: 'swal-text-center'
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        const routeMap = {
+          NEW: '/user/franchise/new',
+          RENEWAL: '/user/franchise/renew',
+        };
+        navigate(routeMap[typeId] || '/user/franchise/new', { 
+          state: { permitType: typeId } 
+        });
+      }
+    });
   };
 
-  const handleConfirmNo = () => {
-    setIsConfirmModalOpen(false);
-  };
+  // TEMPORARILY DISABLED: Confirmation modal handlers
+  // const handleConfirmYes = () => {
+  //   setIsConfirmModalOpen(false);
+  //   navigate('/user/franchise/new', { state: { permitType: 'NEW' } });
+  // };
+  
+  // const handleConfirmNo = () => {
+  //   setIsConfirmModalOpen(false);
+  // };
 
   return (
     <div className="mx-1 mt-1 p-6 dark:bg-slate-900 bg-white dark:text-slate-300 rounded-lg min-h-screen">
@@ -86,75 +137,11 @@ export default function FranchisePermitType({ franchise_permit_id }) {
         ))}
       </div>
 
-      {/* Selection Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-semibold mb-2">Selected Permit Type</h3>
-            <p className="text-gray-600 dark:text-slate-300 mb-4">
-              You have selected:{" "}
-              <span className="font-bold text-blue-600">
-                {application_type.find(t => t.id === selectedType)?.title}
-              </span>
-            </p>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
-              {application_type.find(t => t.id === selectedType)?.description}
-            </p>
-
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleContinue}
-                style={{ backgroundColor: COLORS.success, color: '#fff' }}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-                className="font-semibold py-2 px-4 rounded-lg transition-colors"
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirm Modal */}
-      {isConfirmModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-semibold mb-4">No Existing Franchise Permit</h3>
-            <p className="text-gray-600 dark:text-slate-300 mb-6">
-              You must apply for a NEW Franchise Permit first. Do you want to apply now?
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={handleConfirmNo}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg"
-              >
-                No
-              </button>
-              <button
-                onClick={handleConfirmYes}
-                style={{ backgroundColor: COLORS.success, color: '#fff' }}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-                className="font-semibold py-2 px-4 rounded-lg transition-colors"
-              >
-                Yes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Back to Dashboard Button */}
       <div className="mt-8 text-center">
         <button
-          onClick={() => setIsConfirmBackOpen(true)}
+          onClick={handleBackToDashboard}
           style={{ backgroundColor: COLORS.success, color: '#fff' }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
@@ -164,32 +151,6 @@ export default function FranchisePermitType({ franchise_permit_id }) {
           Back to Dashboard
         </button>
       </div>
-
-      {/* Confirm Back Modal */}
-      {isConfirmBackOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full p-8 text-center">
-            <h3 className="text-2xl font-semibold mb-6">Are you sure you want to go back?</h3>
-            <div className="flex justify-center gap-6">
-              <button
-                onClick={() => setIsConfirmBackOpen(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-3 px-6 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => navigate('/user/dashboard')}
-                style={{ backgroundColor: COLORS.success, color: '#fff' }}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-                className="font-semibold py-3 px-6 rounded-lg transition-colors"
-              >
-                Yes, Go Back
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
