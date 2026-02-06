@@ -270,7 +270,7 @@ export default function FranchiseNew() {
     if (!formData.id_number || !formData.plate_number) return false;
     setIsCheckingDuplicates(true);
     try {
-      const response = await fetch('/backend/franchise_permit/check_duplicate.php', {
+      const response = await fetch('http://localhost/plms-main/backend/franchise_permit/check_duplicate.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -420,7 +420,7 @@ export default function FranchiseNew() {
     
     setIsCheckingMTOP(true);
     try {
-      const response = await fetch('/backend/franchise_permit/check_mtop.php', {
+      const response = await fetch('http://localhost/plms-main/backend/franchise_permit/check_mtop.php', {
         method: 'POST', 
         headers: {'Content-Type': 'application/json'}, 
         body: JSON.stringify(validationData)
@@ -1008,7 +1008,7 @@ export default function FranchiseNew() {
     setVerifyingBarangayId(true);
     
     try {
-      const response = await fetch(`/backend/barangay_permit/admin_fetch.php`);
+      const response = await fetch(`https://e-plms.goserveph.com/backend/barangay_permit/admin_fetch.php`);
       const data = await response.json();
       
       let permits = [];
@@ -1092,7 +1092,7 @@ export default function FranchiseNew() {
     setVerifyingMayorsPermit(true);
     
     try {
-      const response = await fetch(`/backend/business_permit/admin_fetch.php`);
+      const response = await fetch(`https://e-plms.goserveph.com/backend/business_permit/admin_fetch.php`);
       const data = await response.json();
       
       let permits = [];
@@ -1484,7 +1484,7 @@ export default function FranchiseNew() {
     
     const checkPayment = async () => {
       try {
-        const response = await fetch(`/backend/franchise_permit/get_payment_status.php?reference_id=${referenceId}`);
+        const response = await fetch(`http://localhost/plms-main/backend/franchise_permit/get_payment_status.php?reference_id=${referenceId}`);
         
         if (!response.ok) {
           console.error('HTTP error! status:', response.status);
