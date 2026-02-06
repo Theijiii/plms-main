@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, Info } from "lucide-react";
 
 export default function BuildingProcess() {
-  const API_BASE = "https://e-plms.goserveph.com/api"; // PHP backend folder
+  const API_BASE = "backend/building_permit"; // PHP backend folder
 
   const [applications, setApplications] = useState([]);
   const [selectedApp, setSelectedApp] = useState(null);

@@ -1,5 +1,5 @@
 // apiConfig.js (shared across components)
-const API_BASE = "https://e-plms.goserveph.com";
+const API_BASE = "backend/bbusiness_permit";
 
 // Generic POST request
 export async function postData(endpoint, action, payload, db = 'eplms_business_permit_system') {
