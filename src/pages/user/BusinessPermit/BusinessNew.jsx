@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Upload, Check, X, Eye, FileText, Search, AlertCircle } from "lucide-react";
+import { Upload, Check, X, Eye, FileText, Search, AlertCircle, Loader2, Shield } from "lucide-react";
+import { createWorker } from 'tesseract.js';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure PDF.js worker - use the bundled worker from node_modules
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url
+  ).toString();
+}
 
 const COLORS = {
   primary: '#4A90E2',
@@ -14,6 +24,8 @@ const COLORS = {
 
 const API_BUS = "/backend/business_permit/business_permit.php";
 const ZONING_API = "https://urbanplanning.goserveph.com/api/zoning-applications";
+const BARANGAY_API = "https://e-plms.goserveph.com/backend/barangay_permit/admin_fetch.php";
+const SANITATION_API = "https://health.goserveph.com/api/licensing_export.php";
 const NATIONALITIES = [
   "Afghan", "Albanian", "Algerian", "American", "Andorran", "Angolan", "Antiguans", "Argentinean", "Armenian", "Australian", "Austrian", "Azerbaijani", "Bahamian", "Bahraini", "Bangladeshi", "Barbadian", "Barbudans", "Batswana", "Belarusian", "Belgian", "Belizean", "Beninese", "Bhutanese", "Bolivian", "Bosnian", "Brazilian", "British", "Bruneian", "Bulgarian", "Burkinabe", "Burmese", "Burundian", "Cambodian", "Cameroonian", "Canadian", "Cape Verdean", "Central African", "Chadian", "Chilean", "Chinese", "Colombian", "Comoran", "Congolese", "Costa Rican", "Croatian", "Cuban", "Cypriot", "Czech", "Danish", "Djibouti", "Dominican", "Dutch", "East Timorese", "Ecuadorean", "Egyptian", "Emirian", "Equatorial Guinean", "Eritrean", "Estonian", "Ethiopian", "Fijian", "Filipino", "Finnish", "French", "Gabonese", "Gambian", "Georgian", "German", "Ghanaian", "Greek", "Grenadian", "Guatemalan", "Guinea-Bissauan", "Guinean", "Guyanese", "Haitian", "Herzegovinian", "Honduran", "Hungarian", "I-Kiribati", "Icelander", "Indian", "Indonesian", "Iranian", "Iraqi", "Irish", "Israeli", "Italian", "Ivorian", "Jamaican", "Japanese", "Jordanian", "Kazakhstani", "Kenyan", "Kittian and Nevisian", "Kuwaiti", "Kyrgyz", "Laotian", "Latvian", "Lebanese", "Liberian", "Libyan", "Liechtensteiner", "Lithuanian", "Luxembourger", "Macedonian", "Malagasy", "Malawian", "Malaysian", "Maldivan", "Malian", "Maltese", "Marshallese", "Mauritanian", "Mauritian", "Mexican", "Micronesian", "Moldovan", "Monacan", "Mongolian", "Moroccan", "Mosotho", "Motswana", "Mozambican", "Namibian", "Nauruan", "Nepalese", "New Zealander", "Nicaraguan", "Nigerian", "Nigerien", "North Korean", "Northern Irish", "Norwegian", "Omani", "Pakistani", "Palauan", "Palestinian", "Panamanian", "Papua New Guinean", "Paraguayan", "Peruvian", "Polish", "Portuguese", "Qatari", "Romanian", "Russian", "Rwandan", "Saint Lucian", "Salvadoran", "Samoan", "San Marinese", "Sao Tomean", "Saudi", "Scottish", "Senegalese", "Serbian", "Seychellois", "Sierra Leonean", "Singaporean", "Slovakian", "Slovenian", "Solomon Islander", "Somali", "South African", "South Korean", "Spanish", "Sri Lankan", "Sudanese", "Surinamer", "Swazi", "Swedish", "Swiss", "Syrian", "Taiwanese", "Tajik", "Tanzanian", "Thai", "Togolese", "Tongan", "Trinidadian or Tobagonian", "Tunisian", "Turkish", "Tuvaluan", "Ugandan", "Ukrainian", "Uruguayan", "Uzbekistani", "Venezuelan", "Vietnamese", "Welsh", "Yemenite", "Zambian", "Zimbabwean"
 ];
@@ -33,6 +45,8 @@ export default function BusinessNew() {
   const [modalTitle, setModalTitle] = useState('');
   const [agreeDeclaration, setAgreeDeclaration] = useState(false);
   const [showPreview, setShowPreview] = useState({});
+  const [showVerifyingModal, setShowVerifyingModal] = useState(false);
+  const [verifyingProgress, setVerifyingProgress] = useState(0);
   
   // Zoning ID verification states
   const [verifyingZoningId, setVerifyingZoningId] = useState(false);
@@ -40,6 +54,35 @@ export default function BusinessNew() {
   const [showZoningModal, setShowZoningModal] = useState(false);
   const [validatedZoningIds, setValidatedZoningIds] = useState({});
   const [zoningApplications, setZoningApplications] = useState([]);
+
+  // Barangay Clearance ID verification states
+  const [verifyingBarangayId, setVerifyingBarangayId] = useState(false);
+  const [barangayVerificationResult, setBarangayVerificationResult] = useState(null);
+  const [showBarangayModal, setShowBarangayModal] = useState(false);
+  const [validatedBarangayIds, setValidatedBarangayIds] = useState({});
+  const [barangayClearanceMethod, setBarangayClearanceMethod] = useState('upload'); // 'upload' or 'id'
+
+  // Sanitation Permit ID verification states
+  const [verifyingSanitationId, setVerifyingSanitationId] = useState(false);
+  const [sanitationVerificationResult, setSanitationVerificationResult] = useState(null);
+  const [showSanitationModal, setShowSanitationModal] = useState(false);
+  const [validatedSanitationIds, setValidatedSanitationIds] = useState({});
+  const [sanitationPermits, setSanitationPermits] = useState([]);
+
+  // Document verification states
+  const [documentVerification, setDocumentVerification] = useState({
+    barangay_clearance: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    bir_certificate: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    lease_or_title: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    fsic: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    owner_valid_id: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    dti_registration: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 },
+    sec_registration: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 }
+  });
+
+  // Verification result modal state
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationModalData, setVerificationModalData] = useState(null);
 
   // State for attachment checkboxes
   const [attachmentChecks, setAttachmentChecks] = useState({
@@ -95,6 +138,7 @@ export default function BusinessNew() {
     // Operations Details
     zoning_permit_id: "",
     sanitation_permit_id: "",
+    barangay_clearance_id: "",
     business_area: 0,
     total_floor_area: 0,
     operation_time_from: "",
@@ -106,8 +150,6 @@ export default function BusinessNew() {
     delivery_van_truck: 0,
     delivery_motorcycle: 0,
     
-    // Barangay Clearance ID
-    barangay_clearance_id: "",
     
     // Operations
     operation_type: "",
@@ -134,9 +176,10 @@ export default function BusinessNew() {
     applicant_signature: "",
   });
 
-  // Fetch zoning applications on component mount
+  // Fetch zoning applications and sanitation permits on component mount
   useEffect(() => {
     fetchZoningApplications();
+    fetchSanitationPermits();
   }, []);
 
   const fetchZoningApplications = async () => {
@@ -149,6 +192,21 @@ export default function BusinessNew() {
       }
     } catch (error) {
       console.error("Error fetching zoning applications:", error);
+    }
+  };
+
+  const fetchSanitationPermits = async () => {
+    try {
+      const response = await fetch(SANITATION_API);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        setSanitationPermits(data.data);
+      } else if (Array.isArray(data)) {
+        setSanitationPermits(data);
+      }
+    } catch (error) {
+      console.error("Error fetching sanitation permits:", error);
     }
   };
 
@@ -181,6 +239,14 @@ export default function BusinessNew() {
     const { name, files } = e.target;
     const file = files?.[0] || null;
     setFormData((prev) => ({ ...prev, [name]: file }));
+    
+    // Reset verification status when file changes
+    if (documentVerification[name]) {
+      setDocumentVerification(prev => ({
+        ...prev,
+        [name]: { isVerifying: false, isVerified: false, results: null, error: null, progress: 0 }
+      }));
+    }
   };
 
   // Handle signature upload
@@ -236,6 +302,591 @@ export default function BusinessNew() {
     setShowErrorModal(true);
   };
 
+  // ====== DOCUMENT VERIFICATION HELPER FUNCTIONS ======
+  const normalizeText = (text) => {
+    return text.toLowerCase().replace(/[^a-z0-9]/g, '');
+  };
+
+  const fuzzyMatch = (str1, str2, threshold = 0.5) => {
+    const s1 = normalizeText(str1);
+    const s2 = normalizeText(str2);
+    
+    if (s1 === s2) return 1.0;
+    if (s1.includes(s2) || s2.includes(s1)) return 0.95;
+    
+    // Check for partial matches with lower threshold
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    
+    if (longer.length === 0) return 0.0;
+    
+    let matches = 0;
+    for (let i = 0; i < shorter.length; i++) {
+      if (longer.includes(shorter[i])) matches++;
+    }
+    
+    const similarity = matches / longer.length;
+    return similarity >= threshold ? similarity : 0;
+  };
+
+  // Document type patterns for verification
+  const DOCUMENT_PATTERNS = {
+    barangay_clearance: [
+      "barangay clearance", "brgy clearance", "barangay certification",
+      "clearance", "certification", "punong barangay", "barangay captain",
+      "lupon", "katarungang pambarangay"
+    ],
+    bir_certificate: [
+      "bir", "bureau of internal revenue", "certificate of registration",
+      "bir form", "tin", "tax identification", "bir cert", "revenue"
+    ],
+    lease_or_title: [
+      "lease", "contract", "land title", "transfer certificate of title",
+      "tct", "original certificate of title", "oct", "lease agreement",
+      "rental agreement", "deed"
+    ],
+    fsic: [
+      "fire safety", "fsic", "fire safety inspection certificate",
+      "bureau of fire", "bfp", "fire protection", "fire certificate",
+      "inspection certificate", "fire clearance"
+    ],
+    owner_valid_id: [
+      "philippine", "national id", "passport", "driver", "license",
+      "umid", "sss", "gsis", "philhealth", "pag-ibig", "voter",
+      "postal", "senior citizen", "pwd", "tin", "prc"
+    ],
+    dti_registration: [
+      "dti", "department of trade", "trade and industry",
+      "business name registration", "certificate of business",
+      "sole proprietor", "dti registration"
+    ],
+    sec_registration: [
+      "sec", "securities and exchange commission",
+      "certificate of incorporation", "articles of incorporation",
+      "corporation", "partnership", "sec registration"
+    ]
+  };
+
+  const detectDocumentType = (extractedText, expectedType) => {
+    const textLower = extractedText.toLowerCase();
+    const patterns = DOCUMENT_PATTERNS[expectedType] || [];
+    
+    let matchCount = 0;
+    for (const keyword of patterns) {
+      if (textLower.includes(keyword.toLowerCase())) {
+        matchCount++;
+      }
+    }
+    
+    // Strict - require at least one keyword match to verify correct document type
+    const confidence = patterns.length > 0 ? matchCount / patterns.length : 0;
+    
+    return {
+      matched: matchCount > 0,
+      confidence: confidence,
+      matchCount: matchCount,
+      expectedType: expectedType
+    };
+  };
+
+  // ID Type patterns for verification
+  const ID_TYPE_PATTERNS = {
+    "Philippine National ID (PhilSys ID)": ["philsys", "philippine national id", "national id", "phil id", "republic of the philippines", "pambansang pagkakakilanlan", "philippine identification card", "pcn"],
+    "Passport (DFA)": ["passport", "dfa", "department of foreign affairs", "p <", "republic of the philippines passport"],
+    "Driver's License (LTO)": ["driver", "license", "licence", "lto", "land transportation", "department of transportation", "dl no"],
+    "UMID": ["umid", "unified multi-purpose id", "sss", "gsis"],
+    "PRC ID": ["prc", "professional regulation commission", "professional id"],
+    "Voter's ID": ["voter", "comelec", "commission on elections", "voter's identification"],
+    "COMELEC Voter's Certificate": ["comelec", "voter", "certificate", "commission on elections"],
+    "Postal ID (PhilPost)": ["postal", "philpost", "philippine postal"],
+    "Senior Citizen ID": ["senior citizen", "osca", "office of senior citizen"],
+    "PWD ID": ["pwd", "person with disability", "disabled"],
+    "SSS ID": ["sss", "social security system", "social security"],
+    "GSIS eCard": ["gsis", "government service insurance", "ecard"],
+    "PhilHealth ID": ["philhealth", "philippine health", "health insurance"],
+    "Pag-IBIG ID": ["pag-ibig", "pagibig", "hdmf", "home development mutual fund"],
+    "TIN ID": ["tin", "tax identification number", "bir", "bureau of internal revenue"],
+    "Barangay ID": ["barangay id", "barangay identification", "brgy id"],
+    "Barangay Clearance": ["barangay clearance", "brgy clearance"],
+    "Police Clearance": ["police clearance", "pnp clearance", "philippine national police"],
+    "NBI Clearance": ["nbi clearance", "national bureau of investigation"],
+    "Solo Parent ID": ["solo parent", "single parent"],
+    "Indigenous People's (IP) ID": ["indigenous people", "ip id", "ncip", "national commission on indigenous"],
+    "School ID": ["school id", "student id", "university", "college", "student number"],
+    "Company / Employee ID": ["company id", "employee id", "employee no", "emp no"],
+    "Government Office ID": ["government", "office id", "gov id"],
+    "Firearms License ID": ["firearms", "license to own and possess firearms", "ltopf"],
+    "Seafarer's Identification Record Book (SIRB)": ["seafarer", "sirb", "marina", "maritime"],
+    "OWWA ID": ["owwa", "overseas workers welfare", "ofw"],
+    "Alien Certificate of Registration (ACR I-Card)": ["acr", "alien certificate", "i-card", "bureau of immigration"]
+  };
+
+  // Detect ID type from extracted text
+  const detectIDType = (extractedText) => {
+    const textLower = extractedText.toLowerCase();
+    const detectedTypes = [];
+
+    for (const [idType, keywords] of Object.entries(ID_TYPE_PATTERNS)) {
+      let matchCount = 0;
+      for (const keyword of keywords) {
+        if (textLower.includes(keyword.toLowerCase())) {
+          matchCount++;
+        }
+      }
+      if (matchCount > 0) {
+        detectedTypes.push({
+          type: idType,
+          confidence: matchCount / keywords.length,
+          matchCount: matchCount
+        });
+      }
+    }
+
+    detectedTypes.sort((a, b) => {
+      if (b.matchCount !== a.matchCount) {
+        return b.matchCount - a.matchCount;
+      }
+      return b.confidence - a.confidence;
+    });
+
+    return detectedTypes.length > 0 ? detectedTypes[0] : null;
+  };
+
+  // Check if business name appears in document
+  const verifyBusinessNameInDoc = (extractedText) => {
+    if (!formData.business_name) return null;
+    const businessName = formData.business_name.trim();
+    if (!businessName) return null;
+    
+    const match = fuzzyMatch(businessName, extractedText);
+    return {
+      matched: match > 0.6,
+      confidence: match,
+      value: businessName
+    };
+  };
+
+  // Check if owner name appears in document (checks first_name, last_name, middle_name is optional)
+  const verifyOwnerNameInDoc = (extractedText) => {
+    const firstName = formData.owner_first_name?.trim();
+    const lastName = formData.owner_last_name?.trim();
+    const middleName = formData.owner_middle_name?.trim();
+    
+    if (!firstName || !lastName) return null;
+    
+    // More lenient matching - check both fuzzy match and simple substring
+    const textLower = extractedText.toLowerCase();
+    const firstNameLower = firstName.toLowerCase();
+    const lastNameLower = lastName.toLowerCase();
+    
+    const firstNameFuzzy = fuzzyMatch(firstName, extractedText);
+    const lastNameFuzzy = fuzzyMatch(lastName, extractedText);
+    const middleNameFuzzy = middleName ? fuzzyMatch(middleName, extractedText) : 0;
+    
+    // Accept if either fuzzy match works OR simple substring match
+    const firstNameFound = firstNameFuzzy > 0 || textLower.includes(firstNameLower);
+    const lastNameFound = lastNameFuzzy > 0 || textLower.includes(lastNameLower);
+    const middleNameFound = middleName ? (middleNameFuzzy > 0 || textLower.includes(middleName.toLowerCase())) : false;
+    
+    // Only require first name AND last name to match
+    // Middle name is optional - doesn't fail validation if not found
+    const hasRequiredMatch = firstNameFound && lastNameFound;
+    
+    return {
+      firstName: { matched: firstNameFound, confidence: firstNameFuzzy, value: firstName },
+      lastName: { matched: lastNameFound, confidence: lastNameFuzzy, value: lastName },
+      middleName: middleName ? { matched: middleNameFound, confidence: middleNameFuzzy, value: middleName } : null,
+      anyMatch: hasRequiredMatch,
+      allMatch: hasRequiredMatch && (!middleName || middleNameFound)
+    };
+  };
+
+
+  // Convert PDF to images for OCR processing
+  const convertPdfToImages = async (file) => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const images = [];
+      
+      // Process first 3 pages only (to avoid long processing time)
+      const numPages = Math.min(pdf.numPages, 3);
+      
+      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2.0 });
+        
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+        
+        images.push(canvas);
+      }
+      
+      return images;
+    } catch (error) {
+      console.error('Error converting PDF to images:', error);
+      throw error;
+    }
+  };
+
+  // Generic document verification function
+  const verifyDocument = async (documentType, file) => {
+    if (!file) {
+      setDocumentVerification(prev => ({
+        ...prev,
+        [documentType]: {
+          ...prev[documentType],
+          error: 'Please upload the document first',
+          isVerified: false
+        }
+      }));
+      return;
+    }
+
+    // Show verifying modal
+    setShowVerifyingModal(true);
+    setVerifyingProgress(0);
+    
+    // Reset verification status
+    setDocumentVerification(prev => ({
+      ...prev,
+      [documentType]: {
+        isVerifying: true,
+        isVerified: false,
+        results: null,
+        error: null,
+        progress: 0
+      }
+    }));
+
+    try {
+      const worker = await createWorker('eng', 1, {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            const progress = Math.round(m.progress * 100);
+            setVerifyingProgress(progress);
+            setDocumentVerification(prev => ({
+              ...prev,
+              [documentType]: {
+                ...prev[documentType],
+                progress: progress
+              }
+            }));
+          }
+        }
+      });
+
+      setDocumentVerification(prev => ({
+        ...prev,
+        [documentType]: { ...prev[documentType], progress: 10 }
+      }));
+
+      let text = '';
+      
+      // Check if file is PDF
+      if (file.type === 'application/pdf') {
+        setDocumentVerification(prev => ({
+          ...prev,
+          [documentType]: { ...prev[documentType], progress: 20 }
+        }));
+        
+        // Convert PDF to images
+        const images = await convertPdfToImages(file);
+        
+        setDocumentVerification(prev => ({
+          ...prev,
+          [documentType]: { ...prev[documentType], progress: 40 }
+        }));
+        
+        // Process each image
+        for (let i = 0; i < images.length; i++) {
+          const { data: { text: pageText } } = await worker.recognize(images[i]);
+          text += pageText + '\n';
+          
+          setDocumentVerification(prev => ({
+            ...prev,
+            [documentType]: { 
+              ...prev[documentType], 
+              progress: 40 + Math.round((i + 1) / images.length * 40)
+            }
+          }));
+        }
+      } else {
+        // Process image file directly
+        const { data: { text: imageText } } = await worker.recognize(file);
+        text = imageText;
+      }
+      
+      await worker.terminate();
+
+      setDocumentVerification(prev => ({
+        ...prev,
+        [documentType]: { ...prev[documentType], progress: 90 }
+      }));
+
+      const extractedText = text.toLowerCase();
+      
+      // Detect document type
+      const docTypeCheck = detectDocumentType(text, documentType);
+      
+      // Check for business name
+      const businessNameCheck = verifyBusinessNameInDoc(extractedText);
+      
+      // Check for owner name
+      const ownerNameCheck = verifyOwnerNameInDoc(extractedText);
+      
+      // For owner_valid_id and owner_scanned_id, check ID number and ID type
+      let idNumberCheck = null;
+      let idTypeCheck = null;
+      let isValidIDDocument = false;
+      
+      if (documentType === 'owner_valid_id' || documentType === 'owner_scanned_id') {
+        // Check if ID number exists in the document
+        if (formData.valid_id_number) {
+          const idNumberNormalized = normalizeText(formData.valid_id_number);
+          let idNumberInText = extractedText.includes(idNumberNormalized) || 
+            fuzzyMatch(formData.valid_id_number, extractedText) > 0.8;
+          
+          // Also check for "license no" pattern which commonly appears on driver's licenses
+          if (!idNumberInText) {
+            const licenseNoPatterns = [
+              /license\s*no\.?\s*:?\s*(\S+)/i,
+              /dl\s*no\.?\s*:?\s*(\S+)/i,
+              /license\s*number\s*:?\s*(\S+)/i,
+              /dl\s*number\s*:?\s*(\S+)/i
+            ];
+            
+            for (const pattern of licenseNoPatterns) {
+              const match = text.match(pattern);
+              if (match && match[1]) {
+                const extractedNumber = normalizeText(match[1]);
+                if (extractedNumber === idNumberNormalized || 
+                    extractedNumber.includes(idNumberNormalized) ||
+                    idNumberNormalized.includes(extractedNumber)) {
+                  idNumberInText = true;
+                  break;
+                }
+              }
+            }
+          }
+          
+          idNumberCheck = {
+            value: formData.valid_id_number,
+            found: idNumberInText
+          };
+        }
+        
+        // Detect ID type from document - this serves as document type verification for IDs
+        const detectedIDType = detectIDType(extractedText);
+        if (detectedIDType) {
+          isValidIDDocument = true; // Any valid ID type detected means it's an ID document
+          if (formData.valid_id_type) {
+            // Flexible matching to handle variations like "Driver's License" vs "Driver's License (LTO)"
+            const expectedLower = formData.valid_id_type.toLowerCase();
+            const detectedLower = detectedIDType.type.toLowerCase();
+            const isMatch = expectedLower === detectedLower || 
+                           expectedLower.includes(detectedLower) || 
+                           detectedLower.includes(expectedLower) ||
+                           // Match key words (e.g., "driver" and "license" both present)
+                           (expectedLower.includes('driver') && detectedLower.includes('driver')) ||
+                           (expectedLower.includes('passport') && detectedLower.includes('passport')) ||
+                           (expectedLower.includes('national id') && detectedLower.includes('national id')) ||
+                           (expectedLower.includes('philsys') && detectedLower.includes('philsys'));
+            
+            idTypeCheck = {
+              expected: formData.valid_id_type,
+              detected: detectedIDType.type,
+              matched: isMatch,
+              confidence: detectedIDType.confidence,
+              matchCount: detectedIDType.matchCount
+            };
+          }
+        }
+      }
+      
+      const results = {
+        documentType: {
+          detected: docTypeCheck.matched,
+          confidence: docTypeCheck.confidence,
+          matchCount: docTypeCheck.matchCount
+        },
+        businessName: businessNameCheck,
+        ownerName: ownerNameCheck,
+        idNumber: idNumberCheck,
+        idType: idTypeCheck,
+        extractedText: text
+      };
+
+      // Determine if verification passed and track invalid reasons
+      let isVerified = false;
+      let invalidReasons = [];
+      
+      // CRITICAL: Check if correct document type was uploaded
+      // For IDs, use ID type detection instead of generic DOCUMENT_PATTERNS
+      const isIDDocument = documentType === 'owner_valid_id' || documentType === 'owner_scanned_id';
+      const documentTypeMatched = isIDDocument ? isValidIDDocument : docTypeCheck.matched;
+      
+      if (!documentTypeMatched) {
+        const docTypeLabels = {
+          'owner_valid_id': 'Valid ID',
+          'owner_scanned_id': 'Valid ID',
+          'bir_certificate': 'BIR Certificate',
+          'dti_registration': 'DTI Registration',
+          'sec_registration': 'SEC Registration',
+          'lease_or_title': 'Lease Agreement or Property Title',
+          'fsic': 'Fire Safety Inspection Certificate',
+          'barangay_clearance': 'Barangay Clearance'
+        };
+        const expectedDoc = docTypeLabels[documentType] || documentType;
+        invalidReasons = [`Wrong document type uploaded. Expected: ${expectedDoc}. Please upload the correct document.`];
+        isVerified = false;
+      }
+      
+      // For owner_valid_id and owner_scanned_id, require valid ID detected, name, ID number, and ID type match
+      if ((documentType === 'owner_valid_id' || documentType === 'owner_scanned_id') && isValidIDDocument) {
+        const hasOwnerName = ownerNameCheck?.anyMatch;
+        const hasIdNumber = idNumberCheck?.found;
+        const hasCorrectIdType = idTypeCheck?.matched;
+        
+        // All three must match: name, ID number, and ID type
+        if (hasOwnerName && hasIdNumber && hasCorrectIdType) {
+          isVerified = true;
+        } else {
+          // Build detailed checklist of what didn't match
+          invalidReasons = ['The following information could not be verified:'];
+          
+          if (!hasOwnerName) {
+            const firstNameMatch = ownerNameCheck?.firstName?.matched;
+            const lastNameMatch = ownerNameCheck?.lastName?.matched;
+            if (!firstNameMatch && !lastNameMatch) {
+              invalidReasons.push('❌ Owner name not found in ID');
+            } else if (!firstNameMatch) {
+              invalidReasons.push('❌ First name not found in ID');
+            } else if (!lastNameMatch) {
+              invalidReasons.push('❌ Last name not found in ID');
+            }
+          } else {
+            invalidReasons.push('✓ Owner name verified');
+          }
+          
+          if (!hasIdNumber) {
+            invalidReasons.push('❌ ID number not found in document');
+          } else {
+            invalidReasons.push('✓ ID number verified');
+          }
+          
+          if (!hasCorrectIdType) {
+            if (idTypeCheck) {
+              invalidReasons.push(`❌ ID type mismatch (Expected: ${idTypeCheck.expected}, Detected: ${idTypeCheck.detected})`);
+            } else {
+              invalidReasons.push('❌ ID type could not be detected');
+            }
+          } else {
+            invalidReasons.push('✓ ID type verified');
+          }
+          
+          invalidReasons.push('Please ensure the ID image is clear and all information is visible.');
+          isVerified = false;
+        }
+      }
+      
+      // For business documents (BIR, DTI, SEC), require document type match AND owner name
+      if (['bir_certificate', 'dti_registration', 'sec_registration'].includes(documentType) && docTypeCheck.matched) {
+        const hasBusinessName = businessNameCheck?.matched;
+        const hasOwnerName = ownerNameCheck?.anyMatch;
+        
+        // Require owner name match and correct document type
+        if (hasOwnerName) {
+          isVerified = true;
+        } else {
+          invalidReasons = ['Document may be unreadable or unclear. Please re-upload a clear copy.'];
+          isVerified = false;
+        }
+      }
+      
+      // For lease/title and FSIC, require document type match AND owner name
+      if (['lease_or_title', 'fsic'].includes(documentType) && docTypeCheck.matched) {
+        const hasOwnerName = ownerNameCheck?.anyMatch;
+        
+        if (hasOwnerName) {
+          isVerified = true;
+        } else {
+          invalidReasons = ['Document may be unreadable or unclear. Please re-upload a clear copy.'];
+          isVerified = false;
+        }
+      }
+      
+      // For barangay_clearance, require document type match AND owner name
+      if (documentType === 'barangay_clearance' && docTypeCheck.matched) {
+        const hasOwnerName = ownerNameCheck?.anyMatch;
+        
+        if (hasOwnerName) {
+          isVerified = true;
+        } else {
+          invalidReasons = ['Document may be unreadable or unclear. Please re-upload a clear copy.'];
+          isVerified = false;
+        }
+      }
+
+      setDocumentVerification(prev => ({
+        ...prev,
+        [documentType]: {
+          isVerifying: false,
+          isVerified: isVerified,
+          results: results,
+          error: isVerified ? null : 'Document verification failed. Please check the document.',
+          progress: 100
+        }
+      }));
+
+      // Hide verifying modal and show result modal
+      setShowVerifyingModal(false);
+      
+      // Show verification result modal
+      setVerificationModalData({
+        documentType: documentType,
+        isVerified: isVerified,
+        results: results,
+        fileName: file.name,
+        invalidReasons: invalidReasons.length > 0 ? invalidReasons : null
+      });
+      setShowVerificationModal(true);
+
+    } catch (error) {
+      console.error('Verification error:', error);
+      setDocumentVerification(prev => ({
+        ...prev,
+        [documentType]: {
+          isVerifying: false,
+          isVerified: false,
+          results: null,
+          error: 'Failed to verify document: ' + error.message,
+          progress: 0
+        }
+      }));
+      
+      // Hide verifying modal
+      setShowVerifyingModal(false);
+      
+      // Show error modal for invalid or unreadable documents
+      setVerificationModalData({
+        documentType: documentType,
+        isVerified: false,
+        results: null,
+        fileName: file.name,
+        invalidReasons: ['Document may be unreadable or unclear. Please re-upload a clear copy.']
+      });
+      setShowVerificationModal(true);
+    }
+  };
+
   // Check if business is health-related
   const isHealthRelatedBusiness = () => {
     const healthBusinesses = [
@@ -248,7 +899,7 @@ export default function BusinessNew() {
     return healthBusinesses.includes(formData.business_nature);
   };
 
-  // Verify Zoning ID
+  // Verify Zoning ID - UPDATED TO ACCEPT BOTH 'approved' AND 'active' STATUS
   const verifyZoningId = async () => {
     const zoningId = formData.zoning_permit_id.trim();
     
@@ -281,10 +932,11 @@ export default function BusinessNew() {
       );
 
       if (foundApplication) {
-        if (foundApplication.status === 'approved') {
+        // ACCEPT BOTH 'approved' AND 'active' STATUS
+        if (foundApplication.status === 'approved' || foundApplication.status === 'active') {
           setZoningVerificationResult({
             success: true,
-            message: "✅ Zoning permit ID is VALID and APPROVED!",
+            message: `Zoning permit ID is VALID! Status: ${foundApplication.status}`,
             data: foundApplication
           });
           
@@ -296,7 +948,7 @@ export default function BusinessNew() {
         } else {
           setZoningVerificationResult({
             success: false,
-            message: "⚠ Zoning permit ID exists but is NOT APPROVED. Status: " + foundApplication.status,
+            message: `⚠ Zoning permit ID exists but is NOT APPROVED. Status: ${foundApplication.status}`,
             data: foundApplication
           });
         }
@@ -316,6 +968,170 @@ export default function BusinessNew() {
     } finally {
       setVerifyingZoningId(false);
       setShowZoningModal(true);
+    }
+  };
+
+  // Verify Barangay Clearance ID
+  const verifyBarangayClearanceId = async () => {
+    const barangayId = formData.barangay_clearance_id.trim();
+    
+    if (!barangayId) {
+      setBarangayVerificationResult({
+        success: false,
+        message: "Please enter a barangay clearance ID to verify"
+      });
+      setShowBarangayModal(true);
+      return;
+    }
+
+    if (validatedBarangayIds[barangayId]) {
+      setBarangayVerificationResult({
+        success: true,
+        message: "Barangay clearance ID is already verified and valid!",
+        data: validatedBarangayIds[barangayId]
+      });
+      setShowBarangayModal(true);
+      return;
+    }
+
+    setVerifyingBarangayId(true);
+
+    try {
+      const response = await fetch(BARANGAY_API);
+      const data = await response.json();
+      
+      console.log('Barangay API Response:', data);
+      
+      let permits = [];
+      if (data.success && data.data) {
+        permits = data.data;
+      } else if (Array.isArray(data)) {
+        permits = data;
+      } else {
+        // If data is an object with permits array
+        permits = data.permits || [];
+      }
+
+      console.log('Searching for ID:', barangayId);
+      console.log('Available permits:', permits);
+
+      // Search by both applicant_id AND permit_id
+      const foundPermit = permits.find(permit => {
+        const permitApplicantId = permit.applicant_id ? permit.applicant_id.toString() : '';
+        const permitPermitId = permit.permit_id ? permit.permit_id.toString() : '';
+        const searchId = barangayId.toString();
+        
+        // Match if either applicant_id or permit_id matches and status is approved
+        return (permitApplicantId === searchId || permitPermitId === searchId) && permit.status === 'approved';
+      });
+      
+      console.log('Found permit:', foundPermit);
+
+      if (foundPermit) {
+        setBarangayVerificationResult({
+          success: true,
+          message: `Barangay clearance ID is VALID! Status: approved`,
+          data: foundPermit
+        });
+        
+        setValidatedBarangayIds(prev => ({
+          ...prev,
+          [barangayId]: foundPermit
+        }));
+        
+        // Store permit_id in formData
+        if (foundPermit.permit_id) {
+          setFormData(prev => ({
+            ...prev,
+            barangay_permit_id: foundPermit.permit_id
+          }));
+        }
+      } else {
+        setBarangayVerificationResult({
+          success: false,
+          message: "❌ Barangay clearance ID not found or not approved. Please check the ID and try again.",
+          data: null
+        });
+      }
+    } catch (error) {
+      console.error("Error verifying barangay clearance ID:", error);
+      setBarangayVerificationResult({
+        success: false,
+        message: "❌ Error connecting to verification service. Please try again later."
+      });
+    } finally {
+      setVerifyingBarangayId(false);
+      setShowBarangayModal(true);
+    }
+  };
+
+  // Verify Sanitation Permit ID
+  const verifySanitationPermitId = async () => {
+    const sanitationId = formData.sanitation_permit_id.trim();
+    
+    if (!sanitationId) {
+      setSanitationVerificationResult({
+        success: false,
+        message: "Please enter a sanitation permit ID to verify"
+      });
+      setShowSanitationModal(true);
+      return;
+    }
+
+    if (validatedSanitationIds[sanitationId]) {
+      setSanitationVerificationResult({
+        success: true,
+        message: "Sanitation permit ID is already verified and valid!",
+        data: validatedSanitationIds[sanitationId]
+      });
+      setShowSanitationModal(true);
+      return;
+    }
+
+    setVerifyingSanitationId(true);
+
+    try {
+      console.log('Sanitation permits available:', sanitationPermits);
+      console.log('Searching for sanitation ID:', sanitationId);
+      
+      const foundPermit = sanitationPermits.find(permit => {
+        const permitId = permit.id ? permit.id.toString() : '';
+        const licenseNum = permit.license_number ? permit.license_number.toString() : '';
+        const searchId = sanitationId.toString();
+        
+        return (permitId === searchId || licenseNum === searchId) &&
+               (permit.status === 'completed' || permit.status === 'pending');
+      });
+      
+      console.log('Found permit:', foundPermit);
+
+      if (foundPermit) {
+        setSanitationVerificationResult({
+          success: true,
+          message: `Sanitation permit ID is VALID! Status: ${foundPermit.status}`,
+          data: foundPermit
+        });
+        
+        setValidatedSanitationIds(prev => ({
+          ...prev,
+          [sanitationId]: foundPermit
+        }));
+      } else {
+        setSanitationVerificationResult({
+          success: false,
+          message: "❌ Sanitation permit ID not found or invalid status. Please check the ID and try again.",
+          data: null
+        });
+      }
+    } catch (error) {
+      console.error("Error verifying sanitation permit ID:", error);
+      setSanitationVerificationResult({
+        success: false,
+        message: "❌ Error verifying sanitation permit. Please try again later."
+      });
+    } finally {
+      setVerifyingSanitationId(false);
+      setShowSanitationModal(true);
     }
   };
 
@@ -375,6 +1191,15 @@ export default function BusinessNew() {
         missing.push("Zoning Permit ID needs to be verified (click Verify button)");
       }
 
+      // Check sanitation permit for health-related businesses
+      if (isHealthRelatedBusiness()) {
+        if (isEmpty(formData.sanitation_permit_id)) {
+          missing.push("Sanitation Permit ID (required for health-related businesses)");
+        } else if (!validatedSanitationIds[formData.sanitation_permit_id]) {
+          missing.push("Sanitation Permit ID needs to be verified (click Verify button)");
+        }
+      }
+
       if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
       return { ok: true };
     }
@@ -382,24 +1207,75 @@ export default function BusinessNew() {
     if (step === 4) {
       const missing = [];
       
-      const mandatoryDocs = [
-        { field: 'bir_certificate', label: 'BIR Certificate of Registration' },
-        { field: 'lease_or_title', label: 'Lease Contract / Land Title' },
-        { field: 'fsic', label: 'Fire Safety Inspection Certificate (FSIC)' },
-        { field: 'owner_valid_id', label: 'Owner Valid ID' },
-        { field: 'id_picture', label: '2x2 ID Picture' }
-      ];
-
-      mandatoryDocs.forEach(doc => {
-        if (isEmpty(formData[doc.field])) {
-          missing.push(doc.label);
-        }
-      });
-
-      if (isEmpty(formData.barangay_clearance) && isEmpty(formData.barangay_clearance_id)) {
-        missing.push("Barangay Clearance (either file or ID must be provided)");
+      // BIR Certificate
+      if (isEmpty(formData.bir_certificate)) {
+        missing.push("BIR Certificate of Registration");
+      } else if (documentVerification.bir_certificate?.isVerified === false) {
+        missing.push("BIR Certificate is INVALID - Please upload a valid document");
+      } else if (formData.bir_certificate && !documentVerification.bir_certificate?.isVerified) {
+        missing.push("BIR Certificate must be verified (click Verify button)");
       }
 
+      // Lease or Title
+      if (isEmpty(formData.lease_or_title)) {
+        missing.push("Lease Agreement or Property Title");
+      } else if (documentVerification.lease_or_title?.isVerified === false) {
+        missing.push("Lease/Title is INVALID - Please upload a valid document");
+      } else if (formData.lease_or_title && !documentVerification.lease_or_title?.isVerified) {
+        missing.push("Lease/Title must be verified (click Verify button)");
+      }
+
+      // FSIC
+      if (isEmpty(formData.fsic)) {
+        missing.push("Fire Safety Inspection Certificate (FSIC)");
+      } else if (documentVerification.fsic?.isVerified === false) {
+        missing.push("FSIC is INVALID - Please upload a valid document");
+      } else if (formData.fsic && !documentVerification.fsic?.isVerified) {
+        missing.push("FSIC must be verified (click Verify button)");
+      }
+
+      // Owner valid ID
+      if (isEmpty(formData.owner_valid_id)) {
+        missing.push("Owner Valid ID");
+      } else if (documentVerification.owner_valid_id?.isVerified === false) {
+        missing.push("Owner Valid ID is INVALID - Please upload a valid document");
+      } else if (formData.owner_valid_id && !documentVerification.owner_valid_id?.isVerified) {
+        missing.push("Owner Valid ID must be verified (click Verify button)");
+      }
+
+      // Barangay clearance (file or ID)
+      if (isEmpty(formData.barangay_clearance) && isEmpty(formData.barangay_clearance_id)) {
+        missing.push("Barangay Clearance (file or ID)");
+      } else if (formData.barangay_clearance && documentVerification.barangay_clearance?.isVerified === false) {
+        missing.push("Barangay Clearance is INVALID - Please upload a valid document or use ID verification");
+      } else if (formData.barangay_clearance && !documentVerification.barangay_clearance?.isVerified) {
+        missing.push("Barangay Clearance must be verified (click Verify button)");
+      } else if (formData.barangay_clearance_id && !validatedBarangayIds[formData.barangay_clearance_id]) {
+        missing.push("Barangay Clearance ID must be verified (click Verify button)");
+      }
+
+      // DTI registration for Individual owner type
+      if (formData.owner_type === "Individual") {
+        if (isEmpty(formData.dti_registration)) {
+          missing.push("DTI Registration (required for Individual)");
+        } else if (documentVerification.dti_registration?.isVerified === false) {
+          missing.push("DTI Registration is INVALID - Please upload a valid document");
+        } else if (!documentVerification.dti_registration?.isVerified) {
+          missing.push("DTI Registration must be verified (click Verify button)");
+        }
+      }
+
+      // SEC registration for Partnership owner type
+      if (formData.owner_type === "Partnership") {
+        if (isEmpty(formData.sec_registration)) {
+          missing.push("SEC Registration (required for Partnership)");
+        } else if (documentVerification.sec_registration?.isVerified === false) {
+          missing.push("SEC Registration is INVALID - Please upload a valid document");
+        } else if (!documentVerification.sec_registration?.isVerified) {
+          missing.push("SEC Registration must be verified (click Verify button)");
+        }
+      }
+      
       if (attachmentChecks.official_receipt_file && isEmpty(formData.official_receipt_file)) {
         missing.push("Official Receipt of Payment");
       }
@@ -778,18 +1654,54 @@ export default function BusinessNew() {
                           </div>
                         </label>
                         {formData.dti_registration && (
-                          <button
-                            type="button"
-                            onClick={() => previewFile(formData.dti_registration)}
-                            className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                            style={{ color: COLORS.secondary }}
-                          >
-                            <Eye className="w-4 h-4" />
-                            Preview
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => previewFile(formData.dti_registration)}
+                              className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                              style={{ color: COLORS.secondary }}
+                            >
+                              <Eye className="w-4 h-4" />
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => verifyDocument('dti_registration', formData.dti_registration)}
+                              disabled={documentVerification.dti_registration.isVerifying}
+                              className={`flex items-center gap-1 px-3 py-1 text-sm rounded transition-colors duration-300 border ${
+                                documentVerification.dti_registration.isVerified 
+                                  ? 'bg-green-100 border-green-500 text-green-700' 
+                                  : 'bg-blue-50 border-blue-500 text-blue-700 hover:bg-blue-100'
+                              }`}
+                            >
+                              {documentVerification.dti_registration.isVerifying ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+                              ) : documentVerification.dti_registration.isVerified ? (
+                                <><Check className="w-4 h-4" /> Verified</>
+                              ) : (
+                                <><Shield className="w-4 h-4" /> Verify</>
+                              )}
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
+                    
+                    {/* Progress percentage for DTI registration verification */}
+                    {formData.dti_registration && documentVerification.dti_registration.isVerifying && (
+                      <div className="p-3 border-l border-r border-b border-gray-300 rounded-b-lg">
+                        <div className="flex items-center justify-between text-xs text-blue-600">
+                          <span>Verifying document...</span>
+                          <span>{documentVerification.dti_registration.progress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                          <div 
+                            className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" 
+                            style={{ width: `${documentVerification.dti_registration.progress}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -826,18 +1738,54 @@ export default function BusinessNew() {
                           </div>
                         </label>
                         {formData.sec_registration && (
-                          <button
-                            type="button"
-                            onClick={() => previewFile(formData.sec_registration)}
-                            className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                            style={{ color: COLORS.secondary }}
-                          >
-                            <Eye className="w-4 h-4" />
-                            Preview
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => previewFile(formData.sec_registration)}
+                              className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                              style={{ color: COLORS.secondary }}
+                            >
+                              <Eye className="w-4 h-4" />
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => verifyDocument('sec_registration', formData.sec_registration)}
+                              disabled={documentVerification.sec_registration.isVerifying}
+                              className={`flex items-center gap-1 px-3 py-1 text-sm rounded transition-colors duration-300 border ${
+                                documentVerification.sec_registration.isVerified 
+                                  ? 'bg-green-100 border-green-500 text-green-700' 
+                                  : 'bg-blue-50 border-blue-500 text-blue-700 hover:bg-blue-100'
+                              }`}
+                            >
+                              {documentVerification.sec_registration.isVerifying ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+                              ) : documentVerification.sec_registration.isVerified ? (
+                                <><Check className="w-4 h-4" /> Verified</>
+                              ) : (
+                                <><Shield className="w-4 h-4" /> Verify</>
+                              )}
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
+                    
+                    {/* Progress percentage for SEC registration verification */}
+                    {formData.sec_registration && documentVerification.sec_registration.isVerifying && (
+                      <div className="p-3 border-l border-r border-b border-gray-300 rounded-b-lg">
+                        <div className="flex items-center justify-between text-xs text-blue-600">
+                          <span>Verifying document...</span>
+                          <span>{documentVerification.sec_registration.progress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                          <div 
+                            className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" 
+                            style={{ width: `${documentVerification.sec_registration.progress}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -951,7 +1899,7 @@ export default function BusinessNew() {
                   Valid ID Number <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   name="valid_id_number"
                   value={formData.valid_id_number}
                   onChange={handleChange}
@@ -1321,7 +2269,7 @@ export default function BusinessNew() {
                       onChange={handleChange}
                       className="w-full p-3 border border-black rounded-lg"
                       style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                      placeholder="Enter zoning permit ID/number (e.g., ZA-2026-0101)"
+                      placeholder="Enter zoning permit ID/number (e.g., ZC-2026-01-0001)"
                       required
                     />
                     <button
@@ -1349,30 +2297,59 @@ export default function BusinessNew() {
                   
                   <p className="text-xs mt-1 text-gray-600">
                     {validatedZoningIds[formData.zoning_permit_id] ? 
-                      "✅ Zoning ID verified and approved" : 
+                      " Zoning ID verified and valid" : 
                       "Enter your zoning permit ID and click Verify to check status"}
                   </p>
                 </div>
 
-                <div>
-                  <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    Sanitation Permit ID / Number
-                  </label>
-                  <input
-                    type="text"
-                    name="sanitation_permit_id"
-                    value={formData.sanitation_permit_id}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-black rounded-lg"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    placeholder="Enter sanitation permit ID/number"
-                  />
-                  {isHealthRelatedBusiness() && (
-                    <p className="text-xs text-blue-600 mt-1">
-                      Note: Recommended for health/food related businesses
+                {/* Sanitation Permit ID Field with Verification (for health-related businesses) */}
+                {isHealthRelatedBusiness() && (
+                  <div className="md:col-span-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                        Sanitation Permit ID / License Number <span className="text-red-500">*</span>
+                      </label>
+                      {formData.sanitation_permit_id && validatedSanitationIds[formData.sanitation_permit_id] && (
+                        <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800 flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Verified
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      name="sanitation_permit_id"
+                      value={formData.sanitation_permit_id}
+                      onChange={handleChange}
+                      className="w-full p-3 border border-black rounded-lg"
+                      style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                      placeholder="Enter sanitation permit ID/license number"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={verifySanitationPermitId}
+                      disabled={verifyingSanitationId || !formData.sanitation_permit_id}
+                      className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {verifyingSanitationId ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Verifying...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4" />
+                          Verify Sanitation Permit ID
+                        </>
+                      )}
+                    </button>
+                    <p className="text-xs mt-1 text-gray-600">
+                      {validatedSanitationIds[formData.sanitation_permit_id] ? 
+                        "Sanitation permit verified and valid" : 
+                        "Enter your sanitation permit ID and click Verify to check status (required for health-related businesses)"}
                     </p>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block mb-2 font-medium" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
@@ -1601,56 +2578,166 @@ export default function BusinessNew() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="cursor-pointer">
+                </div>
+                
+                {/* Radio buttons to choose method */}
+                <div className="p-3 bg-gray-50 border-b">
+                  <label className="block text-sm font-medium mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                    Choose verification method:
+                  </label>
+                  <div className="flex gap-6">
+                    <label className="flex items-center cursor-pointer">
                       <input
-                        type="file"
-                        name="barangay_clearance"
-                        onChange={handleFile}
-                        accept=".pdf,.jpg,.png,.doc,.docx"
-                        className="hidden"
+                        type="radio"
+                        name="barangay_method"
+                        value="upload"
+                        checked={barangayClearanceMethod === 'upload'}
+                        onChange={(e) => setBarangayClearanceMethod(e.target.value)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                       />
-                      <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
-                        !formData.barangay_clearance ? 'border-gray-300' : 'border-green-200 bg-green-50'
-                      }`} style={{ color: COLORS.secondary }}>
-                        <Upload className="w-4 h-4" />
-                        {formData.barangay_clearance ? 'Change' : 'Upload'}
-                      </div>
+                      <span className="ml-2 text-sm" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                        Upload Document (AI Verification)
+                      </span>
                     </label>
-                    {formData.barangay_clearance && (
-                      <button
-                        type="button"
-                        onClick={() => previewFile(formData.barangay_clearance)}
-                        className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                        style={{ color: COLORS.secondary }}
-                      >
-                        <Eye className="w-4 h-4" />
-                        Preview
-                      </button>
-                    )}
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        name="barangay_method"
+                        value="id"
+                        checked={barangayClearanceMethod === 'id'}
+                        onChange={(e) => setBarangayClearanceMethod(e.target.value)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                        Enter ID Number (API Verification)
+                      </span>
+                    </label>
                   </div>
                 </div>
-                <div className="p-3 bg-gray-50">
-                  <label className="block text-sm font-medium mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                    Barangay Clearance ID/Number (Alternative to file upload):
-                  </label>
-                  <input
-                    type="text"
-                    name="barangay_clearance_id"
-                    value={formData.barangay_clearance_id}
-                    onChange={handleChange}
-                    placeholder="Enter Barangay Clearance ID or Reference Number (if no file uploaded)"
-                    className="w-full p-2 border border-gray-300 rounded"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                  />
 
-                  <p className="text-xs mt-1">
+                {/* File Upload Section - shown when 'upload' is selected */}
+                {barangayClearanceMethod === 'upload' && (
+                  <>
+                    <div className="p-3 bg-white">
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            name="barangay_clearance"
+                            onChange={handleFile}
+                            accept=".pdf,.jpg,.png,.doc,.docx"
+                            className="hidden"
+                          />
+                          <div className={`flex items-center gap-1 px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${
+                            !formData.barangay_clearance ? 'border-gray-300' : 'border-green-200 bg-green-50'
+                          }`} style={{ color: COLORS.secondary }}>
+                            <Upload className="w-4 h-4" />
+                            {formData.barangay_clearance ? 'Change File' : 'Upload Document'}
+                          </div>
+                        </label>
+                        {formData.barangay_clearance && (
+                          <>
+                            <span className="text-sm text-gray-600">{formData.barangay_clearance.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => previewFile(formData.barangay_clearance)}
+                              className="flex items-center gap-1 px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border border-gray-300"
+                              style={{ color: COLORS.secondary }}
+                            >
+                              <Eye className="w-4 h-4" />
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => verifyDocument('barangay_clearance', formData.barangay_clearance)}
+                              disabled={documentVerification.barangay_clearance.isVerifying}
+                              className={`flex items-center gap-1 px-3 py-2 text-sm rounded transition-colors duration-300 border ${
+                                documentVerification.barangay_clearance.isVerified 
+                                  ? 'bg-green-100 border-green-500 text-green-700' 
+                                  : 'bg-blue-50 border-blue-500 text-blue-700 hover:bg-blue-100'
+                              }`}
+                            >
+                              {documentVerification.barangay_clearance.isVerifying ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+                              ) : documentVerification.barangay_clearance.isVerified ? (
+                                <><Check className="w-4 h-4" /> Verified</>
+                              ) : (
+                                <><Shield className="w-4 h-4" /> Verify with AI</>
+                              )}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Progress percentage for barangay clearance file verification */}
+                    {formData.barangay_clearance && documentVerification.barangay_clearance.isVerifying && (
+                      <div className="px-3 pb-3">
+                        <div className="flex items-center justify-between text-xs text-blue-600">
+                          <span>Verifying document with AI...</span>
+                          <span>{documentVerification.barangay_clearance.progress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                          <div 
+                            className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" 
+                            style={{ width: `${documentVerification.barangay_clearance.progress}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* ID Input Section - shown when 'id' is selected */}
+                {barangayClearanceMethod === 'id' && (
+                  <div className="p-3 bg-white">
+                    <label className="block text-sm font-medium mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                      Barangay Clearance ID/Applicant ID:
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        name="barangay_clearance_id"
+                        value={formData.barangay_clearance_id}
+                        onChange={handleChange}
+                        placeholder="Enter Barangay Clearance Applicant ID"
+                        className="flex-1 p-2 border border-gray-300 rounded"
+                        style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                      />
+                      {formData.barangay_clearance_id && (
+                        <button
+                          type="button"
+                          onClick={verifyBarangayClearanceId}
+                          disabled={verifyingBarangayId}
+                          className={`flex items-center gap-1 px-4 py-2 text-sm rounded transition-colors duration-300 border ${
+                            validatedBarangayIds[formData.barangay_clearance_id]
+                              ? 'bg-green-100 border-green-500 text-green-700' 
+                              : 'bg-blue-50 border-blue-500 text-blue-700 hover:bg-blue-100'
+                          }`}
+                        >
+                          {verifyingBarangayId ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+                          ) : validatedBarangayIds[formData.barangay_clearance_id] ? (
+                            <><Check className="w-4 h-4" /> Verified</>
+                          ) : (
+                            <><Search className="w-4 h-4" /> Verify with API</>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-3 bg-gray-50">
+                  <p className="text-xs">
                     <span className={`font-medium ${
-                      formData.barangay_clearance || formData.barangay_clearance_id ? 'text-green-600' : 'text-red-600'
+                      (documentVerification.barangay_clearance?.isVerified || validatedBarangayIds[formData.barangay_clearance_id]) ? 'text-green-600' : 'text-red-600'
                     }`}>
-                      {formData.barangay_clearance || formData.barangay_clearance_id 
-                        ? '✓ Requirement satisfied (either file or ID provided)' 
-                        : '⚠ Please provide either the document or ID number'}
+                      {(documentVerification.barangay_clearance?.isVerified || validatedBarangayIds[formData.barangay_clearance_id])
+                        ? '✓ Requirement satisfied - Verified' 
+                        : (formData.barangay_clearance || formData.barangay_clearance_id)
+                          ? '⚠ Please verify the document or ID to proceed'
+                          : '⚠ Please provide either the document or ID number'}
                     </span>
                   </p>
                 </div>
@@ -1682,18 +2769,54 @@ export default function BusinessNew() {
                     </div>
                   </label>
                   {formData.bir_certificate && (
-                    <button
-                      type="button"
-                      onClick={() => previewFile(formData.bir_certificate)}
-                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                      style={{ color: COLORS.secondary }}
-                    >
-                      <Eye className="w-4 h-4" />
-                      Preview
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => previewFile(formData.bir_certificate)}
+                        className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                        style={{ color: COLORS.secondary }}
+                      >
+                        <Eye className="w-4 h-4" />
+                        Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => verifyDocument('bir_certificate', formData.bir_certificate)}
+                        disabled={documentVerification.bir_certificate.isVerifying}
+                        className={`flex items-center gap-1 px-3 py-1 text-sm rounded transition-colors duration-300 border ${
+                          documentVerification.bir_certificate.isVerified 
+                            ? 'bg-green-100 border-green-500 text-green-700' 
+                            : 'bg-blue-50 border-blue-500 text-blue-700 hover:bg-blue-100'
+                        }`}
+                      >
+                        {documentVerification.bir_certificate.isVerifying ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+                        ) : documentVerification.bir_certificate.isVerified ? (
+                          <><Check className="w-4 h-4" /> Verified</>
+                        ) : (
+                          <><Shield className="w-4 h-4" /> Verify</>
+                        )}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
+              
+              {/* Progress percentage for BIR certificate verification */}
+              {formData.bir_certificate && documentVerification.bir_certificate.isVerifying && (
+                <div className="p-3 border-l border-r border-b border-gray-300 rounded-b-lg bg-blue-50">
+                  <div className="flex items-center justify-between text-xs text-blue-600">
+                    <span>Verifying document...</span>
+                    <span>{documentVerification.bir_certificate.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                    <div 
+                      className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" 
+                      style={{ width: `${documentVerification.bir_certificate.progress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
                 <div className="flex items-center">
@@ -1721,18 +2844,54 @@ export default function BusinessNew() {
                     </div>
                   </label>
                   {formData.lease_or_title && (
-                    <button
-                      type="button"
-                      onClick={() => previewFile(formData.lease_or_title)}
-                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                      style={{ color: COLORS.secondary }}
-                    >
-                      <Eye className="w-4 h-4" />
-                      Preview
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => previewFile(formData.lease_or_title)}
+                        className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                        style={{ color: COLORS.secondary }}
+                      >
+                        <Eye className="w-4 h-4" />
+                        Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => verifyDocument('lease_or_title', formData.lease_or_title)}
+                        disabled={documentVerification.lease_or_title.isVerifying}
+                        className={`flex items-center gap-1 px-3 py-1 text-sm rounded transition-colors duration-300 border ${
+                          documentVerification.lease_or_title.isVerified 
+                            ? 'bg-green-100 border-green-500 text-green-700' 
+                            : 'bg-blue-50 border-blue-500 text-blue-700 hover:bg-blue-100'
+                        }`}
+                      >
+                        {documentVerification.lease_or_title.isVerifying ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+                        ) : documentVerification.lease_or_title.isVerified ? (
+                          <><Check className="w-4 h-4" /> Verified</>
+                        ) : (
+                          <><Shield className="w-4 h-4" /> Verify</>
+                        )}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
+              
+              {/* Progress percentage for lease/title verification */}
+              {formData.lease_or_title && documentVerification.lease_or_title.isVerifying && (
+                <div className="p-3 border-l border-r border-b border-gray-300 rounded-b-lg bg-blue-50">
+                  <div className="flex items-center justify-between text-xs text-blue-600">
+                    <span>Verifying document...</span>
+                    <span>{documentVerification.lease_or_title.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                    <div 
+                      className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" 
+                      style={{ width: `${documentVerification.lease_or_title.progress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
                 <div className="flex items-center">
@@ -1760,18 +2919,54 @@ export default function BusinessNew() {
                     </div>
                   </label>
                   {formData.fsic && (
-                    <button
-                      type="button"
-                      onClick={() => previewFile(formData.fsic)}
-                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                      style={{ color: COLORS.secondary }}
-                    >
-                      <Eye className="w-4 h-4" />
-                      Preview
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => previewFile(formData.fsic)}
+                        className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                        style={{ color: COLORS.secondary }}
+                      >
+                        <Eye className="w-4 h-4" />
+                        Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => verifyDocument('fsic', formData.fsic)}
+                        disabled={documentVerification.fsic.isVerifying}
+                        className={`flex items-center gap-1 px-3 py-1 text-sm rounded transition-colors duration-300 border ${
+                          documentVerification.fsic.isVerified 
+                            ? 'bg-green-100 border-green-500 text-green-700' 
+                            : 'bg-blue-50 border-blue-500 text-blue-700 hover:bg-blue-100'
+                        }`}
+                      >
+                        {documentVerification.fsic.isVerifying ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+                        ) : documentVerification.fsic.isVerified ? (
+                          <><Check className="w-4 h-4" /> Verified</>
+                        ) : (
+                          <><Shield className="w-4 h-4" /> Verify</>
+                        )}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
+              
+              {/* Progress percentage for FSIC verification */}
+              {formData.fsic && documentVerification.fsic.isVerifying && (
+                <div className="p-3 border-l border-r border-b border-gray-300 rounded-b-lg bg-blue-50">
+                  <div className="flex items-center justify-between text-xs text-blue-600">
+                    <span>Verifying document...</span>
+                    <span>{documentVerification.fsic.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                    <div 
+                      className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" 
+                      style={{ width: `${documentVerification.fsic.progress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
                 <div className="flex items-center">
@@ -1799,57 +2994,54 @@ export default function BusinessNew() {
                     </div>
                   </label>
                   {formData.owner_valid_id && (
-                    <button
-                      type="button"
-                      onClick={() => previewFile(formData.owner_valid_id)}
-                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                      style={{ color: COLORS.secondary }}
-                    >
-                      <Eye className="w-4 h-4" />
-                      Preview
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => previewFile(formData.owner_valid_id)}
+                        className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
+                        style={{ color: COLORS.secondary }}
+                      >
+                        <Eye className="w-4 h-4" />
+                        Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => verifyDocument('owner_valid_id', formData.owner_valid_id)}
+                        disabled={documentVerification.owner_valid_id.isVerifying}
+                        className={`flex items-center gap-1 px-3 py-1 text-sm rounded transition-colors duration-300 border ${
+                          documentVerification.owner_valid_id.isVerified 
+                            ? 'bg-green-100 border-green-500 text-green-700' 
+                            : 'bg-blue-50 border-blue-500 text-blue-700 hover:bg-blue-100'
+                        }`}
+                      >
+                        {documentVerification.owner_valid_id.isVerifying ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+                        ) : documentVerification.owner_valid_id.isVerified ? (
+                          <><Check className="w-4 h-4" /> Verified</>
+                        ) : (
+                          <><Shield className="w-4 h-4" /> Verify</>
+                        )}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
-
-              <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-blue-50">
-                <div className="flex items-center">
-                  <div>
-                    <span className="font-medium">2x2 ID Picture: <span className="text-red-500">*</span></span>
-                    <p className="text-sm text-gray-600">
-                      {formData.id_picture ? formData.id_picture.name : 'Required'}
-                    </p>
-                    <p className="text-xs text-red-500 font-semibold">* This document is mandatory</p>
+              
+              {/* Progress percentage for owner valid ID verification */}
+              {formData.owner_valid_id && documentVerification.owner_valid_id.isVerifying && (
+                <div className="p-3 border-l border-r border-b border-gray-300 rounded-b-lg bg-blue-50">
+                  <div className="flex items-center justify-between text-xs text-blue-600">
+                    <span>Verifying document...</span>
+                    <span>{documentVerification.owner_valid_id.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                    <div 
+                      className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" 
+                      style={{ width: `${documentVerification.owner_valid_id.progress}%` }}
+                    ></div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="cursor-pointer">
-                    <input
-                      type="file"
-                      name="id_picture"
-                      onChange={handleFile}
-                      accept=".jpg,.jpeg,.png"
-                      className="hidden"
-                      required
-                    />
-                    <div className={`flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300 border ${!formData.id_picture ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'}`} style={{ color: COLORS.secondary }}>
-                      <Upload className="w-4 h-4" />
-                      {formData.id_picture ? 'Change' : 'Upload'}
-                    </div>
-                  </label>
-                  {formData.id_picture && (
-                    <button
-                      type="button"
-                      onClick={() => previewFile(formData.id_picture)}
-                      className="flex items-center gap-1 px-3 py-1 text-sm rounded hover:bg-gray-100 transition-colors duration-300"
-                      style={{ color: COLORS.secondary }}
-                    >
-                      <Eye className="w-4 h-4" />
-                      Preview
-                    </button>
-                  )}
-                </div>
-              </div>
+              )}
 
               <div className="flex items-center justify-between p-3 border border-gray-300 rounded-lg">
                 <div className="flex items-center">
@@ -2280,7 +3472,7 @@ export default function BusinessNew() {
                       <span className="font-medium" style={{ color: COLORS.secondary }}>Zoning Permit ID:</span>
                       <p>{formData.zoning_permit_id || 'Not provided'}</p>
                       {validatedZoningIds[formData.zoning_permit_id] ? (
-                        <span className="text-sm text-green-600">✅ Verified and Approved</span>
+                        <span className="text-sm text-green-600"> Verified and Valid</span>
                       ) : (
                         <span className="text-sm text-yellow-600">⚠ Needs verification</span>
                       )}
@@ -2502,58 +3694,18 @@ export default function BusinessNew() {
               </div>
             </div>
             
-            <h2 className="text-xl font-bold text-center mb-4" style={{ 
+            <h2 className="text-2xl font-bold text-center mb-4" style={{ 
               color: zoningVerificationResult.success ? COLORS.success : COLORS.danger 
             }}>
-              Zoning ID Verification Result
+              {zoningVerificationResult.success ? 'VALID DOCUMENT' : 'INVALID DOCUMENT'}
             </h2>
             
             <div className="mb-6">
-              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                {zoningVerificationResult.message}
+              <p className="text-center text-base" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                {zoningVerificationResult.success 
+                  ? 'The zoning permit ID has been successfully verified and is valid for use in this application.'
+                  : 'The zoning permit ID could not be verified. Please check the ID number or ensure the document is readable and approved.'}
               </p>
-              
-              {zoningVerificationResult.data && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
-                  <h4 className="font-medium mb-2" style={{ color: COLORS.secondary }}>Zoning Permit Details:</h4>
-                  <div className="grid grid-cols-1 gap-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Application Number:</span>
-                      <span className="font-medium">{zoningVerificationResult.data.applicationNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Reference No:</span>
-                      <span className="font-medium">{zoningVerificationResult.data.referenceNo}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Status:</span>
-                      <span className={`font-medium px-2 py-1 rounded ${
-                        zoningVerificationResult.data.status === 'approved' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {zoningVerificationResult.data.status}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Applicant:</span>
-                      <span className="font-medium">{zoningVerificationResult.data.applicantName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Municipality:</span>
-                      <span className="font-medium">{zoningVerificationResult.data.municipality}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Land Use Type:</span>
-                      <span className="font-medium">{zoningVerificationResult.data.landUseType}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Submitted:</span>
-                      <span className="font-medium">{zoningVerificationResult.data.submittedAt}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex justify-center">
@@ -2564,9 +3716,259 @@ export default function BusinessNew() {
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
                 onMouseLeave={e => e.currentTarget.style.background = zoningVerificationResult.success ? COLORS.success : COLORS.danger}
-                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
+                className="px-8 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
               >
                 {zoningVerificationResult.success ? 'Continue Application' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barangay Clearance ID Verification Modal */}
+      {showBarangayModal && barangayVerificationResult && (
+        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
+          <div 
+            className="rounded-lg shadow-lg max-w-lg w-full border border-gray-200 p-8"
+            style={{ 
+              background: 'rgba(255, 255, 255, 0.95)',
+              fontFamily: COLORS.font,
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <div className="flex items-center justify-center mb-6">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                barangayVerificationResult.success ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {barangayVerificationResult.success ? (
+                  <Check className="w-8 h-8 text-green-600" />
+                ) : (
+                  <AlertCircle className="w-8 h-8 text-red-600" />
+                )}
+              </div>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-center mb-4" style={{ 
+              color: barangayVerificationResult.success ? COLORS.success : COLORS.danger 
+            }}>
+              {barangayVerificationResult.success ? 'VALID DOCUMENT' : 'INVALID DOCUMENT'}
+            </h2>
+            
+            <div className="mb-6">
+              <p className="text-center text-base" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                {barangayVerificationResult.success 
+                  ? 'The barangay clearance ID has been successfully verified and is valid for use in this application.'
+                  : 'The barangay clearance ID could not be verified. Please check the ID number or ensure the document is readable and approved.'}
+              </p>
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={() => setShowBarangayModal(false)}
+                style={{ 
+                  background: barangayVerificationResult.success ? COLORS.success : COLORS.danger 
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                onMouseLeave={e => e.currentTarget.style.background = barangayVerificationResult.success ? COLORS.success : COLORS.danger}
+                className="px-8 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
+              >
+                {barangayVerificationResult.success ? 'Continue Application' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sanitation Permit ID Verification Modal */}
+      {showSanitationModal && sanitationVerificationResult && (
+        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
+          <div 
+            className="rounded-lg shadow-lg max-w-lg w-full border border-gray-200 p-8"
+            style={{ 
+              background: 'rgba(255, 255, 255, 0.95)',
+              fontFamily: COLORS.font,
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <div className="flex items-center justify-center mb-6">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                sanitationVerificationResult.success ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {sanitationVerificationResult.success ? (
+                  <Check className="w-8 h-8 text-green-600" />
+                ) : (
+                  <AlertCircle className="w-8 h-8 text-red-600" />
+                )}
+              </div>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-center mb-4" style={{ 
+              color: sanitationVerificationResult.success ? COLORS.success : COLORS.danger 
+            }}>
+              {sanitationVerificationResult.success ? 'VALID DOCUMENT' : 'INVALID DOCUMENT'}
+            </h2>
+            
+            <div className="mb-6">
+              <p className="text-center text-base" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                {sanitationVerificationResult.success 
+                  ? 'The sanitation permit ID has been successfully verified and is valid for use in this application.'
+                  : 'The sanitation permit ID could not be verified. Please check the ID number or ensure the document is readable and approved.'}
+              </p>
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={() => setShowSanitationModal(false)}
+                style={{ 
+                  background: sanitationVerificationResult.success ? COLORS.success : COLORS.danger 
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                onMouseLeave={e => e.currentTarget.style.background = sanitationVerificationResult.success ? COLORS.success : COLORS.danger}
+                className="px-8 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
+              >
+                {sanitationVerificationResult.success ? 'Continue Application' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Verifying Modal - Shows during processing */}
+      {showVerifyingModal && (
+        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
+          <div 
+            className="rounded-lg shadow-lg max-w-md w-full border border-gray-200 p-8"
+            style={{ 
+              background: 'rgba(255, 255, 255, 0.95)',
+              fontFamily: COLORS.font,
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <div className="flex items-center justify-center mb-6">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center bg-blue-100">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+              </div>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-center mb-4" style={{ color: COLORS.primary }}>
+              Verifying Document
+            </h2>
+            
+            <div className="mb-6">
+              <p className="text-center text-base mb-4" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                Please wait while we verify your document...
+              </p>
+              
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                  style={{ width: `${verifyingProgress}%` }}
+                ></div>
+              </div>
+              
+              <p className="text-center text-sm mt-2" style={{ color: COLORS.secondary }}>
+                {verifyingProgress}% complete
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Verification Result Modal */}
+      {showVerificationModal && verificationModalData && (
+        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
+          <div 
+            className="rounded-lg shadow-lg max-w-lg w-full border border-gray-200 p-8"
+            style={{ 
+              background: 'rgba(255, 255, 255, 0.95)',
+              fontFamily: COLORS.font,
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            <div className="flex items-center justify-center mb-6">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                verificationModalData.isVerified ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {verificationModalData.isVerified ? (
+                  <Check className="w-8 h-8 text-green-600" />
+                ) : (
+                  <AlertCircle className="w-8 h-8 text-red-600" />
+                )}
+              </div>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-center mb-4" style={{ 
+              color: verificationModalData.isVerified ? COLORS.success : COLORS.danger 
+            }}>
+              {verificationModalData.isVerified ? 'VALID DOCUMENT' : 'INVALID DOCUMENT'}
+            </h2>
+            
+            <div className="mb-6">
+              {verificationModalData.isVerified ? (
+                <p className="text-center text-base mb-4" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  The document has been successfully verified and is valid for use in this application.
+                </p>
+              ) : (
+                <div className="text-left">
+                  {verificationModalData.invalidReasons && verificationModalData.invalidReasons.length > 0 ? (
+                    <div>
+                      {verificationModalData.invalidReasons.map((reason, index) => (
+                        <p key={index} className={`mb-2 ${index === 0 ? 'font-semibold text-base' : 'text-sm ml-4'}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                          {reason}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-base mb-4" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                      Document may be unreadable or unclear. Please re-upload a clear copy.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-center gap-3">
+              {!verificationModalData.isVerified && (
+                <button
+                  onClick={() => {
+                    setShowVerificationModal(false);
+                    // Clear the invalid document from formData
+                    if (verificationModalData.documentType) {
+                      setFormData(prev => ({
+                        ...prev,
+                        [verificationModalData.documentType]: null
+                      }));
+                      // Reset verification state
+                      setDocumentVerification(prev => ({
+                        ...prev,
+                        [verificationModalData.documentType]: {
+                          isVerifying: false,
+                          isVerified: false,
+                          results: null,
+                          error: null,
+                          progress: 0
+                        }
+                      }));
+                    }
+                  }}
+                  style={{ background: COLORS.primary }}
+                  onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                  onMouseLeave={e => e.currentTarget.style.background = COLORS.primary}
+                  className="px-8 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
+                >
+                  Re-upload Document
+                </button>
+              )}
+              <button
+                onClick={() => setShowVerificationModal(false)}
+                style={{ 
+                  background: verificationModalData.isVerified ? COLORS.success : COLORS.danger 
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                onMouseLeave={e => e.currentTarget.style.background = verificationModalData.isVerified ? COLORS.success : COLORS.danger}
+                className="px-8 py-3 rounded-lg font-semibold text-white transition-colors duration-300"
+              >
+                {verificationModalData.isVerified ? 'Continue Application' : 'Close'}
               </button>
             </div>
           </div>

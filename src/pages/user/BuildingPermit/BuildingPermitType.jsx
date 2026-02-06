@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft } from "lucide-react";
+import Swal from 'sweetalert2';
+
+const COLORS = {
+  primary: '#4A90E2',
+  secondary: '#000000',
+  accent: '#FDA811',
+  success: '#4CAF50',
+  danger: '#E53935',
+  background: '#FBFBFB',
+  font: 'Montserrat, Arial, sans-serif'
+};
 
 export default function BuildingPermitType({ building_permit_id }) {
-  const [selectedType, setSelectedType] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-  const [isConfirmBackOpen, setIsConfirmBackOpen] = useState(false);
   const navigate = useNavigate();
 
   const permit_type = [
@@ -18,37 +25,84 @@ export default function BuildingPermitType({ building_permit_id }) {
   ];
 
 const handleTypeSelection = (typeId) => {
-  setSelectedType(typeId);
-  setIsModalOpen(true); // Always open modal for any permit type
+  const selectedPermit = permit_type.find(t => t.id === typeId);
+  
+  Swal.fire({
+    title: 'Selected Permit Type',
+    html: `
+      <div style="text-align: center; padding: 10px 0;">
+        <p style="margin-bottom: 10px;">You have selected: <strong style="color: ${COLORS.primary}">${selectedPermit?.title}</strong></p>
+        <p style="font-size: 0.9rem; color: #666;">${selectedPermit?.description}</p>
+      </div>
+    `,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: COLORS.success,
+    cancelButtonColor: '#9CA3AF',
+    confirmButtonText: 'Continue',
+    cancelButtonText: 'Cancel',
+    customClass: {
+      popup: 'swal-wide',
+      title: 'swal-title-center',
+      htmlContainer: 'swal-text-center'
+    }
+  }).then((result) => {
+    if (result.isConfirmed) {
+      const routeMap = {
+        NEW: '/user/building/new',
+        RENEWAL: '/user/building/renewal',
+        OCCUPANCY: '/user/building/occupancy',
+        PROFESSIONAL: '/user/building/professional',
+        ANCILLARY: '/user/building/ancillary',
+      };
+      navigate(routeMap[typeId] || '/user/building/new', {
+        state: { permitType: typeId },
+      });
+    }
+  });
 };
 
 
-  const handleContinue = () => {
-    setIsModalOpen(false);
-
-    const routeMap = {
-      NEW: '/user/building/new',
-      RENEWAL: '/user/building/renewal',
-      OCCUPANCY: '/user/building/occupancy',
-      PROFESSIONAL: '/user/building/professional',
-      ANCILLARY: '/user/building/ancillary',
-    };
-
-    navigate(routeMap[selectedType] || '/user/building/new', {
-      state: { permitType: selectedType },
+  const handleBackToDashboard = () => {
+    Swal.fire({
+      title: 'Go Back to Dashboard?',
+      text: 'Are you sure you want to return to the dashboard?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: COLORS.success,
+      cancelButtonColor: COLORS.danger,
+      confirmButtonText: 'Yes, Go Back',
+      cancelButtonText: 'Cancel',
+      customClass: {
+        title: 'swal-title-center',
+        htmlContainer: 'swal-text-center'
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: 'Redirecting...',
+          html: '<p style="text-align: center;">Returning to dashboard...</p>',
+          timer: 2000,
+          timerProgressBar: true,
+          showConfirmButton: false,
+          allowOutsideClick: false,
+          customClass: {
+            title: 'swal-title-center',
+            htmlContainer: 'swal-text-center'
+          },
+          didOpen: () => {
+            Swal.showLoading();
+          },
+          willClose: () => {
+            navigate('/user/dashboard');
+          }
+        });
+      }
     });
   };
 
-  const handleConfirmYes = () => {
-    setIsConfirmModalOpen(false);
-    navigate('/user/building/new', { state: { permitType: 'NEW' } });
-  };
-
-  const handleConfirmNo = () => setIsConfirmModalOpen(false);
-
   return (
-    <>
-      <div className="mx-1 mt-1 p-6 dark:bg-slate-900 bg-white dark:text-slate-300 rounded-lg min-h-screen">
+    <div className="mx-1 mt-1 p-6 dark:bg-slate-900 bg-white dark:text-slate-300 rounded-lg min-h-screen">
         <h1 className="text-2xl md:text-4xl font-bold mb-8 text-center">
           Building Permit Types
         </h1>
@@ -56,93 +110,35 @@ const handleTypeSelection = (typeId) => {
           Please select the type of Building permit you need to apply for
         </p>
 
-        {/* ✅ Permit Type Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full mt-6">
           {permit_type.map((type) => (
             <div
               key={type.id}
               onClick={() => handleTypeSelection(type.id)}
-              className={`group cursor-pointer rounded-lg border border-gray-200 bg-white px-5 py-4 shadow-sm transition-all duration-200 hover:shadow-md hover:border-blue-400 hover:bg-blue-100`}
+              className="cursor-pointer rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-blue-300 hover:bg-blue-100 shadow-lg shadow-blue-200/50 hover:shadow-blue-300/50 flex flex-col justify-between h-full"
             >
-              <h2 className="mb-3 text-2xl font-semibold flex items-center justify-between text-gray-800">
+              <h2 className="mb-3 text-2xl font-semibold flex items-center justify-between">
                 {type.title}
-                <ArrowRight className="ml-2 w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" />
+                <ArrowRight className="ml-2 w-5 h-5 transition-transform group-hover:translate-x-1 motion-reduce:transform-none" />
               </h2>
-              <p className="m-0 max-w-[30ch] text-sm text-gray-600">{type.description}</p>
+              <p className="m-0 max-w-[30ch] text-sm opacity-70">{type.description}</p>
             </div>
           ))}
         </div>
 
-        {/* ✅ Back Button */}
+        {/* Back to Dashboard Button */}
         <div className="mt-8 text-center">
           <button
-            onClick={() => setIsConfirmBackOpen(true)}
-            className="inline-flex items-center gap-2 bg-green-600 hover:bg-orange-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+            onClick={handleBackToDashboard}
+            style={{ backgroundColor: COLORS.success, color: '#fff' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.accent}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = COLORS.success}
+            className="inline-flex items-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors"
           >
             <ArrowLeft size={18} />
             Back to Dashboard
           </button>
         </div>
-
-        {/* ✅ Confirm Back Modal */}
-        {isConfirmBackOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full p-8 text-center">
-              <h3 className="text-2xl font-semibold mb-6">
-                Are you sure you want to go back?
-              </h3>
-              <div className="flex justify-center gap-6">
-                <button
-                  onClick={() => setIsConfirmBackOpen(false)}
-                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => navigate('/user/dashboard')}
-                  className="bg-green-600 hover:bg-orange-500 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-                >
-                  Yes, Go Back
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ✅ Selection Modal */}
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-6">
-              <h3 className="text-xl font-semibold mb-2">Selected Permit Type</h3>
-              <p className="text-gray-600 dark:text-slate-300 mb-4">
-                You have selected:{" "}
-                <span className="font-bold text-blue-600">
-                  {permit_type.find(t => t.id === selectedType)?.title}
-                </span>
-              </p>
-              <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
-                {permit_type.find(t => t.id === selectedType)?.description}
-              </p>
-
-              <div className="flex justify-end gap-4">
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  onClick={handleContinue}
-                  className="bg-green-600 hover:bg-orange-500 text-white font-semibold py-2 px-4 rounded-lg transition"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </>
+    </div>
   );
 }

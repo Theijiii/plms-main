@@ -1,13 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft } from "lucide-react";
+import Swal from 'sweetalert2';
+
+const COLORS = {
+  primary: '#4A90E2',
+  secondary: '#000000',
+  accent: '#FDA811',
+  success: '#4CAF50',
+  danger: '#E53935',
+  background: '#FBFBFB',
+  font: 'Montserrat, Arial, sans-serif'
+};
 
 export default function BusPermitType({ business_permit_id }) {
-  const [selectedType, setSelectedType] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-  const [isConfirmBackOpen, setIsConfirmBackOpen] = useState(false); // Back confirmation
-  const [isBarangayModalOpen, setIsBarangayModalOpen] = useState(false); // Barangay permit modal
   const navigate = useNavigate();
 
   const application_type = [
@@ -18,24 +24,200 @@ export default function BusPermitType({ business_permit_id }) {
     { id: 'AMENDMENT', title: 'AMENDMENT', description: 'Make changes to your existing business permit', color: 'bg-yellow-500 hover:bg-yellow-600' },
   ];
 
-  const handleTypeSelection = (typeId) => {
-    setSelectedType(typeId);
-    // Open Barangay Permit modal first
-    setIsBarangayModalOpen(true);
+  const verifyBarangayClearance = async (permitId) => {
+    try {
+      const response = await fetch('https://e-plms.goserveph.com/backend/barangay_permit/admin_fetch.php');
+      const data = await response.json();
+      
+      if (data.success && Array.isArray(data.data)) {
+        const permit = data.data.find(p => 
+          String(p.permit_id) === String(permitId) && p.status === 'approved'
+        );
+        return permit ? { exists: true, permit_id: permit.permit_id, permit } : { exists: false };
+      }
+      return { exists: false };
+    } catch (error) {
+      console.error('Error verifying Barangay Permit:', error);
+      return { exists: false, error: true };
+    }
   };
 
-  const handleContinue = () => {
-    setIsModalOpen(false);
-
-    const routeMap = {
-      RENEWAL: '/user/business/renewal',
-      SPECIAL: '/user/business/special',
-      LIQUOR_PERMIT: '/user/business/liquor',
-      AMENDMENT: '/user/business/amendment',
-    };
+  const handleTypeSelection = (typeId) => {
+    const selectedApplication = application_type.find(t => t.id === typeId);
     
-    navigate(routeMap[selectedType] || '/user/business/new', {
-      state: { application_type: selectedType }
+    // First ask about Barangay Permit
+    Swal.fire({
+      title: 'Do you have an existing Barangay Permit?',
+      html: `
+        <div style="text-align: center; padding: 10px 0;">
+          <p style="margin-bottom: 10px;">Before applying for a business permit, we need to check if you already have a valid Barangay Permit.</p>
+          <p style="font-size: 0.9rem; color: #666;">If you don't have one, you will be redirected to the Barangay Permit application page.</p>
+        </div>
+      `,
+      icon: 'question',
+      showDenyButton: true,
+      confirmButtonColor: COLORS.success,
+      denyButtonColor: COLORS.primary,
+      confirmButtonText: 'Yes, I have one',
+      denyButtonText: 'No, redirect me',
+      customClass: {
+        popup: 'swal-wide',
+        title: 'swal-title-center',
+        htmlContainer: 'swal-text-center'
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        // Ask for Barangay Permit ID
+        const { value: permitId } = await Swal.fire({
+          title: 'Enter Barangay Permit ID',
+          html: `
+            <div style="text-align: center; padding: 10px 0;">
+              <p style="margin-bottom: 15px; font-size: 0.95rem;">Please enter your Barangay Permit ID to verify your permit.</p>
+            </div>
+          `,
+          input: 'text',
+          inputPlaceholder: 'e.g., 2041',
+          showCancelButton: true,
+          confirmButtonColor: COLORS.success,
+          cancelButtonColor: '#9CA3AF',
+          confirmButtonText: 'Verify',
+          cancelButtonText: 'Cancel',
+          customClass: {
+            popup: 'swal-wide',
+            title: 'swal-title-center',
+            htmlContainer: 'swal-text-center'
+          },
+          inputValidator: (value) => {
+            if (!value) {
+              return 'Please enter your Barangay Permit ID';
+            }
+          }
+        });
+
+        if (permitId) {
+          // Show loading while verifying
+          Swal.fire({
+            title: 'Verifying...',
+            html: '<p style="text-align: center;">Checking your Barangay Permit ID...</p>',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+              Swal.showLoading();
+            }
+          });
+
+          // Verify the permit ID
+          const verification = await verifyBarangayClearance(permitId);
+
+          if (verification.exists) {
+            // Valid permit - Show type selection confirmation
+            Swal.fire({
+              title: 'Permit Verified!',
+              html: `
+                <div style="text-align: center; padding: 10px 0;">
+                  <p style="margin-bottom: 10px; color: ${COLORS.success};">✓ Your Barangay Permit is valid and approved.</p>
+                  <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
+                  <p style="margin-bottom: 10px;">You have selected: <strong style="color: ${COLORS.primary}">${selectedApplication?.title}</strong></p>
+                  <p style="font-size: 0.9rem; color: #666;">${selectedApplication?.description}</p>
+                </div>
+              `,
+              icon: 'success',
+              showCancelButton: true,
+              confirmButtonColor: COLORS.success,
+              cancelButtonColor: '#9CA3AF',
+              confirmButtonText: 'Continue',
+              cancelButtonText: 'Cancel',
+              customClass: {
+                popup: 'swal-wide',
+                title: 'swal-title-center',
+                htmlContainer: 'swal-text-center'
+              }
+            }).then((confirmResult) => {
+              if (confirmResult.isConfirmed) {
+                const routeMap = {
+                  RENEWAL: '/user/business/renewal',
+                  SPECIAL: '/user/business/special',
+                  LIQUOR_PERMIT: '/user/business/liquor',
+                  AMENDMENT: '/user/business/amendment',
+                };
+                navigate(routeMap[typeId] || '/user/business/new', {
+                  state: { 
+                    application_type: typeId,
+                    barangay_permit_id: verification.permit_id
+                  }
+                });
+              }
+            });
+          } else {
+            // Invalid or not found - Show error with only redirect option
+            Swal.fire({
+              title: 'Permit Not Found',
+              html: `
+                <div style="text-align: center; padding: 10px 0;">
+                  <p style="margin-bottom: 10px; color: ${COLORS.danger};">There is no ID existing or your permit is not approved yet.</p>
+                  <p style="font-size: 0.9rem; color: #666;">You need to apply for a Barangay Permit first before proceeding with a Business Permit application.</p>
+                </div>
+              `,
+              icon: 'error',
+              showDenyButton: true,
+              showCancelButton: false,
+              showConfirmButton: false,
+              denyButtonColor: COLORS.primary,
+              denyButtonText: 'Apply for Barangay Permit',
+              customClass: {
+                popup: 'swal-wide',
+                title: 'swal-title-center',
+                htmlContainer: 'swal-text-center'
+              }
+            }).then((errorResult) => {
+              if (errorResult.isDenied) {
+                navigate('/user/barangay/new');
+              }
+            });
+          }
+        }
+      } else if (result.isDenied) {
+        // No Barangay Permit - Redirect
+        navigate('/user/barangay/new');
+      }
+    });
+  };
+
+  const handleBackToDashboard = () => {
+    Swal.fire({
+      title: 'Go Back to Dashboard?',
+      text: 'Are you sure you want to return to the dashboard?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: COLORS.success,
+      cancelButtonColor: COLORS.danger,
+      confirmButtonText: 'Yes, Go Back',
+      cancelButtonText: 'Cancel',
+      customClass: {
+        title: 'swal-title-center',
+        htmlContainer: 'swal-text-center'
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: 'Redirecting...',
+          html: '<p style="text-align: center;">Returning to dashboard...</p>',
+          timer: 2000,
+          timerProgressBar: true,
+          showConfirmButton: false,
+          allowOutsideClick: false,
+          customClass: {
+            title: 'swal-title-center',
+            htmlContainer: 'swal-text-center'
+          },
+          didOpen: () => {
+            Swal.showLoading();
+          },
+          willClose: () => {
+            navigate('/user/dashboard');
+          }
+        });
+      }
     });
   };
 
@@ -49,130 +231,31 @@ export default function BusPermitType({ business_permit_id }) {
           <div
             key={type.id}
             onClick={() => handleTypeSelection(type.id)}
-            className={`cursor-pointer rounded-lg border px-5 py-4 transition-colors hover:border-blue-300 hover:bg-blue-100 shadow-lg shadow-blue-200/50 hover:shadow-blue-300/50 flex flex-col justify-between h-full
-              ${selectedType === type.id ? 'border-blue-400 bg-blue-50' : 'border-transparent'}`}
+            className="cursor-pointer rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-blue-300 hover:bg-blue-100 shadow-lg shadow-blue-200/50 hover:shadow-blue-300/50 flex flex-col justify-between h-full"
           >
             <h2 className="mb-3 text-2xl font-semibold flex items-center justify-between">
               {type.title}
-              <ArrowRight className="ml-2 w-5 h-5 transition-transform" />
+              <ArrowRight className="ml-2 w-5 h-5 transition-transform group-hover:translate-x-1 motion-reduce:transform-none" />
             </h2>
             <p className="m-0 max-w-[30ch] text-sm opacity-70">{type.description}</p>
           </div>
         ))}
       </div>
 
-      {/* Barangay Permit Modal */}
-{/* Barangay Permit Modal */}
-{/* Barangay Permit Modal */}
-{isBarangayModalOpen && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-    <div className="bg-[#FBFBFB] dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-8 text-center min-h-[300px]">
-      <h3 className="text-2xl font-semibold mb-4">Do you have an existing Barangay Permit?</h3>
-      <p className="text-gray-600 dark:text-slate-300 mb-8">
-        Before applying for a business permit, we need to check if you already have a valid Barangay Permit.
-        If you don't have one, you will be redirected to the Barangay Permit application page.
-      </p>
-      <div className="flex justify-center gap-6">
-        {/* Yes button - Green */}
-        <button
-          onClick={() => {
-            setIsBarangayModalOpen(false);
-            setIsModalOpen(true); // Continue to the main permit modal
-          }}
-          className="bg-[#4CAF50] hover:bg-[#FDA811] text-white font-semibold py-3 px-8 rounded-lg transition-colors"
-        >
-          Yes
-        </button>
-
-        {/* No button - Blue */}
-        <button
-          onClick={() => navigate('/user/barangay/new')}
-          className="bg-[#4A90E2] hover:bg-[#FDA811] text-white font-semibold py-3 px-8 rounded-lg transition-colors"
-        >
-          No
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
-
-      {/* Selection Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-semibold mb-2">Selected Permit Type</h3>
-            <p className="text-gray-600 dark:text-slate-300 mb-4">
-              You have selected:{" "}
-              <span className="font-bold text-blue-600">
-                {application_type.find(t => t.id === selectedType)?.title}
-              </span>
-            </p>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
-              {application_type.find(t => t.id === selectedType)?.description}
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "#FDA811";
-                  e.currentTarget.style.color = "#FFFFFF";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "#D1D5DB";
-                  e.currentTarget.style.color = "#1F2937";
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleContinue}
-                className="text-white font-semibold py-2 px-4 rounded-lg transition"
-                style={{ backgroundColor: "#4CAF50" }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#FDA811")}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#4CAF50")}
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Back to Dashboard Button */}
       <div className="mt-8 text-center">
         <button
-          onClick={() => setIsConfirmBackOpen(true)}
-          className="inline-flex items-center gap-2 bg-green-600 hover:bg-orange-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+          onClick={handleBackToDashboard}
+          style={{ backgroundColor: COLORS.success, color: '#fff' }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.accent}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = COLORS.success}
+          className="inline-flex items-center gap-2 font-semibold py-2 px-4 rounded-lg transition-colors"
         >
           <ArrowLeft size={18} />
           Back to Dashboard
         </button>
       </div>
-
-      {/* Confirm Back Modal */}
-      {isConfirmBackOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full p-8 text-center">
-            <h3 className="text-2xl font-semibold mb-6">Are you sure you want to go back?</h3>
-            <div className="flex justify-center gap-6">
-              <button
-                onClick={() => setIsConfirmBackOpen(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-3 px-6 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => navigate('/user/dashboard')}
-                className="bg-green-600 hover:bg-orange-500 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-              >
-                Yes, Go Back
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
