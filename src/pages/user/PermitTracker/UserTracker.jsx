@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye, Download, Calendar, FileText, X, CheckCircle, Clock, Upload, Check } from "lucide-react";
+import { ArrowLeft, Eye, Download, Calendar, FileText, X, CheckCircle, Clock, Upload, Check, Loader2 } from "lucide-react";
+import { useAuth } from "../../../context/AuthContext";
 
 export default function PermitTracker() {
   const [tracking, setTracking] = useState([]);
@@ -12,103 +13,58 @@ export default function PermitTracker() {
   const [showUploadSuccess, setShowUploadSuccess] = useState(false);
   const [downloadedPermitId, setDownloadedPermitId] = useState("");
   const [uploadedPermitId, setUploadedPermitId] = useState("");
-  const [isConfirmBackOpen, setIsConfirmBackOpen] = useState(false); // Back confirmation
+  const [isConfirmBackOpen, setIsConfirmBackOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
-
-  // Single applicant with different types of permits
-  const applicantData = [
-    {
-      id: "BUS-2024-001",
-      permitType: "Business Permit",
-      application_type: "New",
-      status: "Approved",
-      applicantName: "John Smith",
-      businessName: "Smith Coffee Shop",
-      submittedDate: "2024-01-15",
-      approvedDate: "2024-01-25",
-      rejectedDate: null,
-      expirationDate: "2025-01-24",
-      address: "123 Main Street, Cityville",
-      contactNumber: "+1-555-0101",
-      fees: "₱150.00",
-      requirements: ["Business Registration", "Tax Identification", "Location Sketch"]
-    },
-    {
-      id: "BLD-2024-002",
-      permitType: "Building Permit",
-      application_type: "Renewal",
-      status: "For Compliance",
-      applicantName: "John Smith",
-      businessName: "Smith Coffee Shop",
-      submittedDate: "2024-02-01",
-      approvedDate: null,
-      rejectedDate: null,
-      expirationDate: "2025-02-01",
-      address: "123 Main Street, Cityville",
-      contactNumber: "+1-555-0101",
-      fees: "₱300.00",
-      requirements: ["Building Plans", "Structural Calculations", "Site Development Plan"],
-      complianceNotes: "Missing structural engineer's stamp on building plans. Please upload revised documents."
-    },
-    {
-      id: "FRN-2024-003",
-      permitType: "Franchise Permit",
-      application_type: "Special",
-      status: "Rejected",
-      applicantName: "John Smith",
-      businessName: "Smith Coffee Shop",
-      submittedDate: "2024-01-20",
-      approvedDate: null,
-      rejectedDate: "2024-02-05",
-      expirationDate: null,
-      address: "123 Main Street, Cityville",
-      contactNumber: "+1-555-0101",
-      fees: "₱500.00",
-      requirements: ["Franchise Agreement", "Financial Statements", "Business Plan"],
-      rejectionReason: "Incomplete financial documentation"
-    },
-    {
-      id: "BRG-2024-004",
-      permitType: "Barangay Permit",
-      application_type: "New",
-      status: "Approved",
-      applicantName: "John Smith",
-      businessName: "Smith Coffee Shop",
-      submittedDate: "2024-02-10",
-      approvedDate: "2024-02-12",
-      rejectedDate: null,
-      expirationDate: "2024-12-31",
-      address: "123 Main Street, Cityville",
-      contactNumber: "+1-555-0101",
-      fees: "₱75.00",
-      requirements: ["Barangay Clearance", "Community Tax Certificate"]
-    },
-    {
-      id: "ENV-2024-005",
-      permitType: "Environmental Permit",
-      application_type: "New",
-      status: "For Compliance",
-      applicantName: "John Smith",
-      businessName: "Smith Coffee Shop",
-      submittedDate: "2024-02-15",
-      approvedDate: null,
-      rejectedDate: null,
-      expirationDate: "2025-02-14",
-      address: "123 Main Street, Cityville",
-      contactNumber: "+1-555-0101",
-      fees: "₱180.00",
-      requirements: ["Environmental Impact Assessment", "Waste Management Plan"],
-      complianceNotes: "Environmental Impact Assessment requires additional water quality testing data."
-    }
-  ];
+  const { user } = useAuth();
 
   useEffect(() => {
-    // Simulate API call with applicant data
-    setTracking(applicantData);
-  }, []);
+    fetchApplications();
+  }, [user]);
+
+  const fetchApplications = async () => {
+    if (!user || !user.email) {
+      setError("User not authenticated");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const userEmail = user.email;
+      const userId = localStorage.getItem('user_id') || 0;
+
+      const response = await fetch(
+        `http://localhost/plms-main/backend/api/tracker.php?email=${encodeURIComponent(userEmail)}&user_id=${userId}`,
+        {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        setTracking(data.applications || []);
+      } else {
+        setError(data.message || "Failed to fetch applications");
+      }
+    } catch (err) {
+      console.error("Error fetching applications:", err);
+      setError("Failed to load applications. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredTracking = tracking.filter((t) =>
-    `₱{t.permitType} ₱{t.status} ₱{t.application_type} ₱{t.applicantName} ₱{t.businessName} ₱{t.id}`
+    `${t.permitType} ${t.status} ${t.application_type} ${t.applicantName} ${t.businessName} ${t.id}`
       .toLowerCase()
       .includes(search.toLowerCase())
   );
@@ -124,36 +80,35 @@ export default function PermitTracker() {
       return;
     }
 
-    // Simulate download process
     const permitContent = `
       OFFICIAL PERMIT DOCUMENT
       ========================
       
-      Permit ID: ₱{permit.id}
-      Permit Type: ₱{permit.permitType}
-      Application Type: ₱{permit.application_type}
-      Status: ₱{permit.status}
+      Permit ID: ${permit.id}
+      Permit Type: ${permit.permitType}
+      Application Type: ${permit.application_type}
+      Status: ${permit.status}
       
-      Applicant: ₱{permit.applicantName}
-      Business: ₱{permit.businessName}
-      Address: ₱{permit.address}
+      Applicant: ${permit.applicantName}
+      Business: ${permit.businessName}
+      Address: ${permit.address}
       
-      Submitted: ₱{permit.submittedDate}
-      Approved: ₱{permit.approvedDate}
-      Expires: ₱{permit.expirationDate}
+      Submitted: ${permit.submittedDate}
+      Approved: ${permit.approvedDate}
+      Expires: ${permit.expirationDate}
       
-      Fees Paid: ₱{permit.fees}
+      Fees Paid: ${permit.fees}
       
       This document serves as official proof of permit approval.
       
-      Generated on: ₱{new Date().toLocaleDateString()}
+      Generated on: ${new Date().toLocaleDateString()}
     `;
 
     const blob = new Blob([permitContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `permit-₱{permit.id}.txt`;
+    a.download = `permit-${permit.id}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -210,8 +165,8 @@ export default function PermitTracker() {
       <div className="w-full max-w-2xl mx-auto mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
         <div className="text-center">
           <h3 className="font-semibold text-blue-800 dark:text-blue-300 text-sm">Applicant Information</h3>
-          <p className="text-sm"><strong>Name:</strong> John Smith</p>
-          <p className="text-sm"><strong>Applicant ID:</strong> PA20251001</p>
+          <p className="text-sm"><strong>Name:</strong> {user?.fullName || user?.username || 'N/A'}</p>
+          <p className="text-sm"><strong>Email:</strong> {user?.email || 'N/A'}</p>
         </div>
       </div>
 
@@ -226,7 +181,23 @@ export default function PermitTracker() {
         />
       </div>
 
-      {tracking.length === 0 ? (
+      {loading ? (
+        <div className="flex flex-col items-center justify-center flex-grow py-12">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading your applications...</p>
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center flex-grow py-12">
+          <X className="w-12 h-12 text-red-500 mb-4" />
+          <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+          <button
+            onClick={fetchApplications}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      ) : tracking.length === 0 ? (
         <p className="text-gray-500 italic text-center flex-grow text-sm">
           No permit applications submitted
         </p>
@@ -251,10 +222,10 @@ export default function PermitTracker() {
                     <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-mono">{t.id}</td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{t.permitType}</td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                      <span className={`px-2 py-1 rounded-full text-xs ₱{
-                        t.application_type === 'New' ? 'bg-blue-100 text-blue-800' :
-                        t.application_type === 'Renewal' ? 'bg-green-100 text-green-800' :
-                        'bg-purple-100 text-purple-800'
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        t.application_type === 'New' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' :
+                        t.application_type === 'Renewal' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' :
+                        'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
                       }`}>
                         {t.application_type}
                       </span>
@@ -262,10 +233,10 @@ export default function PermitTracker() {
                     <td className="px-6 py-4 text-sm">
                       <div className="flex items-center gap-2">
                         {getStatusIcon(t.status)}
-                        <span className={`font-medium ₱{
-                          t.status === 'Approved' ? 'text-green-600' :
-                          t.status === 'Rejected' ? 'text-red-600' :
-                          'text-yellow-600'
+                        <span className={`font-medium ${
+                          t.status === 'Approved' ? 'text-green-600 dark:text-green-400' :
+                          t.status === 'Rejected' ? 'text-red-600 dark:text-red-400' :
+                          'text-yellow-600 dark:text-yellow-400'
                         }`}>
                           {t.status}
                         </span>
@@ -294,9 +265,9 @@ export default function PermitTracker() {
                         </button>
                         <button
                           onClick={() => downloadPermit(t)}
-                          className={`p-2 rounded-lg transition-colors ₱{
+                          className={`p-2 rounded-lg transition-colors ${
                             t.status === 'Approved' 
-                              ? 'text-green-600 hover:bg-green-50' 
+                              ? 'text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20' 
                               : 'text-gray-400 cursor-not-allowed'
                           }`}
                           title={t.status === 'Approved' ? 'Download Permit' : 'Available when approved'}
@@ -354,10 +325,10 @@ export default function PermitTracker() {
                     <p><strong>Permit Type:</strong> {selectedPermit.permitType}</p>
                     <p><strong>Application Type:</strong> {selectedPermit.application_type}</p>
                     <p><strong>Status:</strong> 
-                      <span className={`ml-2 ₱{
-                        selectedPermit.status === 'Approved' ? 'text-green-600' :
-                        selectedPermit.status === 'Rejected' ? 'text-red-600' :
-                        'text-yellow-600'
+                      <span className={`ml-2 ${
+                        selectedPermit.status === 'Approved' ? 'text-green-600 dark:text-green-400' :
+                        selectedPermit.status === 'Rejected' ? 'text-red-600 dark:text-red-400' :
+                        'text-yellow-600 dark:text-yellow-400'
                       }`}>
                         {selectedPermit.status}
                       </span>
@@ -447,10 +418,10 @@ export default function PermitTracker() {
                 <p className="text-sm"><strong>Fees:</strong> {selectedPermit.fees}</p>
                 <button
                   onClick={() => downloadPermit(selectedPermit)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm ₱{
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm ${
                     selectedPermit.status === 'Approved'
                       ? 'bg-green-500 hover:bg-green-600 text-white'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                   }`}
                   disabled={selectedPermit.status !== 'Approved'}
                 >

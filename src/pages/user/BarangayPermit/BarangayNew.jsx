@@ -1740,7 +1740,21 @@ export default function BarangayNew() {
           </p>
         </div>
         <button
-          onClick={() => navigate('/user/dashboard')}
+          onClick={async () => {
+            const result = await Swal.fire({
+              title: 'Leave Application?',
+              text: 'Are you sure you want to go back to the dashboard? Any unsaved progress will be lost.',
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: COLORS.danger,
+              cancelButtonColor: COLORS.primary,
+              confirmButtonText: 'Yes, leave',
+              cancelButtonText: 'Stay here'
+            });
+            if (result.isConfirmed) {
+              navigate('/user/dashboard');
+            }
+          }}
           onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
           onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
           style={{ background: COLORS.success }}

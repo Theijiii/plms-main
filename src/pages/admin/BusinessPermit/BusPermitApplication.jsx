@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 
 const API_BUSINESS = "/backend/business_permit/";
+const ZONING_API = "https://urbanplanning.goserveph.com/api/zoning-applications";
+const SANITATION_API = "https://health.goserveph.com/api/licensing_export.php";
 
 export default function BusPermitApplication() {
   const [selectedPermit, setSelectedPermit] = useState(null);
@@ -26,6 +28,10 @@ export default function BusPermitApplication() {
     approved: 0,
     rejected: 0
   });
+  const [zoningApplications, setZoningApplications] = useState([]);
+  const [sanitationPermits, setSanitationPermits] = useState([]);
+  const [zoningPermitDetails, setZoningPermitDetails] = useState(null);
+  const [sanitationPermitDetails, setSanitationPermitDetails] = useState(null);
 
   // Sort function for business permits
   const sortPermits = (permitsToSort, sortBy) => {
@@ -333,34 +339,62 @@ export default function BusPermitApplication() {
     }
   };
 
-const fetchSinglePermit = async (permitId) => {
-  try {
-    // Use permit_id instead of id in the query
-    const response = await fetch(`${API_BUSINESS}/fetch_single.php?permit_id=${permitId}`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+  const fetchZoningApplications = async () => {
+    try {
+      const response = await fetch(ZONING_API);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        setZoningApplications(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching zoning applications:", error);
     }
-    
-    const result = await response.json();
-    console.log('Fetch single result:', result);
-    
-    if (result.success && result.data) {
-      // If documents are not included, fetch them separately
-      if (!result.data.documents || result.data.documents.length === 0) {
-        const documents = await fetchPermitDocuments(permitId);
-        result.data.documents = documents;
+  };
+
+  const fetchSanitationPermits = async () => {
+    try {
+      const response = await fetch(SANITATION_API);
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        setSanitationPermits(data.data);
+      } else if (Array.isArray(data)) {
+        setSanitationPermits(data);
+      }
+    } catch (error) {
+      console.error("Error fetching sanitation permits:", error);
+    }
+  };
+
+  const fetchSinglePermit = async (permitId) => {
+    try {
+      // Use permit_id instead of id in the query
+      const response = await fetch(`${API_BUSINESS}/fetch_single.php?permit_id=${permitId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      return result.data;
-    } else {
-      throw new Error(result.message || 'Failed to fetch permit details');
+      const result = await response.json();
+      console.log('Fetch single result:', result);
+      
+      if (result.success && result.data) {
+        // If documents are not included, fetch them separately
+        if (!result.data.documents || result.data.documents.length === 0) {
+          const documents = await fetchPermitDocuments(permitId);
+          result.data.documents = documents;
+        }
+        
+        return result.data;
+      } else {
+        throw new Error(result.message || 'Failed to fetch permit details');
+      }
+    } catch (err) {
+      console.error('Error fetching single permit:', err);
+      return null;
     }
-  } catch (err) {
-    console.error('Error fetching single permit:', err);
-    return null;
-  }
-};
+  };
 
   // Fetch documents separately if needed
   const fetchPermitDocuments = async (permitId) => {
@@ -522,6 +556,8 @@ const fetchSinglePermit = async (permitId) => {
 
   useEffect(() => {
     fetchPermits();
+    fetchZoningApplications();
+    fetchSanitationPermits();
   }, []);
 
   const openModal = async (permit) => {
@@ -534,12 +570,33 @@ const fetchSinglePermit = async (permitId) => {
           ...detailedPermit,
           uiStatus: uiStatus
         });
+        
+        // Fetch zoning and sanitation permit details if IDs exist
+        if (detailedPermit.zoning_permit_id) {
+          const zoningDetails = zoningApplications.find(
+            z => z.application_id === detailedPermit.zoning_permit_id
+          );
+          setZoningPermitDetails(zoningDetails || null);
+        } else {
+          setZoningPermitDetails(null);
+        }
+        
+        if (detailedPermit.sanitation_permit_id) {
+          const sanitationDetails = sanitationPermits.find(
+            s => s.permit_id === detailedPermit.sanitation_permit_id
+          );
+          setSanitationPermitDetails(sanitationDetails || null);
+        } else {
+          setSanitationPermitDetails(null);
+        }
       } else {
         const uiStatus = getUIStatus(permit.status);
         setSelectedPermit({
           ...permit,
           uiStatus: uiStatus
         });
+        setZoningPermitDetails(null);
+        setSanitationPermitDetails(null);
       }
       
       setActionComment('');
@@ -551,6 +608,8 @@ const fetchSinglePermit = async (permitId) => {
         ...permit,
         uiStatus: uiStatus
       });
+      setZoningPermitDetails(null);
+      setSanitationPermitDetails(null);
       setActionComment('');
       setShowModal(true);
     }
@@ -562,6 +621,8 @@ const fetchSinglePermit = async (permitId) => {
     setSelectedFile(null);
     setShowFilePreview(false);
     setShowModal(false);
+    setZoningPermitDetails(null);
+    setSanitationPermitDetails(null);
   };
 
   const handleApprove = async () => {
@@ -584,32 +645,32 @@ const fetchSinglePermit = async (permitId) => {
     await updatePermitStatus(selectedPermit.permit_id, 'Pending', actionComment);
   };
 
-const viewFile = async (file) => {
-  try {
-    if (!file || !file.file_path) {
-      alert('File path not available');
-      return;
+  const viewFile = async (file) => {
+    try {
+      if (!file || !file.file_path) {
+        alert('File path not available');
+        return;
+      }
+      
+      // Extract filename
+      const filename = file.file_path.split('/').pop();
+      
+      // Call API endpoint instead of direct file access
+      const fullUrl = `${API_BUSINESS}/uploads/${encodeURIComponent(filename)}`;
+      
+      // For API, we can skip the HEAD check and just try to open/download
+      setSelectedFile({
+        ...file,
+        url: fullUrl,
+        name: file.document_name || file.document_type || 'Document'
+      });
+      setShowFilePreview(true);
+      
+    } catch (err) {
+      console.error('Error accessing file:', err);
+      alert('Unable to access the file');
     }
-    
-    // Extract filename
-    const filename = file.file_path.split('/').pop();
-    
-    // Call API endpoint instead of direct file access
-    const fullUrl = `${API_BUSINESS}/uploads/${encodeURIComponent(filename)}`;
-    
-    // For API, we can skip the HEAD check and just try to open/download
-    setSelectedFile({
-      ...file,
-      url: fullUrl,
-      name: file.document_name || file.document_type || 'Document'
-    });
-    setShowFilePreview(true);
-    
-  } catch (err) {
-    console.error('Error accessing file:', err);
-    alert('Unable to access the file');
-  }
-};
+  };
 
   const closeFilePreview = () => {
     setSelectedFile(null);
@@ -1157,150 +1218,291 @@ const viewFile = async (file) => {
                 </div>
               </div>
 
+              {/* Prerequisite Permits - Only show for NEW permit type */}
+              {selectedPermit.permit_type === 'NEW' && (
+                <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Prerequisite Permits</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Zoning Permit */}
+                    <div className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-gray-50 dark:bg-slate-700/50">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
+                          </div>
+                          <label className="text-sm font-semibold text-gray-900 dark:text-white">Zoning Permit</label>
+                        </div>
+                        {zoningPermitDetails && (
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            zoningPermitDetails.status === 'approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                            zoningPermitDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                            zoningPermitDetails.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                            'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                          }`}>
+                            {zoningPermitDetails.status ? zoningPermitDetails.status.toUpperCase() : 'N/A'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Permit ID</p>
+                          <p className="text-sm font-mono font-medium text-gray-900 dark:text-white">
+                            {selectedPermit.zoning_permit_id || 'Not provided'}
+                          </p>
+                        </div>
+                        {zoningPermitDetails && (
+                          <>
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Applicant</p>
+                              <p className="text-sm text-gray-900 dark:text-white">
+                                {zoningPermitDetails.first_name} {zoningPermitDetails.last_name}
+                              </p>
+                            </div>
+                            {zoningPermitDetails.business_name && (
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Business</p>
+                                <p className="text-sm text-gray-900 dark:text-white">
+                                  {zoningPermitDetails.business_name}
+                                </p>
+                              </div>
+                            )}
+                            {zoningPermitDetails.application_date && (
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Application Date</p>
+                                <p className="text-sm text-gray-900 dark:text-white">
+                                  {new Date(zoningPermitDetails.application_date).toLocaleDateString()}
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {!zoningPermitDetails && selectedPermit.zoning_permit_id && (
+                          <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
+                            ⚠️ Permit details not found in zoning system
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Sanitation Permit */}
+                    <div className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-gray-50 dark:bg-slate-700/50">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                            <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                            </svg>
+                          </div>
+                          <label className="text-sm font-semibold text-gray-900 dark:text-white">Sanitation Permit</label>
+                        </div>
+                        {sanitationPermitDetails && (
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            sanitationPermitDetails.status === 'approved' || sanitationPermitDetails.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                            sanitationPermitDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                            sanitationPermitDetails.status === 'rejected' || sanitationPermitDetails.status === 'expired' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                            'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                          }`}>
+                            {sanitationPermitDetails.status ? sanitationPermitDetails.status.toUpperCase() : 'N/A'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Permit ID</p>
+                          <p className="text-sm font-mono font-medium text-gray-900 dark:text-white">
+                            {selectedPermit.sanitation_permit_id || 'Not provided'}
+                          </p>
+                        </div>
+                        {sanitationPermitDetails && (
+                          <>
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Establishment</p>
+                              <p className="text-sm text-gray-900 dark:text-white">
+                                {sanitationPermitDetails.establishment_name || sanitationPermitDetails.business_name || 'N/A'}
+                              </p>
+                            </div>
+                            {sanitationPermitDetails.owner_name && (
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Owner</p>
+                                <p className="text-sm text-gray-900 dark:text-white">
+                                  {sanitationPermitDetails.owner_name}
+                                </p>
+                              </div>
+                            )}
+                            {sanitationPermitDetails.issue_date && (
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Issue Date</p>
+                                <p className="text-sm text-gray-900 dark:text-white">
+                                  {new Date(sanitationPermitDetails.issue_date).toLocaleDateString()}
+                                </p>
+                              </div>
+                            )}
+                            {sanitationPermitDetails.expiry_date && (
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Expiry Date</p>
+                                <p className="text-sm text-gray-900 dark:text-white">
+                                  {new Date(sanitationPermitDetails.expiry_date).toLocaleDateString()}
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {!sanitationPermitDetails && selectedPermit.sanitation_permit_id && (
+                          <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
+                            ⚠️ Permit details not found in sanitation system
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Documents Section - Updated */}
-{/* Documents Section - Updated */}
-<div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-  <div className="flex justify-between items-center mb-4">
-    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Submitted Documents</h3>
-    {selectedPermit.documents && (
-      <span className="text-sm text-gray-500 dark:text-gray-400">
-        {selectedPermit.documents.length} document{selectedPermit.documents.length !== 1 ? 's' : ''}
-      </span>
-    )}
-  </div>
-  
-  {selectedPermit.documents && selectedPermit.documents.length > 0 ? (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {selectedPermit.documents.map((doc, index) => {
-        const fileIcon = getFileIcon(doc.file_type, doc.document_name);
-        const fileTypeName = getFileTypeName(doc.file_type, doc.document_name);
-        const fileExtension = getFileExtension(doc.document_name);
-        const isImage = isImageFile(doc.file_type, doc.document_name);
-        const displayName = doc.document_type ? doc.document_type.replace(/_/g, ' ') : 'Document';
-        
-        return (
-          <div 
-            key={index} 
-            className="flex items-center justify-between p-4 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              {/* File Type Icon */}
-              <div className={`p-3 rounded-lg ${fileIcon.bgColor} ${fileIcon.textColor}`}>
-                {doc.file_type?.includes('image/') ? (
-                  <Image className="w-6 h-6" />
-                ) : doc.file_type?.includes('pdf') || doc.document_name?.endsWith('.pdf') ? (
-                  <FileText className="w-6 h-6" />
-                ) : doc.file_type?.includes('word') || doc.document_name?.endsWith('.doc') || doc.document_name?.endsWith('.docx') ? (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                ) : doc.file_type?.includes('excel') || doc.document_name?.endsWith('.xls') || doc.document_name?.endsWith('.xlsx') ? (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                ) : doc.file_type?.includes('powerpoint') || doc.document_name?.endsWith('.ppt') || doc.document_name?.endsWith('.pptx') ? (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
+              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Submitted Documents</h3>
+                  {selectedPermit.documents && (
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {selectedPermit.documents.length} document{selectedPermit.documents.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                
+                {selectedPermit.documents && selectedPermit.documents.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedPermit.documents.map((doc, index) => {
+                      const fileIcon = getFileIcon(doc.file_type, doc.document_name);
+                      const fileTypeName = getFileTypeName(doc.file_type, doc.document_name);
+                      const fileExtension = getFileExtension(doc.document_name);
+                      const isImage = isImageFile(doc.file_type, doc.document_name);
+                      const displayName = doc.document_type ? doc.document_type.replace(/_/g, ' ') : 'Document';
+                      
+                      return (
+                        <div 
+                          key={index} 
+                          className="flex items-center justify-between p-4 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* File Type Icon */}
+                            <div className={`p-3 rounded-lg ${fileIcon.bgColor} ${fileIcon.textColor}`}>
+                              {doc.file_type?.includes('image/') ? (
+                                <Image className="w-6 h-6" />
+                              ) : doc.file_type?.includes('pdf') || doc.document_name?.endsWith('.pdf') ? (
+                                <FileText className="w-6 h-6" />
+                              ) : doc.file_type?.includes('word') || doc.document_name?.endsWith('.doc') || doc.document_name?.endsWith('.docx') ? (
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              ) : doc.file_type?.includes('excel') || doc.document_name?.endsWith('.xls') || doc.document_name?.endsWith('.xlsx') ? (
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              ) : doc.file_type?.includes('powerpoint') || doc.document_name?.endsWith('.ppt') || doc.document_name?.endsWith('.pptx') ? (
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                </svg>
+                              ) : (
+                                <FileText className="w-6 h-6" />
+                              )}
+                            </div>
+                            
+                            {/* Document Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                  {displayName}
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${fileIcon.bgColor} ${fileIcon.textColor}`}>
+                                  {fileExtension}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                {doc.document_name || 'No filename'}
+                              </div>
+                              <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                {fileTypeName} • {(doc.file_size / 1024).toFixed(2)} KB
+                              </div>
+                              <div className="text-xs text-gray-400 dark:text-gray-500">
+                                Uploaded: {doc.upload_date ? new Date(doc.upload_date).toLocaleDateString() : 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Action Buttons - Only show View for images, Download for all */}
+                          <div className="flex flex-col gap-2">
+                            {isImage ? (
+                              <>
+                                <button 
+                                  onClick={() => viewFile(doc)}
+                                  className="px-3 py-1.5 text-xs bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px]"
+                                  title="Preview image"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                  View
+                                </button>
+                                
+                                <a 
+                                  href={doc.file_path ? `${API_BUSINESS}/${doc.file_path}` : '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1.5 text-xs bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px] text-center"
+                                  title="Download image"
+                                  onClick={(e) => {
+                                    if (!doc.file_path) {
+                                      e.preventDefault();
+                                      alert('Download link not available');
+                                    }
+                                  }}
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                  </svg>
+                                  Download
+                                </a>
+                              </>
+                            ) : (
+                              // Only Download button for non-image files
+                              <a 
+                                href={doc.file_path ? `${API_BUSINESS}/${doc.file_path}` : '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-2 text-xs bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px] text-center"
+                                title="Download document"
+                                onClick={(e) => {
+                                  if (!doc.file_path) {
+                                    e.preventDefault();
+                                    alert('Download link not available');
+                                  }
+                                }}
+                              >
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Download
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <FileText className="w-6 h-6" />
+                  <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
+                    <svg className="w-16 h-16 text-gray-300 dark:text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      No documents submitted for this application.
+                    </p>
+                  </div>
                 )}
               </div>
-              
-              {/* Document Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {displayName}
-                  </span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${fileIcon.bgColor} ${fileIcon.textColor}`}>
-                    {fileExtension}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {doc.document_name || 'No filename'}
-                </div>
-                <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                  {fileTypeName} • {(doc.file_size / 1024).toFixed(2)} KB
-                </div>
-                <div className="text-xs text-gray-400 dark:text-gray-500">
-                  Uploaded: {doc.upload_date ? new Date(doc.upload_date).toLocaleDateString() : 'N/A'}
-                </div>
-              </div>
-            </div>
-            
-            {/* Action Buttons - Only show View for images, Download for all */}
-            <div className="flex flex-col gap-2">
-              {isImage ? (
-                <>
-                  <button 
-                    onClick={() => viewFile(doc)}
-                    className="px-3 py-1.5 text-xs bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px]"
-                    title="Preview image"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    View
-                  </button>
-                  
-                  <a 
-                    href={doc.file_path ? `${API_BUSINESS}/${doc.file_path}` : '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1.5 text-xs bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px] text-center"
-                    title="Download image"
-                    onClick={(e) => {
-                      if (!doc.file_path) {
-                        e.preventDefault();
-                        alert('Download link not available');
-                      }
-                    }}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download
-                  </a>
-                </>
-              ) : (
-                // Only Download button for non-image files
-                <a 
-                  href={doc.file_path ? `${API_BUSINESS}/${doc.file_path}` : '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-2 text-xs bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px] text-center"
-                  title="Download document"
-                  onClick={(e) => {
-                    if (!doc.file_path) {
-                      e.preventDefault();
-                      alert('Download link not available');
-                    }
-                  }}
-                >
-                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Download
-                </a>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  ) : (
-    <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
-      <svg className="w-16 h-16 text-gray-300 dark:text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-      <p className="text-gray-500 dark:text-gray-400">
-        No documents submitted for this application.
-      </p>
-    </div>
-  )}
-</div>
 
               {/* Review Comments Section */}
               <div className="border-t border-gray-200 dark:border-slate-700 pt-6">

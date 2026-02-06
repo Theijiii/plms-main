@@ -1465,8 +1465,7 @@ const handleSubmit = async () => {
               </div>
               <div>
                 <h1 className="text-2xl md:text-4xl font-bold" style={{ color: COLORS.primary }}>
-                  Business Amendment Application
-                </h1>
+                  BUSINESS AMENDMENT                 </h1>
                 <p className={`mt-1 text-lg font-semibold ${selectedAmendment?.formColor || 'text-gray-800'}`}>
                   {selectedAmendment?.title}
                 </p>
