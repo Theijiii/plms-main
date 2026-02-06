@@ -1114,6 +1114,12 @@ const viewFile = (file) => {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
+                    <label className="text-sm font-medium text-gray-500">Applicant ID</label>
+                    <p className="text-lg font-mono font-bold text-[#4CAF50] mt-1">
+                      {selectedPermit.applicant_id || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
                     <label className="text-sm font-medium text-gray-500">Full Name</label>
                     <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
                       {selectedPermit.first_name} {selectedPermit.middle_name} {selectedPermit.last_name} {selectedPermit.suffix}

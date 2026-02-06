@@ -295,9 +295,52 @@ export default function BarangayNew() {
       const middleNameMatch = formData.middle_name ? 
         fuzzyMatch(formData.middle_name, extractedText) : null;
       
+      // Enhanced ID number verification for Philippine National ID and other formats
+      let idNumberMatch = false;
       const idNumberNormalized = normalizeText(formData.id_number);
-      const idNumberMatch = extractedText.includes(idNumberNormalized) || 
-        fuzzyMatch(formData.id_number, extractedText) > 0.8;
+      const userIdNumber = formData.id_number.trim();
+      
+      // Check if this is Philippine National ID format (XXXX-XXXX-XXXX-XXXX or 16 digits)
+      const isPhilippineNationalID = formData.id_type === "Philippine National ID (PhilSys ID)";
+      
+      if (isPhilippineNationalID) {
+        // Philippine National ID specific verification
+        // Format: XXXX-XXXX-XXXX-XXXX (16 digits with dashes)
+        const digitsOnly = userIdNumber.replace(/[^0-9]/g, '');
+        
+        // Check various possible formats in the extracted text:
+        // 1. Exact match with dashes: XXXX-XXXX-XXXX-XXXX
+        // 2. With spaces: XXXX XXXX XXXX XXXX
+        // 3. Without separators: XXXXXXXXXXXXXXXX
+        // 4. OCR might misread dashes as other chars
+        const possibleFormats = [
+          userIdNumber, // Original format
+          digitsOnly, // Just digits
+          digitsOnly.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1-$2-$3-$4'), // With dashes
+          digitsOnly.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1 $2 $3 $4'), // With spaces
+          digitsOnly.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1.$2.$3.$4'), // With dots
+        ];
+        
+        // Check if any format appears in the text
+        idNumberMatch = possibleFormats.some(format => {
+          const normalizedFormat = normalizeText(format);
+          return extractedText.includes(normalizedFormat) || 
+                 text.includes(format) ||
+                 normalizeText(text).includes(normalizedFormat);
+        });
+        
+        // Also check for partial matches with high confidence for 16-digit IDs
+        if (!idNumberMatch && digitsOnly.length === 16) {
+          // Look for the 16 consecutive digits in the extracted text
+          const textDigitsOnly = text.replace(/[^0-9]/g, '');
+          idNumberMatch = textDigitsOnly.includes(digitsOnly);
+        }
+      } else {
+        // Standard ID number verification for other ID types
+        idNumberMatch = extractedText.includes(idNumberNormalized) || 
+                       text.includes(userIdNumber) ||
+                       fuzzyMatch(userIdNumber, extractedText) > 0.8;
+      }
 
       let birthdateMatch = null;
       if (formData.birthdate) {
@@ -420,7 +463,21 @@ export default function BarangayNew() {
       if (!formData.first_name || formData.first_name.trim() === '') newErrors.first_name = 'First name is required';
       if (!formData.last_name || formData.last_name.trim() === '') newErrors.last_name = 'Last name is required';
       if (!formData.mobile_number || formData.mobile_number.trim() === '') newErrors.mobile_number = 'Mobile number is required';
-      if (!formData.birthdate) newErrors.birthdate = 'Birth date is required';
+      if (!formData.birthdate) {
+        newErrors.birthdate = 'Birth date is required';
+      } else {
+        // Validate age is 18 or above
+        const today = new Date();
+        const birthDate = new Date(formData.birthdate);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        if (age < 18) {
+          newErrors.birthdate = 'You must be at least 18 years old to apply';
+        }
+      }
       if (!formData.gender) newErrors.gender = 'Gender is required';
       if (!formData.civil_status) newErrors.civil_status = 'Civil status is required';
       if (!formData.nationality || formData.nationality.trim() === '') newErrors.nationality = 'Nationality is required';
@@ -455,6 +512,15 @@ export default function BarangayNew() {
       if (!formData.last_name || formData.last_name.trim() === '') return false;
       if (!formData.mobile_number || formData.mobile_number.trim() === '') return false;
       if (!formData.birthdate) return false;
+      // Check age is 18 or above
+      const today = new Date();
+      const birthDate = new Date(formData.birthdate);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      if (age < 18) return false;
       if (!formData.gender) return false;
       if (!formData.civil_status) return false;
       if (!formData.nationality || formData.nationality.trim() === '') return false;

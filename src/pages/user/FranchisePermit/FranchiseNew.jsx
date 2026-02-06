@@ -1668,6 +1668,11 @@ export default function FranchiseNew() {
       if (uploadedCount < requiredDocs.length) {
         newErrors.min_documents = `All required documents must be uploaded`;
       }
+      
+      // Driver's license must be AI verified to proceed
+      if (formData.drivers_license && !documentVerification.drivers_license?.isVerified) {
+        newErrors.drivers_license_verification = 'Driver\'s License must be AI verified before proceeding. Click the "Verify" button.';
+      }
     }
     
     if (step === 5) {
@@ -3208,6 +3213,18 @@ export default function FranchiseNew() {
                   description: 'Latest emission test result', 
                   optional: true 
                 },
+                { 
+                  name: 'id_picture', 
+                  label: '2x2 ID Picture', 
+                  description: 'Recent 2x2 ID photo', 
+                  optional: true 
+                },
+                { 
+                  name: 'official_receipt', 
+                  label: 'Official Receipt', 
+                  description: 'Official receipt for payment', 
+                  optional: true 
+                },
               ].map((doc) => (
                 <div key={doc.name} className="flex flex-col p-4 border border-gray-300 rounded-lg">
                   <div className="mb-3">
@@ -4099,11 +4116,12 @@ export default function FranchiseNew() {
                       { name: 'proof_of_residency', label: 'Proof of Residency', file: formData.proof_of_residency, required: true },
                       { name: 'barangay_clearance', label: 'Barangay Clearance', file: formData.barangay_clearance, id: formData.barangay_clearance_id, required: true },
                       { name: 'lto_or_cr', label: 'LTO OR/CR', file: formData.lto_or_cr, required: true },
-                      { name: 'insurance_certificate', label: 'Insurance Certificate', file: formData.insurance_certificate, required: true },
+                      { name: 'lto_cr_copy', label: 'LTO CR Copy', file: formData.lto_cr_copy, required: true },
                       { name: 'drivers_license', label: 'Driver\'s License', file: formData.drivers_license, required: true },
-                      { name: 'emission_test', label: 'Emission Test', file: formData.emission_test, required: true },
-                      { name: 'id_picture', label: '2x2 ID Picture', file: formData.id_picture, required: true },
-                      { name: 'official_receipt', label: 'Official Receipt', file: formData.official_receipt, required: true },
+                      { name: 'insurance_certificate', label: 'Insurance Certificate', file: formData.insurance_certificate, required: false },
+                      { name: 'emission_test', label: 'Emission Test', file: formData.emission_test, required: false },
+                      { name: 'id_picture', label: '2x2 ID Picture', file: formData.id_picture, required: false },
+                      { name: 'official_receipt', label: 'Official Receipt', file: formData.official_receipt, required: false },
                       ...(formData.permit_subtype === 'FRANCHISE' ? 
                         [{ name: 'toda_endorsement', label: 'TODA Endorsement', file: formData.toda_endorsement, required: true }] : 
                         []
@@ -4117,13 +4135,25 @@ export default function FranchiseNew() {
                         []
                       )
                     ].map((doc) => (
-                      <div key={doc.name} className={`p-4 border-2 rounded-lg ${doc.file || doc.id ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                      <div key={doc.name} className={`p-4 border-2 rounded-lg ${
+                        doc.file || doc.id ? 
+                          (documentVerification[doc.name]?.isVerified ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200') : 
+                          (doc.required ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200')
+                      }`}>
                         <div className="flex items-start justify-between">
                           <div className="flex items-start flex-1">
                             {doc.file || doc.id ? (
-                              <Check className="w-5 h-5 text-green-600 mr-3 mt-1 flex-shrink-0" />
+                              documentVerification[doc.name]?.isVerified ? (
+                                <Check className="w-5 h-5 text-green-600 mr-3 mt-1 flex-shrink-0" />
+                              ) : (
+                                <AlertCircle className="w-5 h-5 text-yellow-600 mr-3 mt-1 flex-shrink-0" />
+                              )
                             ) : (
-                              <X className="w-5 h-5 text-red-600 mr-3 mt-1 flex-shrink-0" />
+                              doc.required ? (
+                                <X className="w-5 h-5 text-red-600 mr-3 mt-1 flex-shrink-0" />
+                              ) : (
+                                <AlertCircle className="w-5 h-5 text-gray-400 mr-3 mt-1 flex-shrink-0" />
+                              )
                             )}
                             <div className="flex-1">
                               <span className={`font-semibold ${doc.required ? 'text-red-600' : 'text-gray-700'}`}>
@@ -4135,11 +4165,25 @@ export default function FranchiseNew() {
                                     <span className="font-medium">File:</span> {doc.file.name}
                                     <br />
                                     <span className="text-xs text-gray-500">Size: {(doc.file.size / 1024).toFixed(2)} KB</span>
+                                    <br />
+                                    {documentVerification[doc.name]?.isVerified ? (
+                                      <span className="text-xs text-green-600 font-medium flex items-center mt-1">
+                                        <Check className="w-3 h-3 mr-1" /> AI Verified
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-yellow-600 font-medium flex items-center mt-1">
+                                        <AlertCircle className="w-3 h-3 mr-1" /> Not AI Verified
+                                      </span>
+                                    )}
                                   </>
                                 ) : doc.id ? (
                                   <><span className="font-medium">Clearance ID:</span> {doc.id}</>
                                 ) : (
-                                  <span className="text-red-600 font-medium">⚠ Not provided - Required for submission</span>
+                                  doc.required ? (
+                                    <span className="text-red-600 font-medium">⚠ Not provided - Required for submission</span>
+                                  ) : (
+                                    <span className="text-gray-500 font-medium">Not provided - Optional</span>
+                                  )
                                 )}
                               </p>
                               {doc.file && doc.file.type && doc.file.type.startsWith('image/') && (

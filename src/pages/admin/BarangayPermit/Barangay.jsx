@@ -47,6 +47,9 @@ import {
 } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
+import Swal from "sweetalert2";
 
 // Register Chart.js components
 ChartJS.register(
@@ -199,6 +202,7 @@ export default function BarangayPermitAnalytics() {
   const [purposeFilter, setPurposeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [exporting, setExporting] = useState(false);
+  const [exportType, setExportType] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [selectedPermit, setSelectedPermit] = useState(null);
   const [actionComment, setActionComment] = useState('');
@@ -212,7 +216,7 @@ export default function BarangayPermitAnalytics() {
   const dragStartRef = useRef({ x: 0, y: 0 });
   const imagePositionRef = useRef({ x: 0, y: 0 });
 
-  const itemsPerPage = 8;
+  const itemsPerPage = 15;
 
   // Fetch permits from API
   const fetchPermits = async () => {
@@ -703,7 +707,106 @@ export default function BarangayPermitAnalytics() {
       p.value.toLowerCase() === purpose?.toLowerCase()
     );
     return purposeObj?.icon || FileText;
-  }, []);
+  }, [permits, topPurposes]);
+
+  // Weekly Applications Trend (Last 8 weeks)
+  const weeklyApplicationsData = useMemo(() => {
+    const weeksData = [];
+    const currentDate = new Date();
+    
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date(currentDate);
+      weekStart.setDate(currentDate.getDate() - (i * 7));
+      weekStart.setHours(0, 0, 0, 0);
+      
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      
+      const weekLabel = `Week ${8 - i}`;
+      const count = permits.filter(p => {
+        const appDate = new Date(p.application_date);
+        return appDate >= weekStart && appDate <= weekEnd;
+      }).length;
+      
+      weeksData.push({ label: weekLabel, count, weekStart, weekEnd });
+    }
+    
+    return {
+      labels: weeksData.map(w => w.label),
+      datasets: [{
+        label: 'Total Applications',
+        data: weeksData.map(w => w.count),
+        borderColor: '#4CAF50',
+        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 3,
+        pointBackgroundColor: '#4CAF50',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      }],
+      rawData: weeksData
+    };
+  }, [permits]);
+
+  // Monthly Total Applications Trend (Last 12 months)
+  const monthlyTotalApplicationsData = useMemo(() => {
+    const monthsData = [];
+    const currentDate = new Date();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    
+    for (let i = 11; i >= 0; i--) {
+      const monthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59, 999);
+      
+      const monthLabel = `${monthNames[monthDate.getMonth()]} ${monthDate.getFullYear().toString().slice(-2)}`;
+      const count = permits.filter(p => {
+        const appDate = new Date(p.application_date);
+        return appDate >= monthStart && appDate <= monthEnd;
+      }).length;
+      
+      monthsData.push({ label: monthLabel, count, monthStart, monthEnd });
+    }
+    
+    return {
+      labels: monthsData.map(m => m.label),
+      datasets: [{
+        label: 'Total Applications',
+        data: monthsData.map(m => m.count),
+        borderColor: '#4A90E2',
+        backgroundColor: 'rgba(74, 144, 226, 0.1)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 3,
+        pointBackgroundColor: '#4A90E2',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      }],
+      rawData: monthsData
+    };
+  }, [permits]);
+
+  // Status Distribution Chart Data
+  const statusChartData = useMemo(() => ({
+    labels: ["Approved", "For Compliance", "Rejected"],
+    datasets: [{
+      data: [
+        stats.approved || 0,
+        stats.pending || 0,
+        stats.rejected || 0
+      ],
+      backgroundColor: ['#4CAF50', '#FDA811', '#E53935'],
+      hoverBackgroundColor: ['#45a049', '#fc9d0b', '#d32f2f'],
+      borderColor: '#ffffff',
+      borderWidth: 3,
+    }]
+  }), [stats]);
 
   // Filter permits based on filters
   useEffect(() => {
@@ -779,19 +882,38 @@ export default function BarangayPermitAnalytics() {
   // Export to CSV
   const exportToCSV = useCallback(() => {
     setExporting(true);
-    const headers = ["Permit ID", "Applicant Name", "Purpose", "Barangay", "Status", "Application Date", "Clearance Fee", "Contact"];
+    setExportType("csv");
+    
+    const headers = [
+      "Permit ID", "Applicant Name", "Purpose", "Category", "Barangay",
+      "Status", "Application Date", "Clearance Fee", "Contact Number",
+      "Email", "Address", "Valid ID Type", "Valid ID Number"
+    ];
+    
     const csvContent = [
       headers.join(","),
-      ...filteredPermits.map(p => [
-        `BP-${String(p.permit_id).padStart(4, '0')}`,
-        `${p.first_name} ${p.middle_name || ''} ${p.last_name} ${p.suffix || ''}`.trim(),
-        p.purpose || "N/A",
-        p.barangay || "N/A",
-        getUIStatus(p.status),
-        p.application_date ? new Date(p.application_date).toLocaleDateString() : "N/A",
-        `₱${p.clearance_fee || '0.00'}`,
-        p.mobile_number || p.email || "N/A"
-      ].map(field => `"${field || ''}"`).join(","))
+      ...permits.map(p => {
+        const purposeObj = PERMIT_PURPOSES.find(purpose => purpose.value === p.purpose);
+        const category = purposeObj ? (
+          PURPOSE_CATEGORIES.find(cat => purposeObj.label.includes(cat.label.split('-')[0]))?.label || 'Other'
+        ) : 'Other';
+        
+        return [
+          `BP-${String(p.permit_id).padStart(4, '0')}`,
+          `${p.first_name} ${p.middle_name || ''} ${p.last_name} ${p.suffix || ''}`.trim(),
+          p.purpose || "N/A",
+          category,
+          p.barangay || "N/A",
+          getUIStatus(p.status),
+          p.application_date ? new Date(p.application_date).toLocaleDateString() : "N/A",
+          p.clearance_fee || '0.00',
+          p.mobile_number || "N/A",
+          p.email || "N/A",
+          p.address || "N/A",
+          p.valid_id_type || "N/A",
+          p.valid_id_number || "N/A"
+        ].map(field => `"${field || ''}"`).join(",");
+      })
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -799,9 +921,177 @@ export default function BarangayPermitAnalytics() {
     const a = document.createElement("a");
     a.href = url;
     a.download = `barangay-permits-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
     setExporting(false);
-  }, [filteredPermits]);
+    setExportType("");
+  }, [permits]);
+
+  // Export to PDF
+  const exportToPDF = async () => {
+    setExporting(true);
+    setExportType("pdf");
+    
+    try {
+      Swal.fire({
+        title: 'Generating PDF...',
+        text: 'Please wait while we create your report',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const pdfContainer = document.createElement('div');
+      pdfContainer.style.cssText = 'position: absolute; left: -9999px; width: 1200px; background: #FBFBFB; padding: 30px; font-family: Arial, sans-serif;';
+      
+      pdfContainer.innerHTML = `
+        <div style="margin-bottom: 30px;">
+          <h1 style="color: #4D4A4A; font-size: 28px; margin: 0 0 10px 0;">Barangay Clearance Analytics</h1>
+          <p style="color: #666; margin: 0;">Generated on ${new Date().toLocaleDateString()}</p>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px;">
+          ${[
+            { title: 'Total Applications', value: stats.total, color: '#4CAF50' },
+            { title: 'Approved', value: stats.approved, color: '#4CAF50' },
+            { title: 'Pending', value: stats.pending, color: '#FDA811' },
+            { title: 'Rejected', value: stats.rejected, color: '#E53935' }
+          ].map(stat => `
+            <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 20px; background: white;">
+              <p style="color: #666; font-size: 12px; margin: 0 0 10px 0;">${stat.title}</p>
+              <p style="color: ${stat.color}; font-size: 32px; font-weight: bold; margin: 0;">${stat.value}</p>
+            </div>
+          `).join('')}
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Applications by Status</h2>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+            ${[
+              { label: 'Approved', value: stats.approved || 0, color: '#4CAF50' },
+              { label: 'For Compliance', value: stats.pending || 0, color: '#FDA811' },
+              { label: 'Rejected', value: stats.rejected || 0, color: '#E53935' }
+            ].map(stat => `
+              <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 15px; background: white; border-left: 5px solid ${stat.color};">
+                <p style="color: #4D4A4A; font-size: 14px; margin: 0 0 8px 0;">${stat.label}</p>
+                <p style="color: #4D4A4A; font-size: 24px; font-weight: bold; margin: 0;">${stat.value}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Top Permit Purposes</h2>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            ${topPurposes.slice(0, 6).map((purpose, idx) => {
+              const percentage = stats.total > 0 ? ((purpose.count / stats.total) * 100).toFixed(1) : 0;
+              return `
+                <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 12px; background: white; border-left: 5px solid ${purpose.color};">
+                  <p style="color: #4D4A4A; font-size: 12px; margin: 0 0 5px 0; font-weight: 500;">${purpose.label}</p>
+                  <p style="color: #4D4A4A; font-size: 20px; font-weight: bold; margin: 0;">${purpose.count}</p>
+                  <p style="color: #666; font-size: 11px; margin: 3px 0 0 0;">${percentage}% of total</p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Weekly Applications Trend (Last 8 Weeks)</h2>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+            ${weeklyApplicationsData.rawData.map((week, idx) => {
+              return `
+                <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 12px; background: white; text-align: center; border-left: 5px solid #4CAF50;">
+                  <p style="color: #666; font-size: 11px; margin: 0 0 5px 0;">${week.label}</p>
+                  <p style="color: #4CAF50; font-size: 24px; font-weight: bold; margin: 0;">${week.count}</p>
+                  <p style="color: #666; font-size: 10px; margin: 3px 0 0 0;">${new Date(week.weekStart).toLocaleDateString()} - ${new Date(week.weekEnd).toLocaleDateString()}</p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Monthly Applications Trend (Last 12 Months)</h2>
+          <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;">
+            ${monthlyTotalApplicationsData.rawData.map((month, idx) => {
+              return `
+                <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 10px; background: white; text-align: center; border-left: 5px solid #4A90E2;">
+                  <p style="color: #666; font-size: 10px; margin: 0 0 5px 0;">${month.label}</p>
+                  <p style="color: #4A90E2; font-size: 20px; font-weight: bold; margin: 0;">${month.count}</p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(pdfContainer);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2,
+        backgroundColor: "#FBFBFB",
+        logging: false
+      });
+
+      document.body.removeChild(pdfContainer);
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth - 20;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 10;
+
+      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + 10;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`barangay-clearance-analytics-${new Date().toISOString().split("T")[0]}.pdf`);
+
+      Swal.fire({
+        icon: 'success',
+        title: 'PDF Downloaded!',
+        text: 'Your report has been downloaded successfully.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      Swal.fire({
+        title: "Export Failed",
+        text: error.message || "Failed to generate PDF. Please try again.",
+        icon: "error"
+      });
+    } finally {
+      setExporting(false);
+      setExportType("");
+    }
+  };
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredPermits.length / itemsPerPage);
@@ -924,11 +1214,19 @@ export default function BarangayPermitAnalytics() {
             </button>
             <button
               onClick={exportToCSV}
-              disabled={exporting}
+              disabled={exporting && exportType === "csv"}
+              className="px-4 py-2 bg-white border border-[#E9E7E7] text-[#4D4A4A] rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50 font-montserrat"
+            >
+              <FileText className="w-5 h-5" />
+              <span>{exporting && exportType === "csv" ? "Exporting..." : "Export CSV"}</span>
+            </button>
+            <button
+              onClick={exportToPDF}
+              disabled={exporting && exportType === "pdf"}
               className="px-4 py-2 bg-[#4CAF50] text-white rounded-lg hover:bg-opacity-90 transition-colors flex items-center space-x-2 disabled:opacity-50 font-montserrat"
             >
-              <DownloadCloud className="w-5 h-5" />
-              <span>{exporting ? "Exporting..." : "Export Report"}</span>
+              <Download className="w-5 h-5" />
+              <span>{exporting && exportType === "pdf" ? "Generating..." : "Export PDF"}</span>
             </button>
           </div>
         </div>
@@ -1293,6 +1591,173 @@ export default function BarangayPermitAnalytics() {
           })}
         </div>
       </div>
+
+      {/* Status Distribution Chart */}
+      {permits.length > 0 && (
+        <div className="mb-6 bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Status Distribution</h3>
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Applications by approval status</p>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 h-[250px] flex items-center justify-center">
+              <Doughnut
+                data={statusChartData}
+                options={{
+                  maintainAspectRatio: false,
+                  cutout: '65%',
+                  plugins: {
+                    legend: {
+                      position: 'bottom',
+                      labels: {
+                        color: '#4D4A4A',
+                        padding: 15,
+                        usePointStyle: true,
+                        font: { family: 'Poppins' }
+                      }
+                    }
+                  }
+                }}
+              />
+            </div>
+            <div className="lg:col-span-2 flex flex-col justify-center space-y-3">
+              {[
+                { label: "Approved", value: stats.approved || 0, color: '#4CAF50' },
+                { label: "For Compliance", value: stats.pending || 0, color: '#FDA811' },
+                { label: "Rejected", value: stats.rejected || 0, color: '#E53935' }
+              ].map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 bg-[#FBFBFB] rounded-lg border border-[#E9E7E7]">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 rounded-full mr-3" style={{ backgroundColor: item.color }}></div>
+                    <span className="text-sm text-[#4D4A4A] font-poppins">{item.label}</span>
+                  </div>
+                  <span className="font-semibold text-[#4D4A4A] font-montserrat">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Weekly Applications Trend */}
+      {permits.length > 0 && (
+        <div className="mb-6 bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Weekly Applications Trend</h3>
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Total applications submitted in the last 8 weeks</p>
+          </div>
+          <div className="h-[300px]">
+            <Line
+              data={weeklyApplicationsData}
+              options={{
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                  legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' }
+                    }
+                  },
+                  tooltip: {
+                    callbacks: {
+                      title: (context) => {
+                        const weekData = weeklyApplicationsData.rawData[context[0].dataIndex];
+                        const start = new Date(weekData.weekStart).toLocaleDateString();
+                        const end = new Date(weekData.weekEnd).toLocaleDateString();
+                        return `${weekData.label}: ${start} - ${end}`;
+                      }
+                    }
+                  }
+                },
+                scales: {
+                  x: {
+                    ticks: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' }
+                    },
+                    grid: { color: 'rgba(233, 231, 231, 0.5)' }
+                  },
+                  y: {
+                    ticks: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' },
+                      stepSize: 1
+                    },
+                    grid: { color: 'rgba(233, 231, 231, 0.5)' },
+                    beginAtZero: true
+                  }
+                }
+              }}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-4 md:grid-cols-8 gap-2">
+            {weeklyApplicationsData.rawData.map((week, idx) => (
+              <div key={idx} className="text-center p-2 bg-[#FBFBFB] rounded border border-[#E9E7E7]">
+                <p className="text-xs text-[#4D4A4A] text-opacity-70 font-poppins">{week.label}</p>
+                <p className="text-lg font-bold text-[#4CAF50] font-montserrat">{week.count}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Total Applications Trend */}
+      {permits.length > 0 && (
+        <div className="mb-6 bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Monthly Applications Trend</h3>
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Total applications submitted over the last 12 months</p>
+          </div>
+          <div className="h-[300px]">
+            <Line
+              data={monthlyTotalApplicationsData}
+              options={{
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                  legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' }
+                    }
+                  }
+                },
+                scales: {
+                  x: {
+                    ticks: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' }
+                    },
+                    grid: { color: 'rgba(233, 231, 231, 0.5)' }
+                  },
+                  y: {
+                    ticks: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' },
+                      stepSize: 1
+                    },
+                    grid: { color: 'rgba(233, 231, 231, 0.5)' },
+                    beginAtZero: true
+                  }
+                }
+              }}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-6 md:grid-cols-12 gap-2">
+            {monthlyTotalApplicationsData.rawData.map((month, idx) => (
+              <div key={idx} className="text-center p-2 bg-[#FBFBFB] rounded border border-[#E9E7E7]">
+                <p className="text-xs text-[#4D4A4A] text-opacity-70 font-poppins">{month.label}</p>
+                <p className="text-lg font-bold text-[#4A90E2] font-montserrat">{month.count}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Data Table */}
       <div className="bg-white rounded-lg shadow-sm border border-[#E9E7E7] overflow-hidden">

@@ -14,6 +14,8 @@ import {
   Legend,
   Filler
 } from "chart.js";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 import {
   Search,
   Download,
@@ -137,6 +139,7 @@ export default function FranchiseDashboard() {
   const [permitSubtypeFilter, setPermitSubtypeFilter] = useState("all");
   const [permitTypeFilter, setPermitTypeFilter] = useState("all");
   const [exporting, setExporting] = useState(false);
+  const [exportType, setExportType] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({
@@ -166,7 +169,7 @@ export default function FranchiseDashboard() {
   const imagePositionRef = useRef({ x: 0, y: 0 });
   
   const ITEMS_PER_PAGE = 8;
-  const API_FRANCHISE = "/backend/franchise_permit";
+  const API_BASE = "http://localhost/plms-main/backend/franchise_permit";
 
   // Status mapping functions
   const mapStatusToFrontend = (status) => {
@@ -248,7 +251,7 @@ export default function FranchiseDashboard() {
         params.append('search', searchTerm.trim());
       }
       
-      const url = `${API_FRANCHISE}/admin_fetch.php?${params}`;
+      const url = `${API_BASE}/admin_fetch.php?${params}`;
       
       // Fetch data
       const response = await fetch(url, {
@@ -260,7 +263,7 @@ export default function FranchiseDashboard() {
       
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
-      }
+      };
       
       const data = await response.json();
       
@@ -441,10 +444,10 @@ export default function FranchiseDashboard() {
         data: topTODAs.length > 0 
           ? topTODAs.map(toda => franchises.filter(f => f.toda_name === toda).length)
           : [0],
-        backgroundColor: ["#4CAF50", "#4A90E2", "#FDA811", "#9C27B0", "#E53935", "#795548"],
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: "#E9E7E7",
+        backgroundColor: "#4CAF50",
+        hoverBackgroundColor: "#45a049",
+        borderRadius: 8,
+        borderWidth: 0,
       }]
     };
   }, [franchises]);
@@ -459,12 +462,18 @@ export default function FranchiseDashboard() {
         stats.rejected || 0
       ],
       backgroundColor: [
-        'rgba(76, 175, 80, 0.8)',
-        'rgba(253, 168, 17, 0.8)',
-        'rgba(229, 57, 53, 0.8)'
+        '#4CAF50',
+        '#FDA811',
+        '#E53935'
       ],
-      borderColor: '#FBFBFB',
-      borderWidth: 2,
+      hoverBackgroundColor: [
+        '#45a049',
+        '#fc9d0b',
+        '#d32f2f'
+      ],
+      borderColor: '#ffffff',
+      borderWidth: 3,
+      hoverBorderWidth: 4,
     }]
   }), [stats]);
 
@@ -512,11 +521,183 @@ export default function FranchiseDashboard() {
         label: type,
         data: monthlyCounts[type] || Array(last6Months.length).fill(0),
         borderColor: colors[idx],
-        backgroundColor: colors[idx] + "20",
+        backgroundColor: idx === 0 ? 'rgba(76, 175, 80, 0.15)' : 'rgba(74, 144, 226, 0.15)',
         fill: true,
-        tension: 0.4
+        tension: 0.4,
+        borderWidth: 3,
+        pointBackgroundColor: colors[idx],
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 3,
+        pointRadius: 6,
+        pointHoverRadius: 8,
+        pointHoverBackgroundColor: idx === 0 ? '#45a049' : '#3d7bc7',
       }))
     };
+  }, [franchises]);
+
+  // NEW vs RENEWAL Chart Data
+  const permitTypeChartData = useMemo(() => {
+    const newCount = franchises.filter(f => f.permit_type?.toLowerCase() === 'new').length;
+    const renewalCount = franchises.filter(f => f.permit_type?.toLowerCase() === 'renewal').length;
+    
+    return {
+      labels: ['New Applications', 'Renewals'],
+      datasets: [{
+        data: [newCount, renewalCount],
+        backgroundColor: ['#4CAF50', '#4A90E2'],
+        hoverBackgroundColor: ['#45a049', '#3d7bc7'],
+        borderColor: '#ffffff',
+        borderWidth: 3,
+      }]
+    };
+  }, [franchises]);
+
+  // Top Barangays Chart Data
+  const barangayChartData = useMemo(() => {
+    const barangayCounts = {};
+    franchises.forEach(f => {
+      const barangay = f.barangay_of_operation || 'Unknown';
+      if (barangay && barangay !== 'N/A') {
+        barangayCounts[barangay] = (barangayCounts[barangay] || 0) + 1;
+      }
+    });
+    
+    const sortedBarangays = Object.entries(barangayCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 6);
+    
+    return {
+      labels: sortedBarangays.length > 0 ? sortedBarangays.map(([name]) => name) : ['No Data'],
+      datasets: [{
+        label: 'Applications',
+        data: sortedBarangays.length > 0 ? sortedBarangays.map(([, count]) => count) : [0],
+        backgroundColor: '#FDA811',
+        hoverBackgroundColor: '#fc9d0b',
+        borderRadius: 8,
+        borderWidth: 0,
+      }]
+    };
+  }, [franchises]);
+
+  // Operator Type Distribution
+  const operatorTypeStats = useMemo(() => {
+    const operatorCounts = {};
+    franchises.forEach(f => {
+      const type = f.operator_type || 'Unknown';
+      operatorCounts[type] = (operatorCounts[type] || 0) + 1;
+    });
+    return operatorCounts;
+  }, [franchises]);
+
+  // Weekly Applications Trend (Last 8 weeks)
+  const weeklyApplicationsData = useMemo(() => {
+    const weeksData = [];
+    const currentDate = new Date();
+    
+    // Generate last 8 weeks
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date(currentDate);
+      weekStart.setDate(currentDate.getDate() - (i * 7));
+      weekStart.setHours(0, 0, 0, 0);
+      
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      
+      const weekLabel = `Week ${8 - i}`;
+      const count = franchises.filter(f => {
+        const appDate = new Date(f.created_at);
+        return appDate >= weekStart && appDate <= weekEnd;
+      }).length;
+      
+      weeksData.push({ label: weekLabel, count, weekStart, weekEnd });
+    }
+    
+    return {
+      labels: weeksData.map(w => w.label),
+      datasets: [{
+        label: 'Total Applications',
+        data: weeksData.map(w => w.count),
+        borderColor: '#4CAF50',
+        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 3,
+        pointBackgroundColor: '#4CAF50',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      }],
+      rawData: weeksData
+    };
+  }, [franchises]);
+
+  // Monthly Total Applications Trend (Last 12 months)
+  const monthlyTotalApplicationsData = useMemo(() => {
+    const monthsData = [];
+    const currentDate = new Date();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    
+    // Generate last 12 months
+    for (let i = 11; i >= 0; i--) {
+      const monthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59, 999);
+      
+      const monthLabel = `${monthNames[monthDate.getMonth()]} ${monthDate.getFullYear().toString().slice(-2)}`;
+      const count = franchises.filter(f => {
+        const appDate = new Date(f.created_at);
+        return appDate >= monthStart && appDate <= monthEnd;
+      }).length;
+      
+      monthsData.push({ label: monthLabel, count, monthStart, monthEnd });
+    }
+    
+    return {
+      labels: monthsData.map(m => m.label),
+      datasets: [{
+        label: 'Total Applications',
+        data: monthsData.map(m => m.count),
+        borderColor: '#4A90E2',
+        backgroundColor: 'rgba(74, 144, 226, 0.1)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 3,
+        pointBackgroundColor: '#4A90E2',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      }],
+      rawData: monthsData
+    };
+  }, [franchises]);
+
+  // Vehicle Age Distribution
+  const vehicleAgeStats = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const ageGroups = {
+      '0-5 years': 0,
+      '6-10 years': 0,
+      '11-15 years': 0,
+      '16+ years': 0,
+      'Unknown': 0
+    };
+    
+    franchises.forEach(f => {
+      if (f.year_acquired) {
+        const age = currentYear - f.year_acquired;
+        if (age <= 5) ageGroups['0-5 years']++;
+        else if (age <= 10) ageGroups['6-10 years']++;
+        else if (age <= 15) ageGroups['11-15 years']++;
+        else ageGroups['16+ years']++;
+      } else {
+        ageGroups['Unknown']++;
+      }
+    });
+    
+    return ageGroups;
   }, [franchises]);
 
   // Status colors - matching Barangay Permit design
@@ -617,7 +798,7 @@ export default function FranchiseDashboard() {
       fileFields.forEach(field => {
         const fileName = franchiseData[field];
         if (fileName && fileName.trim() !== '') {
-          const fileUrl = `${API_FRANCHISE}/uploads/${applicationId}/${fileName}`;
+          const fileUrl = `${API_BASE}/uploads/${applicationId}/${fileName}`;
           
           fileList.push({
             id: field,
@@ -710,7 +891,7 @@ export default function FranchiseDashboard() {
     if (!selectedFranchise || !actionComment.trim()) return;
     
     try {
-      const response = await fetch(`${API_FRANCHISE}/update_status.php`, {
+      const response = await fetch(`${API_BASE}/update_status.php`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -770,7 +951,7 @@ export default function FranchiseDashboard() {
       const franchise = franchises.find(f => f.id === id);
       if (franchise) {
         // Fetch detailed data from API
-        const response = await fetch(`${API_FRANCHISE}/fetch_single.php?application_id=${franchise.application_id}`);
+        const response = await fetch(`${API_BASE}/fetch_single.php?application_id=${franchise.application_id}`);
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data) {
@@ -872,7 +1053,7 @@ export default function FranchiseDashboard() {
       const backendStatus = mapStatusToBackend(status);
       const commentToSave = remarks || actionComment;
       
-      const response = await fetch(`${API_FRANCHISE}/update_status.php`, {
+      const response = await fetch(`${API_BASE}/update_status.php`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -914,38 +1095,61 @@ export default function FranchiseDashboard() {
   // Export to CSV
   const exportToCSV = () => {
     setExporting(true);
+    setExportType("csv");
     
     const headers = [
       "Application ID",
       "Applicant Name",
       "Permit Type",
       "Permit Subtype", 
+      "Operator Type",
       "TODA",
       "Barangay",
-      "Vehicle",
+      "District",
+      "Route/Zone",
+      "Vehicle Make",
+      "Vehicle Model",
       "Plate Number",
+      "Year Acquired",
+      "Vehicle Age",
+      "Engine Number",
+      "Chassis Number",
       "Status",
       "Contact",
       "Email",
+      "Home Address",
       "Application Date"
     ];
     
+    const currentYear = new Date().getFullYear();
     const csvContent = [
       headers.join(","),
-      ...franchises.map(f => [
-        f.id,
-        f.full_name,
-        f.permit_type,
-        f.permit_subtype,
-        f.toda_name,
-        f.barangay_of_operation,
-        `${f.make_brand} ${f.model}`,
-        f.plate_number,
-        f.status,
-        f.contact_number,
-        f.email,
-        formatDate(f.created_at)
-      ].map(field => `"${field || ''}"`).join(","))
+      ...franchises.map(f => {
+        const vehicleAge = f.year_acquired ? (currentYear - f.year_acquired) : 'N/A';
+        return [
+          f.id,
+          f.full_name,
+          f.permit_type,
+          f.permit_subtype,
+          f.operator_type,
+          f.toda_name,
+          f.barangay_of_operation,
+          f.district,
+          f.route_zone,
+          f.make_brand,
+          f.model,
+          f.plate_number,
+          f.year_acquired,
+          vehicleAge,
+          f.engine_number,
+          f.chassis_number,
+          f.status,
+          f.contact_number,
+          f.email,
+          f.home_address,
+          formatDate(f.created_at)
+        ].map(field => `"${field || ''}"`).join(",");
+      })
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -959,6 +1163,231 @@ export default function FranchiseDashboard() {
     window.URL.revokeObjectURL(url);
     
     setExporting(false);
+    setExportType("");
+  };
+
+  // Export to PDF with automatic download
+  const exportToPDF = async () => {
+    setExporting(true);
+    setExportType("pdf");
+    
+    try {
+      // Show loading indicator
+      Swal.fire({
+        title: 'Generating PDF...',
+        text: 'Please wait while we create your report',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Create a simplified PDF-friendly version
+      const pdfContainer = document.createElement('div');
+      pdfContainer.style.cssText = 'position: absolute; left: -9999px; width: 1200px; background: #FBFBFB; padding: 30px; font-family: Arial, sans-serif;';
+      
+      pdfContainer.innerHTML = `
+        <div style="margin-bottom: 30px;">
+          <h1 style="color: #4D4A4A; font-size: 28px; margin: 0 0 10px 0;">Franchise Permit Analytics</h1>
+          <p style="color: #666; margin: 0;">Generated on ${new Date().toLocaleDateString()}</p>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px;">
+          ${[
+            { title: 'Total Applications', value: dashboardStats.total, color: '#4CAF50' },
+            { title: 'Approved', value: dashboardStats.approved, color: '#4CAF50' },
+            { title: 'Pending', value: dashboardStats.pending, color: '#FDA811' },
+            { title: 'Rejected', value: dashboardStats.rejected, color: '#E53935' }
+          ].map(stat => `
+            <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 20px; background: white;">
+              <p style="color: #666; font-size: 12px; margin: 0 0 10px 0;">${stat.title}</p>
+              <p style="color: ${stat.color}; font-size: 32px; font-weight: bold; margin: 0;">${stat.value}</p>
+            </div>
+          `).join('')}
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Applications by Status</h2>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+            ${[
+              { label: 'Approved', value: stats.approved || 0, color: '#4CAF50' },
+              { label: 'For Compliance', value: (stats.pending + stats.under_review) || 0, color: '#FDA811' },
+              { label: 'Rejected', value: stats.rejected || 0, color: '#E53935' }
+            ].map(stat => `
+              <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 15px; background: white; border-left: 5px solid ${stat.color};">
+                <p style="color: #4D4A4A; font-size: 14px; margin: 0 0 8px 0;">${stat.label}</p>
+                <p style="color: #4D4A4A; font-size: 24px; font-weight: bold; margin: 0;">${stat.value}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Application Type Breakdown</h2>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+            ${[
+              { label: 'New Applications', value: permitTypeChartData.datasets[0].data[0], color: '#4CAF50' },
+              { label: 'Renewals', value: permitTypeChartData.datasets[0].data[1], color: '#4A90E2' }
+            ].map(stat => `
+              <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 15px; background: white; border-left: 5px solid ${stat.color};">
+                <p style="color: #4D4A4A; font-size: 14px; margin: 0 0 8px 0;">${stat.label}</p>
+                <p style="color: #4D4A4A; font-size: 24px; font-weight: bold; margin: 0;">${stat.value}</p>
+                <p style="color: #666; font-size: 12px; margin: 5px 0 0 0;">${((stat.value / filteredFranchises.length) * 100).toFixed(1)}% of total</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Operator Type Distribution</h2>
+          <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+            ${Object.entries(operatorTypeStats).map(([type, count], idx) => {
+              const percentage = ((count / filteredFranchises.length) * 100).toFixed(1);
+              const colors = ['#4CAF50', '#4A90E2', '#FDA811', '#9C27B0', '#E53935'];
+              const color = colors[idx % colors.length];
+              return `
+                <div style="border: 1px solid #E9E7E7; border-radius: 6px; padding: 12px; background: white;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span style="color: #4D4A4A; font-size: 13px; font-weight: 500;">${type}</span>
+                    <span style="color: #4D4A4A; font-size: 13px; font-weight: bold;">${count} (${percentage}%)</span>
+                  </div>
+                  <div style="width: 100%; background: #E9E7E7; border-radius: 10px; height: 8px;">
+                    <div style="width: ${percentage}%; background: ${color}; border-radius: 10px; height: 8px;"></div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Top Barangays of Operation</h2>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            ${barangayChartData.labels.slice(0, 6).map((barangay, idx) => {
+              const count = barangayChartData.datasets[0].data[idx];
+              const percentage = ((count / filteredFranchises.length) * 100).toFixed(1);
+              return `
+                <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 12px; background: white; border-left: 5px solid #FDA811;">
+                  <p style="color: #4D4A4A; font-size: 12px; margin: 0 0 5px 0; font-weight: 500;">${barangay}</p>
+                  <p style="color: #4D4A4A; font-size: 20px; font-weight: bold; margin: 0;">${count}</p>
+                  <p style="color: #666; font-size: 11px; margin: 3px 0 0 0;">${percentage}% of total</p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Weekly Applications Trend (Last 8 Weeks)</h2>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+            ${weeklyApplicationsData.rawData.map((week, idx) => {
+              return `
+                <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 12px; background: white; text-align: center; border-left: 5px solid #4CAF50;">
+                  <p style="color: #666; font-size: 11px; margin: 0 0 5px 0;">${week.label}</p>
+                  <p style="color: #4CAF50; font-size: 24px; font-weight: bold; margin: 0;">${week.count}</p>
+                  <p style="color: #666; font-size: 10px; margin: 3px 0 0 0;">${new Date(week.weekStart).toLocaleDateString()} - ${new Date(week.weekEnd).toLocaleDateString()}</p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Monthly Applications Trend (Last 12 Months)</h2>
+          <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;">
+            ${monthlyTotalApplicationsData.rawData.map((month, idx) => {
+              return `
+                <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 10px; background: white; text-align: center; border-left: 5px solid #4A90E2;">
+                  <p style="color: #666; font-size: 10px; margin: 0 0 5px 0;">${month.label}</p>
+                  <p style="color: #4A90E2; font-size: 20px; font-weight: bold; margin: 0;">${month.count}</p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #4D4A4A; font-size: 20px; margin: 0 0 15px 0;">Vehicle Age Distribution</h2>
+          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
+            ${Object.entries(vehicleAgeStats).map(([ageGroup, count], idx) => {
+              const colors = ['#4CAF50', '#4A90E2', '#FDA811', '#9C27B0', '#757575'];
+              const color = colors[idx];
+              const percentage = filteredFranchises.length > 0 ? ((count / filteredFranchises.length) * 100).toFixed(1) : 0;
+              return `
+                <div style="border: 2px solid #E9E7E7; border-radius: 8px; padding: 12px; background: white; border-left: 5px solid ${color};">
+                  <p style="color: #666; font-size: 11px; margin: 0 0 5px 0;">${ageGroup}</p>
+                  <p style="color: #4D4A4A; font-size: 22px; font-weight: bold; margin: 0 0 3px 0;">${count}</p>
+                  <p style="color: #666; font-size: 11px; margin: 0;">${percentage}%</p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(pdfContainer);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Capture the simplified version
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2,
+        backgroundColor: "#FBFBFB",
+        logging: false
+      });
+
+      // Clean up temp container
+      document.body.removeChild(pdfContainer);
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth - 20;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 10;
+
+      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + 10;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`franchise-analytics-${new Date().toISOString().split("T")[0]}.pdf`);
+
+      Swal.fire({
+        icon: 'success',
+        title: 'PDF Downloaded!',
+        text: 'Your report has been downloaded successfully.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      Swal.fire({
+        title: "Export Failed",
+        text: error.message || "Failed to generate PDF. Please try again.",
+        icon: "error"
+      });
+    } finally {
+      setExporting(false);
+      setExportType("");
+    }
   };
 
   // Handle search with debounce
@@ -1121,7 +1550,7 @@ export default function FranchiseDashboard() {
     
     // If URL doesn't start with http, prepend the base URL
     if (file.url && !file.url.startsWith('http')) {
-      fileUrl = `${API_FRANCHISE}/${file.url}`;
+      fileUrl = `${API_BASE}/${file.url}`;
     }
     
     const fileWithType = {
@@ -1177,7 +1606,7 @@ export default function FranchiseDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FBFBFB] p-4 md:p-6 font-poppins">
+    <div className="min-h-screen bg-[#FBFBFB] p-4 md:p-6 font-poppins" id="franchise-dashboard-content">
       {/* Error Banner */}
       {error && (
         <div className="mb-6 p-4 bg-[#E53935] bg-opacity-20 border border-[#E53935] border-opacity-30 rounded-lg">
@@ -1220,18 +1649,30 @@ export default function FranchiseDashboard() {
             >
               <RefreshCw className="w-5 h-5 text-[#4D4A4A]" />
             </button>
+            
+            {/* CSV Export Button */}
             <button
               onClick={exportToCSV}
               disabled={exporting || franchises.length === 0}
               className="px-4 py-2 bg-[#4CAF50] text-white rounded-lg hover:bg-opacity-90 transition-colors flex items-center space-x-2 disabled:opacity-50 font-montserrat"
             >
               <DownloadCloud className="w-5 h-5" />
-              <span>{exporting ? "Exporting..." : "Export Report"}</span>
+              <span>{exporting && exportType === "csv" ? "Exporting CSV..." : "Export CSV"}</span>
+            </button>
+            
+            {/* PDF Export Button */}
+            <button
+              onClick={exportToPDF}
+              disabled={exporting || franchises.length === 0}
+              className="px-4 py-2 bg-[#E53935] text-white rounded-lg hover:bg-opacity-90 transition-colors flex items-center space-x-2 disabled:opacity-50 font-montserrat"
+            >
+              <File className="w-5 h-5" />
+              <span>{exporting && exportType === "pdf" ? "Generating PDF..." : "Export PDF"}</span>
             </button>
           </div>
         </div>
 
-        {/* Quick Stats Cards - Matching Barangay Permit Design */}
+        {/* Quick Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {[
             {
@@ -1485,19 +1926,291 @@ export default function FranchiseDashboard() {
                 { label: "For Compliance", value: (stats.pending + stats.under_review) || 0 },
                 { label: "Rejected", value: stats.rejected || 0 }
               ].map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-[#FBFBFB] rounded-lg border border-[#E9E7E7]">
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-3 bg-[#FBFBFB] rounded-lg border border-[#E9E7E7]"
+                >
                   <div className="flex items-center">
-                    <div className={`w-3 h-3 rounded-full ${
-                      item.label === "Approved" ? "bg-[#4CAF50]" :
-                      item.label === "For Compliance" ? "bg-[#FDA811]" :
-                      "bg-[#E53935]"
-                    } mr-3`}></div>
+                    <div
+                      className={`w-3 h-3 rounded-full ${
+                        item.label === "Approved" ? "bg-[#4CAF50]" :
+                          item.label === "For Compliance" ? "bg-[#FDA811]" :
+                            "bg-[#E53935]"
+                      } mr-3`}
+                    ></div>
                     <span className="text-sm text-[#4D4A4A] font-poppins">{item.label}</span>
                   </div>
                   <span className="font-semibold text-[#4D4A4A] font-montserrat">{item.value}</span>
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Additional Insights Grid */}
+      {franchises.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* NEW vs RENEWAL Chart */}
+          <div className="bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Application Type Breakdown</h3>
+              <p className="text-sm text-[#4D4A4A] text-opacity-70">New vs Renewal applications</p>
+            </div>
+            <div className="h-[250px] flex items-center justify-center">
+              <Doughnut
+                data={permitTypeChartData}
+                options={{
+                  maintainAspectRatio: false,
+                  cutout: '65%',
+                  plugins: {
+                    legend: {
+                      position: 'bottom',
+                      labels: {
+                        color: '#4D4A4A',
+                        padding: 15,
+                        usePointStyle: true,
+                        font: { family: 'Poppins' }
+                      }
+                    }
+                  }
+                }}
+              />
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {permitTypeChartData.labels.map((label, idx) => (
+                <div key={idx} className="p-3 bg-[#FBFBFB] rounded-lg border border-[#E9E7E7]">
+                  <div className="flex items-center mb-1">
+                    <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: permitTypeChartData.datasets[0].backgroundColor[idx] }}></div>
+                    <span className="text-xs text-[#4D4A4A] font-poppins">{label}</span>
+                  </div>
+                  <p className="text-lg font-bold text-[#4D4A4A] font-montserrat">{permitTypeChartData.datasets[0].data[idx]}</p>
+                  <p className="text-xs text-[#4D4A4A] text-opacity-70">{((permitTypeChartData.datasets[0].data[idx] / franchises.length) * 100).toFixed(1)}% of total</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Operator Type Breakdown */}
+          <div className="bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Operator Type Distribution</h3>
+              <p className="text-sm text-[#4D4A4A] text-opacity-70">Breakdown by operator classification</p>
+            </div>
+            <div className="space-y-3">
+              {Object.entries(operatorTypeStats).map(([type, count], idx) => {
+                const percentage = ((count / franchises.length) * 100).toFixed(1);
+                const colors = ['#4CAF50', '#4A90E2', '#FDA811', '#9C27B0', '#E53935'];
+                const color = colors[idx % colors.length];
+                return (
+                  <div key={type} className="relative">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-medium text-[#4D4A4A] font-poppins">{type}</span>
+                      <span className="text-sm font-bold text-[#4D4A4A] font-montserrat">{count}</span>
+                    </div>
+                    <div className="w-full bg-[#E9E7E7] rounded-full h-2.5">
+                      <div className="h-2.5 rounded-full transition-all" style={{ width: `${percentage}%`, backgroundColor: color }}></div>
+                    </div>
+                    <span className="text-xs text-[#4D4A4A] text-opacity-70 mt-1">{percentage}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Barangays Chart */}
+      {franchises.length > 0 && barangayChartData.labels[0] !== 'No Data' && (
+        <div className="mb-6 bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Top Barangays of Operation</h3>
+              <p className="text-sm text-[#4D4A4A] text-opacity-70">Application distribution by barangay location</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-[#4D4A4A] text-opacity-70">
+                Top {Math.min(6, barangayChartData.labels.length)} barangays
+              </span>
+            </div>
+          </div>
+          <div className="h-[300px]">
+            <Bar
+              data={barangayChartData}
+              options={{
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                  legend: { display: false },
+                },
+                scales: {
+                  x: { 
+                    ticks: { 
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' }
+                    }, 
+                    grid: { color: 'rgba(233, 231, 231, 0.5)' } 
+                  },
+                  y: { 
+                    ticks: { 
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' }
+                    }, 
+                    grid: { color: 'rgba(233, 231, 231, 0.5)' }, 
+                    beginAtZero: true 
+                  },
+                },
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Weekly Applications Trend */}
+      {franchises.length > 0 && (
+        <div className="mb-6 bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Weekly Applications Trend</h3>
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Total applications submitted in the last 8 weeks</p>
+          </div>
+          <div className="h-[300px]">
+            <Line
+              data={weeklyApplicationsData}
+              options={{
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                  legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' }
+                    }
+                  },
+                  tooltip: {
+                    callbacks: {
+                      title: (context) => {
+                        const weekData = weeklyApplicationsData.rawData[context[0].dataIndex];
+                        const start = new Date(weekData.weekStart).toLocaleDateString();
+                        const end = new Date(weekData.weekEnd).toLocaleDateString();
+                        return `${weekData.label}: ${start} - ${end}`;
+                      }
+                    }
+                  }
+                },
+                scales: {
+                  x: {
+                    ticks: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' }
+                    },
+                    grid: { color: 'rgba(233, 231, 231, 0.5)' }
+                  },
+                  y: {
+                    ticks: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' },
+                      stepSize: 1
+                    },
+                    grid: { color: 'rgba(233, 231, 231, 0.5)' },
+                    beginAtZero: true
+                  }
+                }
+              }}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-4 md:grid-cols-8 gap-2">
+            {weeklyApplicationsData.rawData.map((week, idx) => (
+              <div key={idx} className="text-center p-2 bg-[#FBFBFB] rounded border border-[#E9E7E7]">
+                <p className="text-xs text-[#4D4A4A] text-opacity-70 font-poppins">{week.label}</p>
+                <p className="text-lg font-bold text-[#4CAF50] font-montserrat">{week.count}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Total Applications Trend */}
+      {franchises.length > 0 && (
+        <div className="mb-6 bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Monthly Applications Trend</h3>
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Total applications submitted over the last 12 months</p>
+          </div>
+          <div className="h-[300px]">
+            <Line
+              data={monthlyTotalApplicationsData}
+              options={{
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                  legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' }
+                    }
+                  }
+                },
+                scales: {
+                  x: {
+                    ticks: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' }
+                    },
+                    grid: { color: 'rgba(233, 231, 231, 0.5)' }
+                  },
+                  y: {
+                    ticks: {
+                      color: '#4D4A4A',
+                      font: { family: 'Poppins' },
+                      stepSize: 1
+                    },
+                    grid: { color: 'rgba(233, 231, 231, 0.5)' },
+                    beginAtZero: true
+                  }
+                }
+              }}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-6 md:grid-cols-12 gap-2">
+            {monthlyTotalApplicationsData.rawData.map((month, idx) => (
+              <div key={idx} className="text-center p-2 bg-[#FBFBFB] rounded border border-[#E9E7E7]">
+                <p className="text-xs text-[#4D4A4A] text-opacity-70 font-poppins">{month.label}</p>
+                <p className="text-lg font-bold text-[#4A90E2] font-montserrat">{month.count}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Vehicle Age Distribution */}
+      {franchises.length > 0 && (
+        <div className="mb-6 bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Vehicle Age Distribution</h3>
+            <p className="text-sm text-[#4D4A4A] text-opacity-70">Age breakdown of registered vehicles</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {Object.entries(vehicleAgeStats).map(([ageGroup, count], idx) => {
+              const colors = ['#4CAF50', '#4A90E2', '#FDA811', '#9C27B0', '#757575'];
+              const color = colors[idx];
+              const percentage = franchises.length > 0 ? ((count / franchises.length) * 100).toFixed(1) : 0;
+              return (
+                <div key={ageGroup} className="p-4 rounded-lg border-2 border-[#E9E7E7] hover:shadow-md transition-all" style={{ borderLeftColor: color, borderLeftWidth: '4px' }}>
+                  <p className="text-xs text-[#4D4A4A] text-opacity-70 mb-1 font-poppins">{ageGroup}</p>
+                  <p className="text-2xl font-bold text-[#4D4A4A] font-montserrat mb-1">{count}</p>
+                  <div className="flex items-center">
+                    <div className="flex-1 bg-[#E9E7E7] rounded-full h-1.5 mr-2">
+                      <div className="h-1.5 rounded-full" style={{ width: `${percentage}%`, backgroundColor: color }}></div>
+                    </div>
+                    <span className="text-xs text-[#4D4A4A] text-opacity-70">{percentage}%</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1523,9 +2236,7 @@ export default function FranchiseDashboard() {
                 maintainAspectRatio: false,
                 responsive: true,
                 plugins: {
-                  legend: { 
-                    display: false
-                  },
+                  legend: { display: false },
                 },
                 scales: {
                   x: { 
@@ -1561,7 +2272,7 @@ export default function FranchiseDashboard() {
             <div className="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {barChartData.labels.slice(0, 6).map((toda, idx) => {
                 const count = barChartData.datasets[0].data[idx];
-                const color = barChartData.datasets[0].backgroundColor[idx];
+                const color = '#4CAF50';
                 return (
                   <div 
                     key={idx}
@@ -1590,59 +2301,59 @@ export default function FranchiseDashboard() {
         </div>
       )}
 
-      {/* Main Content with Tabs */}
-      <div className="bg-white rounded-lg shadow-sm border border-[#E9E7E7] overflow-hidden">
-        {/* Tab Navigation - Matching Design */}
-        <div className="p-5 border-b border-[#E9E7E7] bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Franchise Applications</h3>
-              <p className="text-sm text-[#4D4A4A] text-opacity-70">
-                Showing {startIndex + 1}-{Math.min(endIndex, filteredFranchises.length)} of {filteredFranchises.length} applications
-              </p>
+      {/* Applications Table */}
+      {franchises.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-[#E9E7E7] overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Applications List</h3>
+                <p className="text-sm text-[#4D4A4A] text-opacity-70">
+                  Showing {startIndex + 1}-{Math.min(endIndex, filteredFranchises.length)} of {filteredFranchises.length} applications
+                </p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-2 text-sm border border-[#E9E7E7] rounded-lg hover:bg-[#FBFBFB] transition-colors flex items-center font-poppins"
+                  title="Print Report"
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  Print
+                </button>
+              </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => window.print()}
-                className="px-3 py-2 text-sm border border-[#E9E7E7] rounded-lg hover:bg-[#FBFBFB] transition-colors flex items-center font-poppins"
-                title="Print Report"
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Print
-              </button>
-            </div>
+            
+            {/* Tabs */}
+            <nav className="flex space-x-6">
+              {tabCategories.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => {
+                    setActiveTab(tab.key);
+                    setPermitSubtypeFilter(tab.key === "all" ? "all" : tab.key);
+                    setCurrentPage(1);
+                  }}
+                  className={`py-2 px-3 border-b-2 font-medium text-sm flex items-center gap-2 transition-all whitespace-nowrap ${
+                    activeTab === tab.key 
+                      ? "border-[#4CAF50] text-[#4CAF50]" 
+                      : "border-transparent text-[#4D4A4A] hover:text-[#4CAF50]"
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    activeTab === tab.key 
+                      ? "bg-[#4CAF50] text-white" 
+                      : "bg-[#FBFBFB] text-[#4D4A4A] border border-[#E9E7E7]"
+                  }`}>
+                    {countByType[tab.key]}
+                  </span>
+                </button>
+              ))}
+            </nav>
           </div>
-          
-          {/* Tabs */}
-          <nav className="flex space-x-6 mt-4">
-            {tabCategories.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => {
-                  setActiveTab(tab.key);
-                  setPermitSubtypeFilter(tab.key === "all" ? "all" : tab.key);
-                  setCurrentPage(1);
-                }}
-                className={`py-2 px-3 border-b-2 font-medium text-sm flex items-center gap-2 transition-all whitespace-nowrap ${
-                  activeTab === tab.key 
-                    ? "border-[#4CAF50] text-[#4CAF50]" 
-                    : "border-transparent text-[#4D4A4A] hover:text-[#4CAF50]"
-                }`}
-              >
-                {tab.label}
-                <span className={`px-2 py-1 text-xs rounded-full ${
-                  activeTab === tab.key 
-                    ? "bg-[#4CAF50] text-white" 
-                    : "bg-[#FBFBFB] text-[#4D4A4A] border border-[#E9E7E7]"
-                }`}>
-                  {countByType[tab.key]}
-                </span>
-              </button>
-            ))}
-          </nav>
-        </div>
 
-        {/* Data Table */}
+          {/* Data Table */}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-[#FBFBFB]">
@@ -1805,39 +2516,92 @@ export default function FranchiseDashboard() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      )}
 
-      {/* Franchise Details Modal - UPDATED WITH SUBMITTED DOCUMENTS SECTION */}
+      {/* Franchise Details Modal - Modern Design */}
       {isModalOpen && selectedFranchise && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-sm p-4 overflow-auto">
-          <div className="w-full max-w-6xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5 rounded-t-xl">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Franchise Permit Details</h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Application ID: {selectedFranchise.id}
-                  </p>
-                  <div className="mt-2 flex items-center">
-                    <span className={`px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(selectedFranchise.status).badge}`}>
-                      {selectedFranchise.status}
-                    </span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 overflow-auto animate-fadeIn">
+          <div className="w-full max-w-7xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl transform transition-all">
+            {/* Redesigned Transport Permit Header */}
+            <div className="relative p-6 bg-gradient-to-r from-gray-50 via-white to-gray-50 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 border-b-4 border-orange-400">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="bg-gradient-to-br from-orange-400 to-orange-500 p-3 rounded-2xl shadow-xl">
+                    <Car className="w-10 h-10 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Transport Permit</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Franchise Application Details</p>
                   </div>
                 </div>
+                
                 <button 
                   onClick={closeModal}
-                  className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors"
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
+
+              {/* Info Cards Row */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Application ID Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Application ID</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white font-mono">
+                    FP-{String(selectedFranchise.id).padStart(4, '0')}
+                  </p>
+                </div>
+
+                {/* Date Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-purple-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Date Applied</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white">
+                    {formatDate(selectedFranchise.date_applied || selectedFranchise.created_at)}
+                  </p>
+                </div>
+
+                {/* Status Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Status</p>
+                  <span className={`inline-block px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedFranchise.status).badge}`}>
+                    {selectedFranchise.status}
+                  </span>
+                </div>
+
+                {/* Permit Type Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-orange-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Permit Info</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                      selectedFranchise.permit_type === "NEW" 
+                        ? "bg-blue-100 text-blue-700" 
+                        : "bg-purple-100 text-purple-700"
+                    }`}>
+                      {selectedFranchise.permit_type === "NEW" ? "New" : "Renewal"}
+                    </span>
+                    <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                      selectedFranchise.permit_subtype === "MTOP" 
+                        ? "bg-green-100 text-green-700" 
+                        : "bg-orange-100 text-orange-700"
+                    }`}>
+                      {selectedFranchise.permit_subtype}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              {/* Applicant Information Section */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Applicant Information</h3>
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto bg-gradient-to-b from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
+              {/* Personal Information Section */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-blue-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Personal Information</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Full Name</label>
@@ -1867,8 +2631,13 @@ export default function FranchiseDashboard() {
               </div>
 
               {/* Vehicle Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Vehicle Information</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-green-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-3 rounded-xl shadow-lg">
+                    <Car className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Vehicle Information</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Make/Brand</label>
@@ -1909,9 +2678,14 @@ export default function FranchiseDashboard() {
                 </div>
               </div>
 
-              {/* Operation Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Operation Information</h3>
+              {/* Franchise Details */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-orange-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-xl shadow-lg">
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Franchise & Route Details</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">TODA Name</label>
@@ -1950,9 +2724,14 @@ export default function FranchiseDashboard() {
                 </div>
               </div>
 
-              {/* Additional Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Additional Information</h3>
+              {/* LTO Documents */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-purple-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-3 rounded-xl shadow-lg">
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">LTO Registration Documents</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">LTO OR Number</label>
@@ -1981,18 +2760,27 @@ export default function FranchiseDashboard() {
                 </div>
               </div>
 
-              {/* SUBMITTED DOCUMENTS SECTION - ADDED */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Submitted Documents</h3>
-                  <button
-                    onClick={toggleSubmittedDocs}
-                    className="flex items-center gap-2 text-sm text-[#4CAF50] hover:text-[#FDA811] transition-colors"
-                  >
-                    <span>{showSubmittedDocs ? 'Hide' : 'View'} Documents</span>
-                    <ChevronRight className={`w-4 h-4 transition-transform ${showSubmittedDocs ? 'rotate-90' : ''}`} />
-                  </button>
-                </div>
+              {/* Submitted Attachments */}
+              {selectedFranchise.attachments && selectedFranchise.attachments.length > 0 ? (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-indigo-100 dark:border-slate-700">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-3 rounded-xl shadow-lg">
+                        <FileText className="w-6 h-6 text-white" />
+                      </div>
+                      <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                      <span className="ml-2 bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold">
+                        {selectedFranchise.attachments.length} files
+                      </span>
+                    </div>
+                    <button
+                      onClick={toggleSubmittedDocs}
+                      className="flex items-center gap-2 text-sm text-[#4CAF50] hover:text-[#FDA811] transition-colors"
+                    >
+                      <span>{showSubmittedDocs ? 'Hide' : 'View'} Documents</span>
+                      <ChevronRight className={`w-4 h-4 transition-transform ${showSubmittedDocs ? 'rotate-90' : ''}`} />
+                    </button>
+                  </div>
 
                 {showSubmittedDocs && (
                   <div className="mt-4">
@@ -2059,10 +2847,26 @@ export default function FranchiseDashboard() {
                     )}
                   </div>
                 )}
-              </div>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-gradient-to-br from-gray-400 to-gray-500 p-3 rounded-xl shadow-lg">
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                  </div>
+                  <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-xl">
+                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      No files uploaded for this application.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Review Comments Section - UPDATED WITH COMMENT SAVING */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-yellow-100 dark:border-slate-700">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   Review Comments
                   {selectedFranchise.remarks && (
@@ -2115,15 +2919,15 @@ export default function FranchiseDashboard() {
 
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3 justify-end pt-6 border-t border-gray-200 dark:border-slate-700">
+              {/* Close Button */}
+              <div className="flex justify-end pt-8 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl p-6 border-t-4 border-gray-300 dark:border-slate-600">
                 <button 
                   onClick={closeModal}
-                  className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                  className="px-8 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
                 >
+                  <X className="w-5 h-5" />
                   Close
                 </button>
-                
               </div>
             </div>
           </div>

@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getTxs } from "../../../lib/txLogger";
-
 
 export default function PermitTracker() {
   const navigate = useNavigate();

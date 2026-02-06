@@ -10,8 +10,13 @@ import {
   X,
   CheckCircle,
   User,
-  Clock
+  Clock,
+  File,
+  Receipt,
+  AlertCircle
 } from "lucide-react";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 // Helper functions for file preview modal
 const isImageFile = (fileType, fileName) => {
@@ -90,7 +95,7 @@ const mapStatusToBackend = (status) => {
   return statusMap[status] || 'pending';
 };
 
-export default function FranchiseDashboard() {
+export default function FranchisePermitApplication() {
   const [franchises, setFranchises] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedFranchise, setSelectedFranchise] = useState(null);
@@ -101,23 +106,23 @@ export default function FranchiseDashboard() {
   const [permitSubtypeFilter, setPermitSubtypeFilter] = useState("all");
   const [permitTypeFilter, setPermitTypeFilter] = useState("all");
   const [exporting, setExporting] = useState(false);
+  const [exportType, setExportType] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionComment, setActionComment] = useState('');
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
   const [sortOption, setSortOption] = useState('latest');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(100);
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const imageRef = useRef(null);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const imagePositionRef = useRef({ x: 0, y: 0 });
   
   const ITEMS_PER_PAGE = 10;
-  const API_FRANCHISE = "/backend/franchise_permit";
+  const API_BASE = "http://localhost/plms-main/backend/franchise_permit";
 
   // Format date for display
   const formatDate = (dateString) => {
@@ -160,7 +165,7 @@ export default function FranchiseDashboard() {
         params.append('search', searchTerm.trim());
       }
       
-      const url = `${API_FRANCHISE}/admin_fetch.php?${params}`;
+      const url = `${API_BASE}/admin_fetch.php?${params}`;
       
       const response = await fetch(url, {
         method: 'GET',
@@ -375,7 +380,7 @@ export default function FranchiseDashboard() {
     if (!selectedFranchise || !actionComment.trim()) return;
     
     try {
-      const response = await fetch(`${API_FRANCHISE}/update_status.php`, {
+      const response = await fetch(`${API_BASE}/update_status.php`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -417,8 +422,14 @@ export default function FranchiseDashboard() {
           remarks: updatedRemarks
         });
 
-        setSuccessMessage('Comment saved successfully!');
-        setShowSuccessModal(true);
+        Swal.fire({
+          icon: 'success',
+          title: 'Comment Saved!',
+          text: 'Your comment has been saved successfully.',
+          confirmButtonColor: '#4CAF50',
+          timer: 2000,
+          showConfirmButton: true
+        });
         setActionComment('');
       } else {
         throw new Error(result.message || 'Failed to save comment');
@@ -564,7 +575,7 @@ export default function FranchiseDashboard() {
   const openModal = async (franchise) => {
     try {
       const applicationId = franchise.application_id || franchise.id;
-      const response = await fetch(`${API_FRANCHISE}/fetch_single.php?application_id=${applicationId}`);
+      const response = await fetch(`${API_BASE}/fetch_single.php?application_id=${applicationId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -616,7 +627,7 @@ export default function FranchiseDashboard() {
     try {
       const backendStatus = mapStatusToBackend(status);
       
-      const response = await fetch(`${API_FRANCHISE}/update_status.php`, {
+      const response = await fetch(`${API_BASE}/update_status.php`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -636,8 +647,14 @@ export default function FranchiseDashboard() {
       const data = await response.json();
       
       if (data.success) {
-        setSuccessMessage(`Permit ${status.toLowerCase()} successfully!`);
-        setShowSuccessModal(true);
+        Swal.fire({
+          icon: 'success',
+          title: 'Success!',
+          text: `Permit ${status.toLowerCase()} successfully!`,
+          confirmButtonColor: '#4CAF50',
+          timer: 2000,
+          showConfirmButton: true
+        });
         
         await fetchFranchises();
         
@@ -733,7 +750,7 @@ export default function FranchiseDashboard() {
         const fileName = franchiseData[field];
         if (fileName && fileName.trim() !== '') {
           // Files are stored in: uploads/{application_id}/{filename}
-          const fileUrl = `${API_FRANCHISE}/uploads/${applicationId}/${fileName}`;
+          const fileUrl = `${API_BASE}/uploads/${applicationId}/${fileName}`;
           
           fileList.push({
             id: field,
@@ -782,7 +799,7 @@ export default function FranchiseDashboard() {
     
     // If URL doesn't start with http, prepend the base URL
     if (file.url && !file.url.startsWith('http')) {
-      fileUrl = `${API_FRANCHISE}/${file.url}`;
+      fileUrl = `${API_BASE}/${file.url}`;
     }
     
     const fileWithType = {
@@ -809,6 +826,7 @@ export default function FranchiseDashboard() {
   // Export to CSV
   const exportToCSV = () => {
     setExporting(true);
+    setExportType("csv");
     
     const headers = [
       "Application ID",
@@ -854,22 +872,380 @@ export default function FranchiseDashboard() {
     window.URL.revokeObjectURL(url);
     
     setExporting(false);
+    setExportType("");
   };
 
-  // Action handlers
+  // Export to PDF
+  const exportToPDF = async () => {
+    setExporting(true);
+    setExportType("pdf");
+    
+    try {
+      // Create a container for the PDF content
+      const pdfContainer = document.createElement("div");
+      pdfContainer.style.position = "absolute";
+      pdfContainer.style.left = "-9999px";
+      pdfContainer.style.width = "800px";
+      pdfContainer.style.backgroundColor = "#ffffff";
+      pdfContainer.style.padding = "20px";
+      pdfContainer.style.fontFamily = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+      pdfContainer.style.color = "#1f2937";
+      document.body.appendChild(pdfContainer);
+
+      // Header section
+      const header = document.createElement("div");
+      header.style.marginBottom = "20px";
+      header.style.borderBottom = "2px solid #4CAF50";
+      header.style.paddingBottom = "15px";
+      header.innerHTML = `
+        <h1 style="color: #1f2937; font-size: 24px; font-weight: bold; margin: 0;">
+          Franchise Permit Report
+        </h1>
+        <p style="color: #6b7280; margin: 5px 0;">
+          Generated on ${new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </p>
+        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+          <span style="background: #4CAF50; color: white; padding: 3px 10px; border-radius: 15px; font-size: 11px;">
+            Total: ${dashboardStats.total}
+          </span>
+          <span style="background: #4CAF50; color: white; padding: 3px 10px; border-radius: 15px; font-size: 11px;">
+            Approved: ${dashboardStats.approved}
+          </span>
+          <span style="background: #FDA811; color: white; padding: 3px 10px; border-radius: 15px; font-size: 11px;">
+            Compliance: ${dashboardStats.compliance}
+          </span>
+          <span style="background: #E53935; color: white; padding: 3px 10px; border-radius: 15px; font-size: 11px;">
+            Rejected: ${dashboardStats.rejected}
+          </span>
+        </div>
+      `;
+      pdfContainer.appendChild(header);
+
+      // Summary section
+      const summarySection = document.createElement("div");
+      summarySection.style.marginBottom = "25px";
+      summarySection.style.padding = "15px";
+      summarySection.style.backgroundColor = "#f9fafb";
+      summarySection.style.borderRadius = "8px";
+      summarySection.style.border = "1px solid #e5e7eb";
+      summarySection.innerHTML = `
+        <h2 style="color: #1f2937; font-size: 16px; font-weight: bold; margin: 0 0 10px 0;">Summary</h2>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 12px;">
+          <div>
+            <strong>Approval Rate:</strong> ${dashboardStats.approvalRate}%
+          </div>
+          <div>
+            <strong>Top TODA:</strong> ${dashboardStats.topTODA.name} (${dashboardStats.topTODA.count} applications)
+          </div>
+          <div>
+            <strong>MTOP Applications:</strong> ${dashboardStats.mtop}
+          </div>
+          <div>
+            <strong>Franchise Applications:</strong> ${dashboardStats.franchise}
+          </div>
+        </div>
+      `;
+      pdfContainer.appendChild(summarySection);
+
+      // Applications table section
+      const tableSection = document.createElement("div");
+      tableSection.innerHTML = `
+        <h2 style="color: #1f2937; font-size: 18px; font-weight: bold; margin-bottom: 15px;">Applications List</h2>
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+          <thead>
+            <tr style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">ID</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Applicant</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Vehicle</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">TODA</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Status</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${getFilteredAndSortedFranchises().slice(0, 20).map(franchise => {
+              const statusColor = franchise.status === "Approved" ? "#4CAF50" : 
+                                franchise.status === "Compliance" ? "#FDA811" : "#E53935";
+              return `
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">FP-${String(franchise.application_id).padStart(4, '0')}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${franchise.full_name}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${franchise.plate_number}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${franchise.toda_name}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb; color: ${statusColor}; font-weight: 500;">
+                    ${franchise.status}
+                  </td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${formatDate(franchise.created_at)}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+        ${getFilteredAndSortedFranchises().length > 20 ? 
+          `<p style="text-align: center; color: #6b7280; font-size: 10px; margin-top: 10px;">
+            ... and ${getFilteredAndSortedFranchises().length - 20} more applications
+          </p>` : ''}
+      `;
+      pdfContainer.appendChild(tableSection);
+
+      // Status distribution section
+      const statusSection = document.createElement("div");
+      statusSection.style.marginTop = "25px";
+      statusSection.style.padding = "15px";
+      statusSection.style.backgroundColor = "#f9fafb";
+      statusSection.style.borderRadius = "8px";
+      statusSection.style.border = "1px solid #e5e7eb";
+      statusSection.innerHTML = `
+        <h2 style="color: #1f2937; font-size: 16px; font-weight: bold; margin: 0 0 10px 0;">Status Distribution</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 12px;">
+          <div style="text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #4CAF50;">${dashboardStats.approved}</div>
+            <div style="color: #6b7280;">Approved</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #FDA811;">${dashboardStats.compliance}</div>
+            <div style="color: #6b7280;">Compliance</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #E53935;">${dashboardStats.rejected}</div>
+            <div style="color: #6b7280;">Rejected</div>
+          </div>
+        </div>
+      `;
+      pdfContainer.appendChild(statusSection);
+
+      // Footer
+      const footer = document.createElement("div");
+      footer.style.marginTop = "30px";
+      footer.style.paddingTop = "15px";
+      footer.style.borderTop = "1px solid #e5e7eb";
+      footer.style.color = "#6b7280";
+      footer.style.fontSize = "10px";
+      footer.innerHTML = `
+        <p style="margin: 0;">Generated by Franchise Permit Management System</p>
+        <p style="margin: 5px 0 0 0;">Total Records: ${franchises.length} • Filtered: ${getFilteredAndSortedFranchises().length}</p>
+      `;
+      pdfContainer.appendChild(footer);
+
+      // Wait for DOM to update
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Generate PDF
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+
+      const imgWidth = 190;
+      const pageHeight = 280;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 10;
+
+      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`franchise-report-${new Date().toISOString().split("T")[0]}.pdf`);
+
+      // Clean up
+      document.body.removeChild(pdfContainer);
+
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      Swal.fire({
+        title: "Export Failed",
+        text: "Failed to generate PDF. Please try again.",
+        icon: "error"
+      });
+    } finally {
+      setExporting(false);
+      setExportType("");
+    }
+  };
+
+  // Action handlers with SweetAlert
   const handleApprove = async () => {
     if (!selectedFranchise) return;
-    await updatePermitStatus('Approved', actionComment);
+
+    const result = await Swal.fire({
+      title: 'Approve Permit?',
+      html: `
+        <div class="text-left">
+          <p class="mb-2">You are about to approve this permit application:</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Application ID:</strong> ${selectedFranchise.application_id}</p>
+            <p class="text-sm"><strong>Applicant:</strong> ${selectedFranchise.full_name}</p>
+            <p class="text-sm"><strong>Type:</strong> ${selectedFranchise.permit_type} - ${selectedFranchise.permit_subtype}</p>
+          </div>
+          <p class="text-sm text-gray-600">This action will approve the application.</p>
+        </div>
+      `,
+      icon: 'question',
+      input: 'textarea',
+      inputLabel: 'Add approval notes (optional)',
+      inputPlaceholder: 'Enter any additional notes...',
+      inputValue: actionComment,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Approve',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#4CAF50',
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+        htmlContainer: 'text-left'
+      }
+    });
+
+    if (result.isConfirmed) {
+      const notes = result.value || actionComment;
+      await updatePermitStatus('Approved', notes);
+      setActionComment('');
+    }
   };
 
   const handleReject = async () => {
     if (!selectedFranchise) return;
-    await updatePermitStatus('Rejected', actionComment);
+
+    const result = await Swal.fire({
+      title: 'Reject Application?',
+      html: `
+        <div class="text-left">
+          <p class="mb-2">You are about to reject this permit application:</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Application ID:</strong> ${selectedFranchise.application_id}</p>
+            <p class="text-sm"><strong>Applicant:</strong> ${selectedFranchise.full_name}</p>
+            <p class="text-sm"><strong>Type:</strong> ${selectedFranchise.permit_type} - ${selectedFranchise.permit_subtype}</p>
+          </div>
+          <p class="text-sm text-red-600">Please provide a reason for rejection.</p>
+        </div>
+      `,
+      icon: 'warning',
+      input: 'textarea',
+      inputLabel: 'Reason for rejection (required)',
+      inputPlaceholder: 'Enter the reason for rejecting this application...',
+      inputValue: actionComment,
+      inputValidator: (value) => {
+        if (!value) {
+          return 'You must provide a reason for rejection!';
+        }
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Reject',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#E53935',
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+        htmlContainer: 'text-left'
+      }
+    });
+
+    if (result.isConfirmed) {
+      await updatePermitStatus('Rejected', result.value);
+      setActionComment('');
+    }
+  };
+
+  // New status update handlers for tracking processing steps
+  const handleStatusUpdate = async (status, title, message, color = '#4CAF50') => {
+    if (!selectedFranchise) return;
+
+    const result = await Swal.fire({
+      title: title,
+      html: `
+        <div class="text-left">
+          <p class="mb-2">${message}</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Application ID:</strong> ${selectedFranchise.application_id}</p>
+            <p class="text-sm"><strong>Applicant:</strong> ${selectedFranchise.full_name}</p>
+            <p class="text-sm"><strong>Type:</strong> ${selectedFranchise.permit_type} - ${selectedFranchise.permit_subtype}</p>
+          </div>
+          <p class="text-sm text-gray-600">Add notes about this status update (optional).</p>
+        </div>
+      `,
+      icon: 'question',
+      input: 'textarea',
+      inputLabel: 'Status update notes',
+      inputPlaceholder: 'Enter any relevant notes...',
+      inputValue: actionComment,
+      showCancelButton: true,
+      confirmButtonText: 'Update Status',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: color,
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+      },
+      preConfirm: (notes) => {
+        return notes;
+      }
+    });
+
+    if (result.isConfirmed) {
+      await updatePermitStatus(status, result.value || '');
+    }
   };
 
   const handleForCompliance = async () => {
     if (!selectedFranchise) return;
-    await updatePermitStatus('Compliance', actionComment);
+
+    const result = await Swal.fire({
+      title: 'Mark for Compliance?',
+      html: `
+        <div class="text-left">
+          <p class="mb-2">Mark this application for compliance review:</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Application ID:</strong> ${selectedFranchise.application_id}</p>
+            <p class="text-sm"><strong>Applicant:</strong> ${selectedFranchise.full_name}</p>
+            <p class="text-sm"><strong>Type:</strong> ${selectedFranchise.permit_type} - ${selectedFranchise.permit_subtype}</p>
+          </div>
+          <p class="text-sm text-gray-600">Please specify what compliance items are needed.</p>
+        </div>
+      `,
+      icon: 'info',
+      input: 'textarea',
+      inputLabel: 'Compliance notes (optional)',
+      inputPlaceholder: 'List required compliance items...',
+      inputValue: actionComment,
+      showCancelButton: true,
+      confirmButtonText: 'Mark for Compliance',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#FDA811',
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+        htmlContainer: 'text-left'
+      }
+    });
+
+    if (result.isConfirmed) {
+      const notes = result.value || actionComment;
+      await updatePermitStatus('Compliance', notes);
+      setActionComment('');
+    }
   };
 
   if (loading) {
@@ -966,6 +1342,42 @@ export default function FranchiseDashboard() {
           </nav>
         </div>
 
+        {/* Permit Type Filter (NEW/RENEWAL) */}
+        <div className="px-6 py-4 bg-gray-50 dark:bg-slate-700/50 border-b border-gray-200 dark:border-slate-700">
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Permit Type:</label>
+            <div className="flex gap-2">
+              {[
+                { value: "all", label: "All", count: franchises.length },
+                { value: "new", label: "New Applications", count: franchises.filter(f => f.permit_type === "NEW").length },
+                { value: "renewal", label: "Renewals", count: franchises.filter(f => f.permit_type === "RENEWAL").length },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    setPermitTypeFilter(option.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                    permitTypeFilter === option.value
+                      ? "bg-[#4CAF50] text-white shadow-md"
+                      : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {option.label}
+                  <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                    permitTypeFilter === option.value
+                      ? "bg-white/20 text-white"
+                      : "bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-400"
+                  }`}>
+                    {option.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Tab Content Header */}
         <div className="p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5">
           <div className="flex items-center justify-between">
@@ -1033,15 +1445,36 @@ export default function FranchiseDashboard() {
                 Refresh
               </button>
 
-              {/* Export Button */}
-              <button
-                onClick={exportToCSV}
-                disabled={exporting || franchises.length === 0}
-                className="px-4 py-2 bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center gap-2 disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" />
-                {exporting ? "Exporting..." : "Export"}
-              </button>
+              {/* Export Dropdown */}
+              <div className="relative group">
+                <button
+                  disabled={exporting || franchises.length === 0}
+                  className="px-4 py-2 bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{exporting ? "Exporting..." : "Export"}</span>
+                </button>
+                
+                {/* Export Options Dropdown */}
+                <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                  <button
+                    onClick={exportToCSV}
+                    disabled={exporting || franchises.length === 0}
+                    className="w-full px-4 py-3 text-left text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 border-b border-gray-100 dark:border-slate-700"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Export as CSV</span>
+                  </button>
+                  <button
+                    onClick={exportToPDF}
+                    disabled={exporting || franchises.length === 0}
+                    className="w-full px-4 py-3 text-left text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                  >
+                    <File className="w-4 h-4" />
+                    <span>Export as PDF</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -1089,6 +1522,9 @@ export default function FranchiseDashboard() {
                       Application No.
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Applicant
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
@@ -1113,6 +1549,24 @@ export default function FranchiseDashboard() {
                     <tr key={f.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
                       <td className="px-6 py-4 text-sm font-mono text-gray-600 dark:text-gray-300">
                         FP-{String(f.application_id).padStart(4, '0')}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex flex-col gap-1">
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full inline-block w-fit ${
+                            f.permit_type === "NEW" 
+                              ? "bg-blue-100 text-blue-700 border border-blue-200" 
+                              : "bg-purple-100 text-purple-700 border border-purple-200"
+                          }`}>
+                            {f.permit_type === "NEW" ? "New" : "Renewal"}
+                          </span>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full inline-block w-fit ${
+                            f.permit_subtype === "MTOP" 
+                              ? "bg-green-100 text-green-700 border border-green-200" 
+                              : "bg-orange-100 text-orange-700 border border-orange-200"
+                          }`}>
+                            {f.permit_subtype}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-medium">
                         {f.full_name}
@@ -1153,39 +1607,93 @@ export default function FranchiseDashboard() {
         </div>
       </div>
 
-      {/* Modal with White Background and Blur */}
+      {/* Enhanced Transport-Themed Modal */}
       {showModal && selectedFranchise && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-sm p-4 overflow-auto">
-          <div className="w-full max-w-6xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5 rounded-t-xl">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Franchise Permit Details</h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Application ID: FP-{String(selectedFranchise.application_id).padStart(4, '0')}
-                  </p>
-                  <span className={`mt-2 px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(selectedFranchise.status)}`}>
-                    {selectedFranchise.status}
-                  </span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 overflow-auto animate-fadeIn">
+          <div className="w-full max-w-7xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl transform transition-all">
+            {/* Redesigned Transport Permit Header */}
+            <div className="relative p-6 bg-gradient-to-r from-gray-50 via-white to-gray-50 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 border-b-4 border-orange-400">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="bg-gradient-to-br from-orange-400 to-orange-500 p-3 rounded-2xl shadow-xl">
+                    <Car className="w-10 h-10 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Transport Permit</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Franchise Application Details</p>
+                  </div>
                 </div>
+                
                 <button 
                   onClick={closeModal}
-                  className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors"
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
+
+              {/* Info Cards Row */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Application ID Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Application ID</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white font-mono">
+                    FP-{String(selectedFranchise.application_id).padStart(4, '0')}
+                  </p>
+                </div>
+
+                {/* Date Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-purple-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Date Applied</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white">
+                    {formatDate(selectedFranchise.created_at)}
+                  </p>
+                </div>
+
+                {/* Status Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Status</p>
+                  <span className={`inline-block px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedFranchise.status)}`}>
+                    {selectedFranchise.status}
+                  </span>
+                </div>
+
+                {/* Permit Type Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-orange-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Permit Info</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                      selectedFranchise.permit_type === "NEW" 
+                        ? "bg-blue-100 text-blue-700" 
+                        : "bg-purple-100 text-purple-700"
+                    }`}>
+                      {selectedFranchise.permit_type === "NEW" ? "New" : "Renewal"}
+                    </span>
+                    <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                      selectedFranchise.permit_subtype === "MTOP" 
+                        ? "bg-green-100 text-green-700" 
+                        : "bg-orange-100 text-orange-700"
+                    }`}>
+                      {selectedFranchise.permit_subtype}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto bg-gradient-to-b from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
               {/* Personal Information Section */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Personal Information</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-blue-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Personal Information</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Full Name</label>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-700 dark:to-slate-600 p-4 rounded-xl">
+                    <label className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Full Name</label>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white mt-2">
                       {selectedFranchise.full_name}
                     </p>
                   </div>
@@ -1223,8 +1731,13 @@ export default function FranchiseDashboard() {
               </div>
 
               {/* Vehicle Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Vehicle Information</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-green-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-3 rounded-xl shadow-lg">
+                    <Car className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Vehicle Information</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Vehicle Type</label>
@@ -1278,8 +1791,13 @@ export default function FranchiseDashboard() {
               </div>
 
               {/* Franchise Details */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Franchise Details</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-orange-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-xl shadow-lg">
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Franchise & Route Details</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Permit Type</label>
@@ -1321,8 +1839,13 @@ export default function FranchiseDashboard() {
               </div>
 
               {/* LTO Documents */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">LTO Documents</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-purple-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-3 rounded-xl shadow-lg">
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">LTO Registration Documents</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">LTO OR Number</label>
@@ -1352,34 +1875,76 @@ export default function FranchiseDashboard() {
               </div>
 
               {/* Payment Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Payment Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Franchise Fee OR</label>
-                    <p className="text-xl font-bold text-[#4CAF50] mt-1">
-                      ₱{selectedFranchise.franchise_fee_or || '0.00'}
-                    </p>
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-700 rounded-2xl shadow-lg p-6 border-2 border-green-200 dark:border-slate-600">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-3 rounded-xl shadow-lg">
+                    <Receipt className="w-6 h-6 text-white" />
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Sticker ID Fee OR</label>
-                    <p className="text-xl font-bold text-[#4CAF50] mt-1">
-                      ₱{selectedFranchise.sticker_id_fee_or || '0.00'}
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Payment Information</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500 relative">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Franchise Fee</label>
+                    <p className="text-3xl font-black text-green-600 mt-2">
+                      ₱250.00
                     </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">PAID</span>
+                      {selectedFranchise.franchise_fee_or && (
+                        <span className="text-xs text-gray-500">OR: {selectedFranchise.franchise_fee_or}</span>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Inspection Fee OR</label>
-                    <p className="text-xl font-bold text-[#4CAF50] mt-1">
-                      ₱{selectedFranchise.inspection_fee_or || '0.00'}
+                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500 relative">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Sticker ID Fee</label>
+                    <p className="text-3xl font-black text-blue-600 mt-2">
+                      ₱150.00
                     </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">PAID</span>
+                      {selectedFranchise.sticker_id_fee_or && (
+                        <span className="text-xs text-gray-500">OR: {selectedFranchise.sticker_id_fee_or}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-orange-500 relative">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Inspection Fee</label>
+                    <p className="text-3xl font-black text-orange-600 mt-2">
+                      ₱100.00
+                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">PAID</span>
+                      {selectedFranchise.inspection_fee_or && (
+                        <span className="text-xs text-gray-500">OR: {selectedFranchise.inspection_fee_or}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-6 p-4 bg-white dark:bg-slate-800 rounded-xl border-2 border-dashed border-green-300">
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold text-gray-700 dark:text-gray-300">Total Amount Paid:</span>
+                    <span className="text-4xl font-black text-green-600">
+                      ₱500.00
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm text-gray-600 dark:text-gray-400 text-center">
+                    Franchise Fee + Sticker Fee + Inspection Fee
                   </div>
                 </div>
               </div>
 
               {/* Submitted Attachments - UPDATED TO SHOW ALL FILES */}
               {selectedFranchise.attachments && selectedFranchise.attachments.length > 0 ? (
-                <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Submitted Files</h4>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-indigo-100 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-3 rounded-xl shadow-lg">
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                    <span className="ml-auto bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold">
+                      {selectedFranchise.attachments.length} files
+                    </span>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {selectedFranchise.attachments.map((file) => (
                       <div key={file.id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-slate-600 rounded-lg">
@@ -1413,24 +1978,37 @@ export default function FranchiseDashboard() {
                   </div>
                 </div>
               ) : (
-                <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Submitted Files</h4>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">
-                    No files uploaded for this application.
-                  </p>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-gradient-to-br from-gray-400 to-gray-500 p-3 rounded-xl shadow-lg">
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                  </div>
+                  <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-xl">
+                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      No files uploaded for this application.
+                    </p>
+                  </div>
                 </div>
               )}
 
               {/* Review Comments Section */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Review Comments
-                  {selectedFranchise.remarks && (
-                    <span className="text-sm font-normal text-gray-500 ml-2">
-                      ({formatComments(selectedFranchise.remarks).length} comment{formatComments(selectedFranchise.remarks).length !== 1 ? 's' : ''})
-                    </span>
-                  )}
-                </h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-yellow-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 p-3 rounded-xl shadow-lg">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Review Comments</h3>
+                    {selectedFranchise.remarks && (
+                      <span className="text-sm font-normal text-gray-500">
+                        ({formatComments(selectedFranchise.remarks).length} comment{formatComments(selectedFranchise.remarks).length !== 1 ? 's' : ''})
+                      </span>
+                    )}
+                  </div>
+                </div>
                 
                 {/* Display all comments in one box */}
                 <div className="space-y-4 mb-6">
@@ -1504,39 +2082,155 @@ export default function FranchiseDashboard() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3 justify-end pt-6 border-t border-gray-200 dark:border-slate-700">
-                {/* Status Update Buttons - Show for Compliance, hide for approved/rejected */}
-                {(selectedFranchise.status === "Compliance" || !selectedFranchise.status) ? (
-                  <>
-                    <button 
-                      onClick={handleForCompliance}
-                      className="px-6 py-3 bg-[#FDA811] text-white rounded-lg hover:bg-[#4A90E2] transition-colors font-medium"
+              <div className="flex gap-4 justify-between pt-8 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl p-6 border-t-4 border-gray-300 dark:border-slate-600">
+                {/* Actions Dropdown - Show for pending/compliance status */}
+                {(selectedFranchise.status === "Compliance" || selectedFranchise.status === "Pending" || !selectedFranchise.status) && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
                     >
-                      Mark Compliance
+                      Actions
+                      <svg className={`w-4 h-4 transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
                     </button>
-                    
-                    <button 
-                      onClick={handleReject}
-                      className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#E53935] transition-colors font-medium"
-                    >
-                      Reject Application
-                    </button>
-                    
-                    <button 
-                      onClick={handleApprove}
-                      className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-all font-medium shadow-sm"
-                    >
-                      Approve Permit
-                    </button>
-                  </>
-                ) : (
-                  <button 
-                    onClick={closeModal}
-                    className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors font-medium"
-                  >
-                    Close
-                  </button>
+
+                    {/* Dropdown Menu */}
+                    {showActionsDropdown && (
+                      <div className="absolute left-0 bottom-full mb-2 w-72 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden z-50 max-h-96 overflow-y-auto">
+                        {/* Processing Status Updates */}
+                        <div className="px-3 py-2 bg-gray-100 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
+                          <p className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">Processing Steps</p>
+                        </div>
+                        
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Under Review', 'Mark as Under Review', 'Application is now being reviewed by the team.', '#3B82F6');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <Search className="w-5 h-5 text-blue-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Under Review</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Document Verification', 'Document Verification', 'Documents are being verified for completeness and authenticity.', '#8B5CF6');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-purple-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <FileText className="w-5 h-5 text-purple-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Document Verification</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Field Inspection Scheduled', 'Schedule Field Inspection', 'Field inspection has been scheduled for this vehicle.', '#0EA5E9');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-cyan-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <Car className="w-5 h-5 text-cyan-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Field Inspection Scheduled</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Payment Verification', 'Verify Payment', 'Payment is being verified.', '#F59E0B');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-amber-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <Receipt className="w-5 h-5 text-amber-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Payment Verification</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('For Manager Approval', 'Send for Manager Approval', 'Application is being sent to manager for approval.', '#6366F1');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <User className="w-5 h-5 text-indigo-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">For Manager Approval</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Printing Processing', 'Mark as Printing', 'Permit is being printed and processed.', '#14B8A6');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-teal-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <FileText className="w-5 h-5 text-teal-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Printing/Processing</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Ready for Release', 'Mark Ready for Release', 'Permit is ready for release to applicant.', '#10B981');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-emerald-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <CheckCircle className="w-5 h-5 text-emerald-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Ready for Release</span>
+                        </button>
+
+                        {/* Compliance & Actions */}
+                        <div className="px-3 py-2 bg-gray-100 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
+                          <p className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">Actions</p>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleForCompliance();
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-yellow-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <AlertCircle className="w-5 h-5 text-yellow-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Mark for Compliance</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleReject();
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <X className="w-5 h-5 text-red-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Reject Application</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleApprove();
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-green-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3"
+                        >
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">✓ Approve Permit</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
+
+                {/* Close Button - Always visible */}
+                <button 
+                  onClick={closeModal}
+                  className="px-8 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2 ml-auto"
+                >
+                  <X className="w-5 h-5" />
+                  Close
+                </button>
               </div>
             </div>
           </div>
@@ -1712,39 +2406,6 @@ export default function FranchiseDashboard() {
         </div>
       )}
 
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6 transform transition-all">
-            <div className="text-center">
-              {/* Success Checkmark Animation */}
-              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-                <CheckCircle className="h-10 w-10 text-green-600 dark:text-green-400" />
-              </div>
-              
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Success!
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                {successMessage}
-              </p>
-              
-              <div className="flex justify-center space-x-3">
-                <button
-                  onClick={() => {
-                    setShowSuccessModal(false);
-                    setSuccessMessage('');
-                  }}
-                  className="px-6 py-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-colors font-medium flex items-center"
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Continue
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

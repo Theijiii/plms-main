@@ -42,145 +42,304 @@ export default function BusPermitType({ business_permit_id }) {
     }
   };
 
+  const verifyApplicantId = async (applicantId) => {
+    try {
+      const response = await fetch(`https://e-plms.goserveph.com/backend/business_permit/admin_fetch.php?search=${encodeURIComponent(applicantId)}`);
+      const data = await response.json();
+      
+      console.log('API Response:', data);
+      console.log('Searching for Applicant ID:', applicantId);
+      
+      if (data.success && Array.isArray(data.data)) {
+        console.log('Received applications:', data.data.length);
+        console.log('Applications:', data.data.map(app => ({
+          applicant_id: app.applicant_id,
+          status: app.status
+        })));
+        
+        const application = data.data.find(app => 
+          String(app.applicant_id).trim().toLowerCase() === String(applicantId).trim().toLowerCase()
+        );
+        
+        console.log('Found application:', application);
+        
+        return application ? { exists: true, applicant_id: application.applicant_id, application } : { exists: false };
+      }
+      return { exists: false };
+    } catch (error) {
+      console.error('Error verifying Applicant ID:', error);
+      return { exists: false, error: true };
+    }
+  };
+
   const handleTypeSelection = (typeId) => {
     const selectedApplication = application_type.find(t => t.id === typeId);
     
-    // First ask about Barangay Permit
-    Swal.fire({
-      title: 'Do you have an existing Barangay Permit?',
-      html: `
-        <div style="text-align: center; padding: 10px 0;">
-          <p style="margin-bottom: 10px;">Before applying for a business permit, we need to check if you already have a valid Barangay Permit.</p>
-          <p style="font-size: 0.9rem; color: #666;">If you don't have one, you will be redirected to the Barangay Permit application page.</p>
-        </div>
-      `,
-      icon: 'question',
-      showDenyButton: true,
-      confirmButtonColor: COLORS.success,
-      denyButtonColor: COLORS.primary,
-      confirmButtonText: 'Yes, I have one',
-      denyButtonText: 'No, redirect me',
-      customClass: {
-        popup: 'swal-wide',
-        title: 'swal-title-center',
-        htmlContainer: 'swal-text-center'
-      }
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        // Ask for Barangay Permit ID
-        const { value: permitId } = await Swal.fire({
-          title: 'Enter Barangay Permit ID',
-          html: `
-            <div style="text-align: center; padding: 10px 0;">
-              <p style="margin-bottom: 15px; font-size: 0.95rem;">Please enter your Barangay Permit ID to verify your permit.</p>
-            </div>
-          `,
-          input: 'text',
-          inputPlaceholder: 'e.g., 2041',
-          showCancelButton: true,
-          confirmButtonColor: COLORS.success,
-          cancelButtonColor: '#9CA3AF',
-          confirmButtonText: 'Verify',
-          cancelButtonText: 'Cancel',
-          customClass: {
-            popup: 'swal-wide',
-            title: 'swal-title-center',
-            htmlContainer: 'swal-text-center'
-          },
-          inputValidator: (value) => {
-            if (!value) {
-              return 'Please enter your Barangay Permit ID';
-            }
-          }
-        });
-
-        if (permitId) {
-          // Show loading while verifying
-          Swal.fire({
-            title: 'Verifying...',
-            html: '<p style="text-align: center;">Checking your Barangay Permit ID...</p>',
-            allowOutsideClick: false,
-            showConfirmButton: false,
-            didOpen: () => {
-              Swal.showLoading();
+    // Check if this is a NEW application or other type
+    if (typeId === 'NEW') {
+      // For NEW type, ask about Barangay Permit
+      Swal.fire({
+        title: 'Do you have an existing Barangay Permit?',
+        html: `
+          <div style="text-align: center; padding: 10px 0;">
+            <p style="margin-bottom: 10px;">Before applying for a business permit, we need to check if you already have a valid Barangay Permit.</p>
+            <p style="font-size: 0.9rem; color: #666;">If you don't have one, you will be redirected to the Barangay Permit application page.</p>
+          </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonColor: COLORS.success,
+        cancelButtonColor: '#9CA3AF',
+        denyButtonColor: COLORS.primary,
+        confirmButtonText: 'Yes, I have one',
+        cancelButtonText: 'No',
+        denyButtonText: 'Redirect me to apply',
+        customClass: {
+          popup: 'swal-wide',
+          title: 'swal-title-center',
+          htmlContainer: 'swal-text-center'
+        }
+      }).then(async (result) => {
+        if (result.isConfirmed) {
+          // Ask for Barangay Permit ID
+          const { value: permitId } = await Swal.fire({
+            title: 'Enter Barangay Permit ID',
+            html: `
+              <div style="text-align: center; padding: 10px 0;">
+                <p style="margin-bottom: 15px; font-size: 0.95rem;">Please enter your Barangay Permit ID to verify your permit.</p>
+              </div>
+            `,
+            input: 'text',
+            inputPlaceholder: 'e.g., 2041',
+            showCancelButton: true,
+            confirmButtonColor: COLORS.success,
+            cancelButtonColor: '#9CA3AF',
+            confirmButtonText: 'Verify',
+            cancelButtonText: 'Cancel',
+            customClass: {
+              popup: 'swal-wide',
+              title: 'swal-title-center',
+              htmlContainer: 'swal-text-center'
+            },
+            inputValidator: (value) => {
+              if (!value) {
+                return 'Please enter your Barangay Permit ID';
+              }
             }
           });
 
-          // Verify the permit ID
-          const verification = await verifyBarangayClearance(permitId);
-
-          if (verification.exists) {
-            // Valid permit - Show type selection confirmation
+          if (permitId) {
+            // Show loading while verifying
             Swal.fire({
-              title: 'Permit Verified!',
-              html: `
-                <div style="text-align: center; padding: 10px 0;">
-                  <p style="margin-bottom: 10px; color: ${COLORS.success};">✓ Your Barangay Permit is valid and approved.</p>
-                  <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
-                  <p style="margin-bottom: 10px;">You have selected: <strong style="color: ${COLORS.primary}">${selectedApplication?.title}</strong></p>
-                  <p style="font-size: 0.9rem; color: #666;">${selectedApplication?.description}</p>
-                </div>
-              `,
-              icon: 'success',
-              showCancelButton: true,
-              confirmButtonColor: COLORS.success,
-              cancelButtonColor: '#9CA3AF',
-              confirmButtonText: 'Continue',
-              cancelButtonText: 'Cancel',
-              customClass: {
-                popup: 'swal-wide',
-                title: 'swal-title-center',
-                htmlContainer: 'swal-text-center'
-              }
-            }).then((confirmResult) => {
-              if (confirmResult.isConfirmed) {
-                const routeMap = {
-                  RENEWAL: '/user/business/renewal',
-                  SPECIAL: '/user/business/special',
-                  LIQUOR_PERMIT: '/user/business/liquor',
-                  AMENDMENT: '/user/business/amendment',
-                };
-                navigate(routeMap[typeId] || '/user/business/new', {
-                  state: { 
-                    application_type: typeId,
-                    barangay_permit_id: verification.permit_id
-                  }
-                });
-              }
-            });
-          } else {
-            // Invalid or not found - Show error with only redirect option
-            Swal.fire({
-              title: 'Permit Not Found',
-              html: `
-                <div style="text-align: center; padding: 10px 0;">
-                  <p style="margin-bottom: 10px; color: ${COLORS.danger};">There is no ID existing or your permit is not approved yet.</p>
-                  <p style="font-size: 0.9rem; color: #666;">You need to apply for a Barangay Permit first before proceeding with a Business Permit application.</p>
-                </div>
-              `,
-              icon: 'error',
-              showDenyButton: true,
-              showCancelButton: false,
+              title: 'Verifying...',
+              html: '<p style="text-align: center;">Checking your Barangay Permit ID...</p>',
+              allowOutsideClick: false,
               showConfirmButton: false,
-              denyButtonColor: COLORS.primary,
-              denyButtonText: 'Apply for Barangay Permit',
-              customClass: {
-                popup: 'swal-wide',
-                title: 'swal-title-center',
-                htmlContainer: 'swal-text-center'
-              }
-            }).then((errorResult) => {
-              if (errorResult.isDenied) {
-                navigate('/user/barangay/new');
+              didOpen: () => {
+                Swal.showLoading();
               }
             });
+
+            // Verify the permit ID
+            const verification = await verifyBarangayClearance(permitId);
+
+            if (verification.exists) {
+              // NEW type - show confirmation
+              Swal.fire({
+                title: 'Permit Verified!',
+                html: `
+                  <div style="text-align: center; padding: 10px 0;">
+                    <p style="margin-bottom: 10px; color: ${COLORS.success};">✓ Your Barangay Permit is valid and approved.</p>
+                    <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
+                    <p style="margin-bottom: 10px;">You have selected: <strong style="color: ${COLORS.primary}">${selectedApplication?.title}</strong></p>
+                    <p style="font-size: 0.9rem; color: #666;">${selectedApplication?.description}</p>
+                  </div>
+                `,
+                icon: 'success',
+                showCancelButton: true,
+                confirmButtonColor: COLORS.success,
+                cancelButtonColor: '#9CA3AF',
+                confirmButtonText: 'Continue',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                  popup: 'swal-wide',
+                  title: 'swal-title-center',
+                  htmlContainer: 'swal-text-center'
+                }
+              }).then((confirmResult) => {
+                if (confirmResult.isConfirmed) {
+                  navigate('/user/business/new', {
+                    state: { 
+                      application_type: typeId,
+                      barangay_permit_id: verification.permit_id
+                    }
+                  });
+                }
+              });
+            } else {
+              // Invalid or not found
+              Swal.fire({
+                title: 'Permit Not Found',
+                html: `
+                  <div style="text-align: center; padding: 10px 0;">
+                    <p style="margin-bottom: 10px; color: ${COLORS.danger};">There is no ID existing or your permit is not approved yet.</p>
+                    <p style="font-size: 0.9rem; color: #666;">You need to apply for a Barangay Permit first before proceeding with a Business Permit application.</p>
+                  </div>
+                `,
+                icon: 'error',
+                showDenyButton: true,
+                showCancelButton: false,
+                showConfirmButton: false,
+                denyButtonColor: COLORS.primary,
+                denyButtonText: 'Apply for Barangay Permit',
+                customClass: {
+                  popup: 'swal-wide',
+                  title: 'swal-title-center',
+                  htmlContainer: 'swal-text-center'
+                }
+              }).then((errorResult) => {
+                if (errorResult.isDenied) {
+                  navigate('/user/barangay/new');
+                }
+              });
+            }
+          }
+        } else if (result.isDenied) {
+          // Redirect to Barangay Permit application
+          navigate('/user/barangay/new');
+        }
+        // If cancelled, do nothing
+      });
+    } else {
+      // For other types (RENEWAL, SPECIAL, LIQUOR_PERMIT, AMENDMENT), ask for Business Permit Applicant ID
+      Swal.fire({
+        title: 'Do you have an existing Business Permit?',
+        html: `
+          <div style="text-align: center; padding: 10px 0;">
+            <p style="margin-bottom: 10px;">To proceed with <strong>${selectedApplication?.title}</strong>, we need to verify your existing Business Permit.</p>
+            <p style="font-size: 0.9rem; color: #666;">${selectedApplication?.description}</p>
+          </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: COLORS.success,
+        cancelButtonColor: '#9CA3AF',
+        confirmButtonText: 'Yes, I have one',
+        cancelButtonText: 'No',
+        customClass: {
+          popup: 'swal-wide',
+          title: 'swal-title-center',
+          htmlContainer: 'swal-text-center'
+        }
+      }).then(async (result) => {
+        if (result.isConfirmed) {
+          // Ask for Business Permit Applicant ID
+          const { value: applicantId } = await Swal.fire({
+            title: 'Enter Business Permit Applicant ID',
+            html: `
+              <div style="text-align: center; padding: 10px 0;">
+                <p style="margin-bottom: 15px; font-size: 0.95rem;">Please enter your Business Permit Applicant ID to verify your existing application.</p>
+              </div>
+            `,
+            input: 'text',
+            inputPlaceholder: 'e.g., BUS2026568',
+            showCancelButton: true,
+            confirmButtonColor: COLORS.success,
+            cancelButtonColor: '#9CA3AF',
+            confirmButtonText: 'Verify',
+            cancelButtonText: 'Cancel',
+            customClass: {
+              popup: 'swal-wide',
+              title: 'swal-title-center',
+              htmlContainer: 'swal-text-center'
+            },
+            inputValidator: (value) => {
+              if (!value) {
+                return 'Please enter your Applicant ID';
+              }
+            }
+          });
+
+          if (applicantId) {
+            // Show loading while verifying
+            Swal.fire({
+              title: 'Verifying...',
+              html: '<p style="text-align: center;">Checking your Applicant ID...</p>',
+              allowOutsideClick: false,
+              showConfirmButton: false,
+              didOpen: () => {
+                Swal.showLoading();
+              }
+            });
+
+            // Verify the applicant ID
+            const applicantVerification = await verifyApplicantId(applicantId);
+
+            if (applicantVerification.exists) {
+              // Valid applicant ID - Show confirmation
+              Swal.fire({
+                title: 'Verification Complete!',
+                html: `
+                  <div style="text-align: center; padding: 10px 0;">
+                    <p style="margin-bottom: 10px; color: ${COLORS.success};">✓ Your Business Permit Applicant ID is verified.</p>
+                    <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
+                    <p style="margin-bottom: 10px;">You have selected: <strong style="color: ${COLORS.primary}">${selectedApplication?.title}</strong></p>
+                    <p style="font-size: 0.9rem; color: #666;">${selectedApplication?.description}</p>
+                  </div>
+                `,
+                icon: 'success',
+                showCancelButton: true,
+                confirmButtonColor: COLORS.success,
+                cancelButtonColor: '#9CA3AF',
+                confirmButtonText: 'Continue',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                  popup: 'swal-wide',
+                  title: 'swal-title-center',
+                  htmlContainer: 'swal-text-center'
+                }
+              }).then((confirmResult) => {
+                if (confirmResult.isConfirmed) {
+                  const routeMap = {
+                    RENEWAL: '/user/business/renewal',
+                    SPECIAL: '/user/business/special',
+                    LIQUOR_PERMIT: '/user/business/liquor',
+                    AMENDMENT: '/user/business/amendment',
+                  };
+                  navigate(routeMap[typeId], {
+                    state: { 
+                      application_type: typeId,
+                      applicant_id: applicantVerification.applicant_id
+                    }
+                  });
+                }
+              });
+            } else {
+              // Invalid applicant ID
+              Swal.fire({
+                title: 'Applicant ID Not Found',
+                html: `
+                  <div style="text-align: center; padding: 10px 0;">
+                    <p style="margin-bottom: 10px; color: ${COLORS.danger};">The Applicant ID you entered does not exist in our records.</p>
+                    <p style="font-size: 0.9rem; color: #666;">Please check your Applicant ID and try again.</p>
+                  </div>
+                `,
+                icon: 'error',
+                confirmButtonColor: COLORS.primary,
+                confirmButtonText: 'OK',
+                customClass: {
+                  popup: 'swal-wide',
+                  title: 'swal-title-center',
+                  htmlContainer: 'swal-text-center'
+                }
+              });
+            }
           }
         }
-      } else if (result.isDenied) {
-        // No Barangay Permit - Redirect
-        navigate('/user/barangay/new');
-      }
-    });
+        // If cancelled or no, do nothing
+      });
+    }
   };
 
   const handleBackToDashboard = () => {

@@ -1,16 +1,17 @@
 <?php
 session_start();
-
-
+ 
 $allowedOrigins = [
     'http://localhost',
     'https://e-plms.goserveph.com/',
     'urbanplanning.goserveph.com',
     'https://urbanplanning.goserveph.com'
 ];
-
+ 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if ($origin && in_array($origin, $allowedOrigins, true)) {
+ 
+// Allow localhost with any port for development
+if ($origin && (in_array($origin, $allowedOrigins, true) || strpos($origin, 'http://localhost:') === 0)) {
     header("Access-Control-Allow-Origin: {$origin}");
 } else {
     header("Access-Control-Allow-Origin: https://e-plms.goserveph.com/");
@@ -19,7 +20,7 @@ header("Access-Control-Allow-Credentials: true");
 header("Content-Type: application/json");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
-
+ 
 // Handle preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 // Database Connection
@@ -31,7 +32,7 @@ if ($conn->connect_error) {
     ]);
     exit;
 }
-
+ 
 try {
     // Get filter parameters
     $status = $_GET['status'] ?? null;
@@ -40,12 +41,12 @@ try {
     $offset = isset($_GET['offset']) ? intval($_GET['offset']) : 0;
     $sort_by = $_GET['sort_by'] ?? 'application_date';
     $sort_order = $_GET['sort_order'] ?? 'DESC';
-
+ 
     // Validate sort parameters
     $allowed_sort_columns = ['application_date', 'owner_last_name', 'business_name', 'capital_investment', 'total_employees', 'status'];
     $sort_by = in_array($sort_by, $allowed_sort_columns) ? $sort_by : 'application_date';
     $sort_order = strtoupper($sort_order) === 'ASC' ? 'ASC' : 'DESC';
-
+ 
     // Build base query - FIXED: Removed bp. prefix since we're not using table alias
     $sql = "SELECT 
                 business_permit_applications.permit_id,
@@ -102,17 +103,17 @@ try {
                 business_permit_applications.has_representative_scanned_id
             FROM business_permit_applications
             WHERE 1=1";
-
+ 
     $params = [];
     $types = "";
-
+ 
     // Apply status filter
     if ($status && $status !== 'all') {
         $sql .= " AND business_permit_applications.status = ?";
         $params[] = $status;
         $types .= "s";
     }
-
+ 
     // Apply search filter
     if (!empty($search)) {
         $sql .= " AND (
@@ -130,26 +131,26 @@ try {
             $types .= "s";
         }
     }
-
+ 
     // Order and limit
     $sql .= " ORDER BY $sort_by $sort_order LIMIT ? OFFSET ?";
     $params[] = $limit;
     $params[] = $offset;
     $types .= "ii";
-
+ 
     // Prepare and execute
     $stmt = $conn->prepare($sql);
     if ($params) {
         $stmt->bind_param($types, ...$params);
     }
-
+ 
     if (!$stmt->execute()) {
         throw new Exception("Failed to fetch applications: " . $stmt->error);
     }
-
+ 
     $result = $stmt->get_result();
     $applications = [];
-
+ 
     while ($row = $result->fetch_assoc()) {
         // Get documents for this application
         $docStmt = $conn->prepare("
@@ -161,13 +162,13 @@ try {
         $docStmt->bind_param("i", $row['permit_id']);
         $docStmt->execute();
         $docResult = $docStmt->get_result();
-        
+ 
         $documents = [];
         while ($doc = $docResult->fetch_assoc()) {
             $documents[] = $doc;
         }
         $docStmt->close();
-
+ 
         // Count documents
         $docCountStmt = $conn->prepare("
             SELECT COUNT(*) as count 
@@ -179,7 +180,7 @@ try {
         $docCountResult = $docCountStmt->get_result();
         $docCount = $docCountResult->fetch_assoc()['count'];
         $docCountStmt->close();
-
+ 
         $applications[] = [
             ...$row,
             'documents' => $documents,
@@ -195,9 +196,9 @@ try {
             )
         ];
     }
-
+ 
     $stmt->close();
-
+ 
     // Get counts for different statuses
     $countSql = "SELECT 
                     status,
@@ -205,7 +206,7 @@ try {
                 FROM business_permit_applications 
                 GROUP BY status";
     $countResult = $conn->query($countSql);
-    
+ 
     $counts = [
         'total' => 0,
         'pending' => 0,
@@ -213,6 +214,7 @@ try {
         'rejected' => 0,
         'compliance' => 0
     ];
+ 
 
     while ($countRow = $countResult->fetch_assoc()) {
         $counts['total'] += $countRow['count'];
