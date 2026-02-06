@@ -154,31 +154,63 @@ export default function BarangayNew() {
     return text.toLowerCase().replace(/[^a-z0-9]/g, '');
   };
 
+  // Improved fuzzy matching using Levenshtein distance
+  const levenshteinDistance = (str1, str2) => {
+    const s1 = str1.toLowerCase();
+    const s2 = str2.toLowerCase();
+    const len1 = s1.length;
+    const len2 = s2.length;
+    const matrix = [];
+
+    for (let i = 0; i <= len2; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= len1; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= len2; i++) {
+      for (let j = 1; j <= len1; j++) {
+        if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    return matrix[len2][len1];
+  };
+
   const fuzzyMatch = (str1, str2, threshold = 0.7) => {
+    if (!str1 || !str2) return 0;
+    
     const s1 = normalizeText(str1);
     const s2 = normalizeText(str2);
     
+    // Exact match
     if (s1 === s2) return 1.0;
-    if (s1.includes(s2) || s2.includes(s1)) return 0.9;
     
-    const longer = s1.length > s2.length ? s1 : s2;
-    const shorter = s1.length > s2.length ? s2 : s1;
+    // Check if one contains the other
+    if (s1.includes(s2) || s2.includes(s1)) return 0.95;
     
-    if (longer.length === 0) return 0.0;
+    // Use Levenshtein distance for similarity
+    const maxLen = Math.max(s1.length, s2.length);
+    if (maxLen === 0) return 1.0;
     
-    let matches = 0;
-    for (let i = 0; i < shorter.length; i++) {
-      if (longer.includes(shorter[i])) matches++;
-    }
+    const distance = levenshteinDistance(s1, s2);
+    const similarity = 1 - (distance / maxLen);
     
-    const similarity = matches / longer.length;
     return similarity >= threshold ? similarity : 0;
   };
 
   const ID_TYPE_PATTERNS = {
     "Philippine National ID (PhilSys ID)": ["philsys", "philippine national id", "national id", "phil id", "republic of the philippines", "pambansang pagkakakilanlan", "philippine identification card", "pcn"],
     "Passport (DFA)": ["passport", "dfa", "department of foreign affairs", "p <", "republic of the philippines passport"],
-    "Driver's License (LTO)": ["driver", "license", "licence", "lto", "land transportation", "dl no"],
+    "Driver's License (LTO)": ["driver", "license", "licence", "lto", "land transportation", "dl no", "department of transportation", "driver's license", "drivers license"],
     "UMID": ["umid", "unified multi-purpose id", "sss", "gsis"],
     "PRC ID": ["prc", "professional regulation commission", "professional id"],
     "Voter's ID": ["voter", "comelec", "commission on elections", "voter's identification"],
@@ -289,11 +321,50 @@ export default function BarangayNew() {
       setVerificationStatus(prev => ({ ...prev, progress: 90 }));
 
       const extractedText = text.toLowerCase();
+      console.log('🔍 OCR Extracted Text:', text);
       
+      // First name matching - check both full name and variations
       const firstNameMatch = fuzzyMatch(formData.first_name, extractedText);
-      const lastNameMatch = fuzzyMatch(formData.last_name, extractedText);
-      const middleNameMatch = formData.middle_name ? 
-        fuzzyMatch(formData.middle_name, extractedText) : null;
+      console.log(`✓ First Name Match: ${formData.first_name} = ${firstNameMatch.toFixed(2)}`);
+      
+      // Last name matching - check multiple variations
+      let lastNameMatch = fuzzyMatch(formData.last_name, extractedText);
+      // Also check if last name appears as separate word (common in IDs)
+      const lastNameWords = formData.last_name.toLowerCase().split(' ');
+      lastNameWords.forEach(word => {
+        if (word.length > 2) {
+          const wordMatch = fuzzyMatch(word, extractedText);
+          if (wordMatch > lastNameMatch) lastNameMatch = wordMatch;
+        }
+      });
+      console.log(`✓ Last Name Match: ${formData.last_name} = ${lastNameMatch.toFixed(2)}`);
+      
+      // Middle name/initial matching - handle both full names and initials
+      let middleNameMatch = null;
+      if (formData.middle_name) {
+        const middleName = formData.middle_name.trim();
+        
+        // Check if it's just an initial (1-2 characters possibly with dot)
+        const isInitial = middleName.replace(/\./g, '').length <= 2;
+        
+        if (isInitial) {
+          // If initial, check if the first letter appears in common middle name patterns
+          const initial = middleName.charAt(0).toLowerCase();
+          const middleNamePattern = new RegExp(`\\b${initial}[a-z]*\\b`, 'i');
+          middleNameMatch = middleNamePattern.test(text) ? 0.85 : fuzzyMatch(middleName, extractedText);
+          console.log(`✓ Middle Initial Match: ${middleName} (initial) = ${middleNameMatch ? middleNameMatch.toFixed(2) : '0.00'}`);
+        } else {
+          // If full middle name, try normal fuzzy match
+          middleNameMatch = fuzzyMatch(middleName, extractedText);
+          // Also check just the initial of the provided middle name
+          const initial = middleName.charAt(0).toLowerCase();
+          const initialPattern = new RegExp(`\\b${initial}\\.?\\b`, 'i');
+          if (initialPattern.test(text) && middleNameMatch < 0.7) {
+            middleNameMatch = Math.max(middleNameMatch, 0.8);
+          }
+          console.log(`✓ Middle Name Match: ${middleName} = ${middleNameMatch.toFixed(2)}`);
+        }
+      }
       
       // Enhanced ID number verification for Philippine National ID and other formats
       let idNumberMatch = false;
@@ -760,7 +831,7 @@ export default function BarangayNew() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>First Name *</label>
-                <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First Name" className={`w-full p-3 border border-black rounded-lg ${errors.first_name ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First Name " className={`w-full p-3 border border-black rounded-lg ${errors.first_name ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
                 {errors.first_name && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.first_name}</p>}
               </div>
               <div>
