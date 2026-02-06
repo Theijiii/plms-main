@@ -79,7 +79,13 @@ function AdminSidebar({ collapsed }) {
       });
 
       // Create final array with main dashboard first, then department groups
-
+      const result = [];
+      
+      // Add main dashboard item first
+      const dashboardItem = AdminSidebarItems.find(item => item.id === 'dashboard');
+      if (dashboardItem) {
+        result.push(dashboardItem);
+      }
       
       // Add department groups in specific order
       const departmentOrder = ['business', 'building', 'transport', 'barangay'];
