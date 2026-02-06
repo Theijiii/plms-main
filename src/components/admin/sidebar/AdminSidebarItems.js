@@ -83,19 +83,18 @@ const AdminSidebarItems = [
     department: ["transport", "super"],
   },
 
-  // BARANGAY
   {
-    id: "barangayPermit",
+    id: "barangayDashboard",
     label: "Permit Dashboard",
     icon: Home,
-    path: "/admin/barangaypermit",
+    path: "/admin/brgydashboard",
     department: ["barangay", "super"],
   },
   {
-    id: "clearanceRequests",
+    id: "brgyPermit",
     label: "Clearance Requests",
     icon: ShieldCheck,
-    path: "/admin/permitapplication",
+    path: "/admin/brgypermit",
     department: ["barangay", "super"],
   },
 ];

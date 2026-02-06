@@ -210,22 +210,27 @@ function App() {
             } 
           />
           
-         <Route 
-  path="barangaypermit" 
-  element={
-    <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
+         <Route path="barangaypermit" 
+      element={ <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
       <BarangayPermit />
-    </ProtectedRoute>
-  } 
-/>
-<Route 
-  path="permitapplication" 
-  element={
-    <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
-      <BrgyPermitApplication />
-    </ProtectedRoute>
-  } 
-/>
+    </ProtectedRoute>} 
+  />
+  <Route 
+    path="permitapplication" 
+    element={
+      <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
+        <BrgyPermitApplication />
+      </ProtectedRoute>
+    } 
+  />
+    <Route 
+    path="brgypermit" 
+    element={
+      <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
+        <BusPermitApplication />
+      </ProtectedRoute>
+    } 
+  />
           
 
           <Route 
