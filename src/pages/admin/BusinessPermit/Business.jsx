@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   Bar,
   Pie,
@@ -59,7 +59,9 @@ import {
   Folder,
   FileArchive,
   FileVideo,
-  FileAudio
+  FileAudio,
+  ChevronRight,
+  MessageSquare
 } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -150,7 +152,14 @@ export default function BusPermitAnalytics() {
   const [actionComment, setActionComment] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [showFilePreview, setShowFilePreview] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const [showSubmittedDocs, setShowSubmittedDocs] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  const imageRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const imagePositionRef = useRef({ x: 0, y: 0 });
   const [successMessage, setSuccessMessage] = useState('');
   const [activeTab, setActiveTab] = useState("all");
   const itemsPerPage = 15;
@@ -1153,7 +1162,12 @@ export default function BusPermitAnalytics() {
     setActionComment('');
     setSelectedFile(null);
     setShowFilePreview(false);
+    setShowSubmittedDocs(false);
     setShowModal(false);
+  };
+
+  const toggleSubmittedDocs = () => {
+    setShowSubmittedDocs(!showSubmittedDocs);
   };
 
   // Update permit status
@@ -1216,16 +1230,20 @@ export default function BusPermitAnalytics() {
         return;
       }
       
-      // Extract filename
+      // Extract filename for display
       const filename = file.file_path.split('/').pop();
       
-      // Call API endpoint instead of direct file access
-      const fullUrl = `${API_BASE}/uploads/${encodeURIComponent(filename)}`;
+      // Construct URL - use file_path directly with API_BASE
+      // Browser resolves ../ in URLs (e.g. ../uploads/file.jpg resolves correctly)
+      const fullUrl = `${API_BASE}/${file.file_path}`;
+      
+      console.log('Viewing file:', { file_path: file.file_path, url: fullUrl, file_type: file.file_type });
       
       setSelectedFile({
         ...file,
         url: fullUrl,
-        name: file.document_name || file.document_type || 'Document'
+        name: filename,
+        file_type: file.file_type || getFileType(filename)
       });
       setShowFilePreview(true);
       
@@ -1235,9 +1253,146 @@ export default function BusPermitAnalytics() {
     }
   };
 
+  // File preview functions
+  const updateZoomLevel = useCallback(() => {
+    if (imageRef.current) {
+      const currentTransform = imageRef.current.style.transform || 'scale(1)';
+      const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+      setZoomLevel(Math.round(currentScale * 100));
+    }
+  }, []);
+
+  // Handle ESC key press to close file preview
+  useEffect(() => {
+    const handleEscKey = (e) => {
+      if (e.key === 'Escape' && showFilePreview) {
+        closeFilePreview();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscKey);
+    return () => {
+      window.removeEventListener('keydown', handleEscKey);
+    };
+  }, [showFilePreview]);
+
+  // Reset image position when file changes
+  useEffect(() => {
+    if (selectedFile && imageRef.current) {
+      imageRef.current.style.transform = 'scale(1)';
+      imageRef.current.style.left = '0px';
+      imageRef.current.style.top = '0px';
+      imageRef.current.style.cursor = 'default';
+      setZoomLevel(100);
+      imagePositionRef.current = { x: 0, y: 0 };
+    }
+  }, [selectedFile]);
+
+  // Handle wheel event for zooming
+  const handleWheel = useCallback((e) => {
+    if (!imageRef.current || !isImageFile(selectedFile?.file_type, selectedFile?.name)) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.deltaY !== 0) {
+      const currentTransform = imageRef.current.style.transform || 'scale(1)';
+      const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      const newScale = Math.max(0.5, Math.min(currentScale + delta, 5));
+      imageRef.current.style.transform = `scale(${newScale})`;
+      imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
+      updateZoomLevel();
+    }
+  }, [selectedFile, updateZoomLevel]);
+
+  // Handle mouse down for dragging
+  const handleMouseDown = useCallback((e) => {
+    if (!imageRef.current || !isImageFile(selectedFile?.file_type, selectedFile?.name)) return;
+    
+    const currentTransform = imageRef.current.style.transform || 'scale(1)';
+    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+    
+    if (currentScale > 1) {
+      e.preventDefault();
+      isDraggingRef.current = true;
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      imageRef.current.style.cursor = 'grabbing';
+      
+      const handleMouseMove = (moveEvent) => {
+        if (!isDraggingRef.current || !imageRef.current) return;
+        
+        const deltaX = moveEvent.clientX - dragStartRef.current.x;
+        const deltaY = moveEvent.clientY - dragStartRef.current.y;
+        
+        const newX = imagePositionRef.current.x + deltaX;
+        const newY = imagePositionRef.current.y + deltaY;
+        
+        imageRef.current.style.left = `${newX}px`;
+        imageRef.current.style.top = `${newY}px`;
+      };
+      
+      const handleMouseUp = () => {
+        if (!imageRef.current) return;
+        
+        isDraggingRef.current = false;
+        imageRef.current.style.cursor = 'grab';
+        
+        if (imageRef.current.style.left && imageRef.current.style.top) {
+          imagePositionRef.current.x = parseFloat(imageRef.current.style.left);
+          imagePositionRef.current.y = parseFloat(imageRef.current.style.top);
+        }
+        
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+      
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+  }, [selectedFile]);
+
+  // Handle zoom controls
+  const handleZoomIn = useCallback(() => {
+    if (!imageRef.current) return;
+    
+    const currentTransform = imageRef.current.style.transform || 'scale(1)';
+    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+    const newScale = Math.min(currentScale + 0.25, 5);
+    imageRef.current.style.transform = `scale(${newScale})`;
+    imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
+    updateZoomLevel();
+  }, [updateZoomLevel]);
+
+  const handleZoomOut = useCallback(() => {
+    if (!imageRef.current) return;
+    
+    const currentTransform = imageRef.current.style.transform || 'scale(1)';
+    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+    const newScale = Math.max(currentScale - 0.25, 0.5);
+    imageRef.current.style.transform = `scale(${newScale})`;
+    imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
+    updateZoomLevel();
+  }, [updateZoomLevel]);
+
+  const handleResetZoom = useCallback(() => {
+    if (!imageRef.current) return;
+    
+    imageRef.current.style.transform = 'scale(1)';
+    imageRef.current.style.left = '0px';
+    imageRef.current.style.top = '0px';
+    imageRef.current.style.cursor = 'default';
+    setZoomLevel(100);
+    imagePositionRef.current = { x: 0, y: 0 };
+  }, []);
+
   const closeFilePreview = () => {
     setSelectedFile(null);
     setShowFilePreview(false);
+    setZoomLevel(100);
+    isDraggingRef.current = false;
+    dragStartRef.current = { x: 0, y: 0 };
+    imagePositionRef.current = { x: 0, y: 0 };
   };
 
   if (loading) {
@@ -2076,81 +2231,122 @@ export default function BusPermitAnalytics() {
         </div>
       )}
 
-      {/* Detailed View Modal */}
+      {/* Business Permit Details Modal - Modern Design */}
       {showModal && selectedPermit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-sm p-4 overflow-auto">
-          <div className="w-full max-w-6xl bg-white rounded-xl shadow-2xl">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-[#E9E7E7] bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5 rounded-t-xl">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-[#4D4A4A]">Business Permit Application</h2>
-                  <p className="text-sm text-[#4D4A4A] text-opacity-70 mt-1">
-                    Application ID: {selectedPermit.applicant_id} • Permit ID: BP-{String(selectedPermit.permit_id).padStart(4, '0')}
-                  </p>
-                  <span className={`mt-2 px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(selectedPermit.status)}`}>
-                    {selectedPermit.uiStatus || getUIStatus(selectedPermit.status)}
-                  </span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 overflow-auto animate-fadeIn">
+          <div className="w-full max-w-7xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl transform transition-all">
+            {/* Redesigned Business Permit Header */}
+            <div className="relative p-6 bg-gradient-to-r from-gray-50 via-white to-gray-50 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 border-b-4 border-green-400">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="bg-gradient-to-br from-green-400 to-green-500 p-3 rounded-2xl shadow-xl">
+                    <Building className="w-10 h-10 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Business Permit</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Business Permit Application Details</p>
+                  </div>
                 </div>
+                
                 <button 
                   onClick={closeModal}
-                  className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors"
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
+
+              {/* Info Cards Row */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Application ID Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Permit ID</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white font-mono">
+                    BP-{String(selectedPermit.permit_id).padStart(4, '0')}
+                  </p>
+                </div>
+
+                {/* Date Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-purple-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Date Applied</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white">
+                    {selectedPermit.created_at ? new Date(selectedPermit.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
+                  </p>
+                </div>
+
+                {/* Status Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Status</p>
+                  <span className={`inline-block px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedPermit.status)}`}>
+                    {selectedPermit.uiStatus || getUIStatus(selectedPermit.status)}
+                  </span>
+                </div>
+
+                {/* Business Info Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-orange-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Capital Investment</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white">
+                    {formatCurrency(selectedPermit.capital_investment)}
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              {/* Personal Information */}
-              <div>
-                <h3 className="text-lg font-semibold text-[#4D4A4A] mb-4">Applicant Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto bg-gradient-to-b from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
+              {/* Applicant Information Section */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-blue-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Applicant Information</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Full Name</label>
-                    <p className="text-lg font-semibold text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Full Name</label>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
                       {selectedPermit.owner_last_name}, {selectedPermit.owner_first_name} {selectedPermit.owner_middle_name}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Owner Type</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Owner Type</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.owner_type || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Citizenship</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Citizenship</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.citizenship || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Date of Birth</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Date of Birth</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.date_of_birth ? new Date(selectedPermit.date_of_birth).toLocaleDateString() : 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Contact Number</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Contact Number</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.contact_number || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Email Address</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Email Address</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.email_address || 'N/A'}
                     </p>
                   </div>
                   <div className="md:col-span-2">
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Home Address</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Home Address</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.home_address || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Valid ID</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Valid ID</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.valid_id_type || 'N/A'}: {selectedPermit.valid_id_number || 'N/A'}
                     </p>
                   </div>
@@ -2158,41 +2354,46 @@ export default function BusPermitAnalytics() {
               </div>
 
               {/* Business Information */}
-              <div className="border-t border-[#E9E7E7] pt-6">
-                <h3 className="text-lg font-semibold text-[#4D4A4A] mb-4">Business Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-green-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-3 rounded-xl shadow-lg">
+                    <Briefcase className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Business Information</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="md:col-span-2">
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Business Name</label>
+                    <label className="text-sm font-medium text-gray-500">Business Name</label>
                     <p className="text-xl font-bold text-[#4CAF50] mt-1">
                       {selectedPermit.business_name || 'N/A'}
                     </p>
                     {selectedPermit.trade_name && (
-                      <p className="text-sm text-[#4D4A4A] text-opacity-70 mt-1">
+                      <p className="text-sm text-gray-500 mt-1">
                         Trading as: {selectedPermit.trade_name}
                       </p>
                     )}
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Nature of Business</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Nature of Business</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.business_nature || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Building Type</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Building Type</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.building_type || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Capital Investment</label>
-                    <p className="text-lg font-bold text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Capital Investment</label>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white mt-1">
                       {formatCurrency(selectedPermit.capital_investment)}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Business Area</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Business Area</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.business_area || '0'} sqm
                     </p>
                   </div>
@@ -2200,42 +2401,47 @@ export default function BusPermitAnalytics() {
               </div>
 
               {/* Business Address */}
-              <div className="border-t border-[#E9E7E7] pt-6">
-                <h3 className="text-lg font-semibold text-[#4D4A4A] mb-4">Business Address</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-orange-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-xl shadow-lg">
+                    <MapPin className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Business Address</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">House/Building No.</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">House/Building No.</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.house_bldg_no || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Street</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Street</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.street || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Barangay</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Barangay</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.barangay || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">City/Municipality</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">City/Municipality</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.city_municipality || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Province</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Province</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.province || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Zip Code</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Zip Code</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.zip_code || 'N/A'}
                     </p>
                   </div>
@@ -2243,227 +2449,237 @@ export default function BusPermitAnalytics() {
               </div>
 
               {/* Operations Information */}
-              <div className="border-t border-[#E9E7E7] pt-6">
-                <h3 className="text-lg font-semibold text-[#4D4A4A] mb-4">Operations Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-purple-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-3 rounded-xl shadow-lg">
+                    <Clock className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Operations Information</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Operation Hours</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Operation Hours</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {formatTime(selectedPermit.operation_time_from)} - {formatTime(selectedPermit.operation_time_to)}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Operation Type</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Operation Type</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.operation_type || 'N/A'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Total Employees</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Total Employees</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.total_employees || '0'} ({selectedPermit.male_employees || '0'} male, {selectedPermit.female_employees || '0'} female)
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Employees in QC</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Employees in QC</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.employees_in_qc || '0'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Delivery Vehicles</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Delivery Vehicles</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       Vans/Trucks: {selectedPermit.delivery_van_truck || '0'}, Motorcycles: {selectedPermit.delivery_motorcycle || '0'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-[#4D4A4A] text-opacity-70">Total Floor Area</label>
-                    <p className="text-[#4D4A4A] mt-1">
+                    <label className="text-sm font-medium text-gray-500">Total Floor Area</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.total_floor_area || '0'} sqm
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Documents Section */}
-              <div className="border-t border-[#E9E7E7] pt-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-[#4D4A4A]">Submitted Documents</h3>
-                  {selectedPermit.documents && (
-                    <span className="text-sm text-[#4D4A4A] text-opacity-70">
-                      {selectedPermit.documents.length} document{selectedPermit.documents.length !== 1 ? 's' : ''}
-                    </span>
+              {/* Submitted Documents */}
+              {selectedPermit.documents && selectedPermit.documents.length > 0 ? (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-indigo-100 dark:border-slate-700">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-3 rounded-xl shadow-lg">
+                        <FileText className="w-6 h-6 text-white" />
+                      </div>
+                      <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                      <span className="ml-2 bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold">
+                        {selectedPermit.documents.length} files
+                      </span>
+                    </div>
+                    <button
+                      onClick={toggleSubmittedDocs}
+                      className="flex items-center gap-2 text-sm text-[#4CAF50] hover:text-[#FDA811] transition-colors"
+                    >
+                      <span>{showSubmittedDocs ? 'Hide' : 'View'} Documents</span>
+                      <ChevronRight className={`w-4 h-4 transition-transform ${showSubmittedDocs ? 'rotate-90' : ''}`} />
+                    </button>
+                  </div>
+
+                  {showSubmittedDocs && (
+                    <div className="mt-4">
+                      {selectedPermit.documents && selectedPermit.documents.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {selectedPermit.documents.map((doc, index) => {
+                            const fileIcon = getFileIcon(doc.file_type, doc.document_name);
+                            const FileIconComponent = fileIcon.icon;
+                            const isImage = isImageFile(doc.file_type, doc.document_name);
+                            const displayName = doc.document_type ? doc.document_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Document';
+                            
+                            return (
+                              <div 
+                                key={index} 
+                                className="flex items-center justify-between p-4 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-3 rounded-lg ${
+                                    isImage
+                                      ? 'bg-green-100 dark:bg-green-900/30' 
+                                      : 'bg-blue-100 dark:bg-blue-900/30'
+                                  }`}>
+                                    {isImage ? (
+                                      <ImageIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                    ) : (
+                                      <FileIconComponent className="w-5 h-5 text-blue-600 dark:text-blue-400" style={{ color: fileIcon.iconColor }} />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                      {displayName}
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                      {doc.document_name || 'No filename'}
+                                    </p>
+                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                      {getFileTypeName(doc.file_type, doc.document_name)}
+                                      {doc.file_size ? ` • ${(doc.file_size / 1024).toFixed(2)} KB` : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {isImage && (
+                                    <button 
+                                      onClick={() => viewFile(doc)}
+                                      className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors"
+                                      title="View document"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                  <a 
+                                    href={doc.file_path ? `${API_BASE}/uploads/${doc.file_path.split('/').pop()}` : '#'}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors"
+                                    title="Download document"
+                                    download
+                                    onClick={(e) => {
+                                      if (!doc.file_path) {
+                                        e.preventDefault();
+                                        alert('Download link not available');
+                                      }
+                                    }}
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </a>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
+                          <FileText className="w-12 h-12 text-gray-300 dark:text-gray-500 mx-auto mb-3" />
+                          <p className="text-gray-500 dark:text-gray-400">
+                            No documents submitted for this application.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-                
-                {selectedPermit.documents && selectedPermit.documents.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedPermit.documents.map((doc, index) => {
-                      const fileIcon = getFileIcon(doc.file_type, doc.document_name);
-                      const FileIconComponent = fileIcon.icon;
-                      const fileTypeName = getFileTypeName(doc.file_type, doc.document_name);
-                      const fileExtension = getFileExtension(doc.document_name);
-                      const isImage = isImageFile(doc.file_type, doc.document_name);
-                      const displayName = doc.document_type ? doc.document_type.replace(/_/g, ' ') : 'Document';
-                      
-                      return (
-                        <div 
-                          key={index} 
-                          className="flex items-center justify-between p-4 border border-[#E9E7E7] rounded-lg hover:bg-[#FBFBFB] transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            {/* File Type Icon */}
-                            <div className={`p-3 rounded-lg ${fileIcon.bgColor} ${fileIcon.textColor}`}>
-                              <FileIconComponent className="w-6 h-6" style={{ color: fileIcon.iconColor }} />
-                            </div>
-                            
-                            {/* Document Info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-medium text-[#4D4A4A] truncate">
-                                  {displayName}
-                                </span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${fileIcon.bgColor} ${fileIcon.textColor}`}>
-                                  {fileExtension}
-                                </span>
-                              </div>
-                              <div className="text-xs text-[#4D4A4A] text-opacity-70 truncate">
-                                {doc.document_name || 'No filename'}
-                              </div>
-                              <div className="text-xs text-[#4D4A4A] text-opacity-50 mt-1">
-                                {fileTypeName} • {(doc.file_size / 1024).toFixed(2)} KB
-                              </div>
-                              <div className="text-xs text-[#4D4A4A] text-opacity-50">
-                                Uploaded: {doc.upload_date ? new Date(doc.upload_date).toLocaleDateString() : 'N/A'}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Action Buttons */}
-                          <div className="flex flex-col gap-2">
-                            {isImage ? (
-                              <>
-                                <button 
-                                  onClick={() => viewFile(doc)}
-                                  className="px-3 py-1.5 text-xs bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px]"
-                                  title="Preview image"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  View
-                                </button>
-                                
-                                <a 
-                                  href={doc.file_path ? `${API_BASE}/${doc.file_path}` : '#'}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-3 py-1.5 text-xs bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px] text-center"
-                                  title="Download image"
-                                  onClick={(e) => {
-                                    if (!doc.file_path) {
-                                      e.preventDefault();
-                                      alert('Download link not available');
-                                    }
-                                  }}
-                                >
-                                  <Download className="w-4 h-4" />
-                                  Download
-                                </a>
-                              </>
-                            ) : (
-                              <a 
-                                href={doc.file_path ? `${API_BASE}/${doc.file_path}` : '#'}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-2 text-xs bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px] text-center"
-                                title="Download document"
-                                onClick={(e) => {
-                                  if (!doc.file_path) {
-                                    e.preventDefault();
-                                    alert('Download link not available');
-                                  }
-                                }}
-                              >
-                                <Download className="w-4 h-4 mr-1" />
-                                Download
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+              ) : (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-gradient-to-br from-gray-400 to-gray-500 p-3 rounded-xl shadow-lg">
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
                   </div>
-                ) : (
-                  <div className="text-center py-8 bg-[#FBFBFB] rounded-lg border border-[#E9E7E7]">
-                    <FileTextIcon className="w-16 h-16 text-[#E9E7E7] mx-auto mb-4" />
-                    <p className="text-[#4D4A4A] text-opacity-70">
-                      No documents submitted for this application.
+                  <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-xl">
+                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      No files uploaded for this application.
                     </p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Review Comments Section */}
-              <div className="border-t border-[#E9E7E7] pt-6">
-                <h3 className="text-lg font-semibold text-[#4D4A4A] mb-4">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-yellow-100 dark:border-slate-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   Review Comments
                   {selectedPermit.comments && (
-                    <span className="text-sm font-normal text-[#4D4A4A] text-opacity-70 ml-2">
+                    <span className="text-sm font-normal text-gray-500 ml-2">
                       ({formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''})
                     </span>
                   )}
                 </h3>
                 
-                {/* Display all comments */}
+                {/* Display all comments in one box */}
                 <div className="space-y-4 mb-6">
                   {selectedPermit.comments && selectedPermit.comments.trim() ? (
-                    <div className="bg-[#FBFBFB] rounded-lg border border-[#E9E7E7] overflow-hidden">
+                    <div className="bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                       <div className="max-h-64 overflow-y-auto p-4">
                         {formatComments(selectedPermit.comments).map((comment, index) => (
-                          <div key={index} className={`mb-4 ${index !== 0 ? 'pt-4 border-t border-[#E9E7E7]' : ''}`}>
+                          <div key={index} className={`mb-4 ${index !== 0 ? 'pt-4 border-t border-gray-200 dark:border-slate-600' : ''}`}>
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center text-sm text-[#4D4A4A] text-opacity-70">
+                              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                                 <User className="w-4 h-4 mr-2" />
                                 Admin Comment
                               </div>
-                              <div className="flex items-center text-xs text-[#4D4A4A] text-opacity-50">
+                              <div className="flex items-center text-xs text-gray-400">
                                 <Clock className="w-3 h-3 mr-1" />
                                 {comment.timestamp}
                               </div>
                             </div>
                             <div className="pl-6">
-                              <p className="text-[#4D4A4A] bg-white p-3 rounded border border-[#E9E7E7]">
+                              <p className="text-gray-900 dark:text-white bg-white dark:bg-slate-800 p-3 rounded border border-gray-100 dark:border-slate-500">
                                 {comment.comment}
                               </p>
                             </div>
                           </div>
                         ))}
                       </div>
-                      <div className="px-4 py-3 bg-[#FBFBFB] border-t border-[#E9E7E7]">
-                        <div className="text-xs text-[#4D4A4A] text-opacity-70">
+                      <div className="px-4 py-3 bg-gray-100 dark:bg-slate-800 border-t border-gray-200 dark:border-slate-600">
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
                           Total: {formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''}
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8 bg-[#FBFBFB] rounded-lg border border-[#E9E7E7]">
-                      <AlertCircle className="w-12 h-12 text-[#E9E7E7] mx-auto mb-3" />
-                      <p className="text-[#4D4A4A] text-opacity-70">
+                    <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
+                      <MessageSquare className="w-12 h-12 text-gray-300 dark:text-gray-500 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400">
                         No comments yet. Add your first comment below.
                       </p>
                     </div>
                   )}
                 </div>
+
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3 justify-end pt-6 border-t border-[#E9E7E7]">
+              {/* Close Button */}
+              <div className="flex justify-end pt-8 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl p-6 border-t-4 border-gray-300 dark:border-slate-600">
                 <button 
                   onClick={closeModal}
-                  className="px-6 py-3 bg-[#4D4A4A] text-white rounded-lg hover:bg-opacity-80 transition-colors font-medium"
+                  className="px-8 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
                 >
+                  <X className="w-5 h-5" />
                   Close
                 </button>
-                
               </div>
             </div>
           </div>
@@ -2471,114 +2687,173 @@ export default function BusPermitAnalytics() {
       )}
 
       {/* File Preview Modal */}
-{showFilePreview && selectedFile && (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-0">
-    <div className="relative w-full h-full flex flex-col">
-      {/* Header */}
-      <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
-        <div className="flex items-center gap-3 text-white">
-          <div className="flex items-center gap-2">
-            <Eye className="w-5 h-5" />
-            <span className="text-sm font-medium truncate max-w-xs">
-              {selectedFile.name}
-            </span>
-            <span className="text-xs text-gray-300">
-              {getFileTypeName(selectedFile.file_type, selectedFile.name)}
-            </span>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <a 
-            href={selectedFile.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors"
-            download
-          >
-            <Download className="w-4 h-4" />
-            Download
-          </a>
-          <button 
-            onClick={closeFilePreview}
-            className="ml-2 p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
-            title="Close preview"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-      </div>
-
-      {/* Image Content */}
-      {isImageFile(selectedFile.file_type, selectedFile.name) ? (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <img 
-            src={selectedFile.url} 
-            alt={selectedFile.name}
-            className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image preview not available</text></svg>';
-            }}
-          />
-        </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="text-center max-w-md bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
-            {(() => {
-              const fileIcon = getFileIcon(selectedFile.file_type, selectedFile.name);
-              const FileIconComponent = fileIcon.icon;
-              return (
-                <div className="text-gray-300 mb-6">
-                  <FileIconComponent className="w-24 h-24 mx-auto" style={{ color: fileIcon.iconColor }} />
+      {showFilePreview && selectedFile && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-0">
+          <div className="relative w-full h-full flex flex-col">
+            {/* Header */}
+            <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
+              <div className="flex items-center gap-3 text-white">
+                <div className="flex items-center gap-2">
+                  {isImageFile(selectedFile.file_type, selectedFile.name) ? (
+                    <ImageIcon className="w-5 h-5" />
+                  ) : (
+                    <FileText className="w-5 h-5" />
+                  )}
+                  <span className="text-sm font-medium truncate max-w-xs">
+                    {selectedFile.name}
+                  </span>
+                  <span className="text-xs text-gray-300">
+                    {getFileTypeName(selectedFile.file_type, selectedFile.name)}
+                  </span>
                 </div>
-              );
-            })()}
-            <h3 className="text-xl font-medium text-white mb-3">
-              {getFileTypeName(selectedFile.file_type, selectedFile.name)}
-            </h3>
-            <p className="text-gray-300 mb-6">
-              This file cannot be previewed in browser.
-            </p>
-            <div className="flex gap-3 justify-center">
-              <a 
-                href={selectedFile.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                download
-              >
-                <Download className="w-5 h-5 mr-2" />
-                Download
-              </a>
-              <button 
-                onClick={closeFilePreview}
-                className="inline-flex items-center justify-center px-5 py-2.5 border border-white/30 text-white hover:bg-white/10 rounded-lg transition-colors"
-              >
-                Close
-              </button>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {/* Zoom Controls */}
+                {isImageFile(selectedFile.file_type, selectedFile.name) && (
+                  <div className="flex items-center gap-1 mr-4 bg-black/40 rounded-lg p-1">
+                    <button 
+                      onClick={handleZoomOut}
+                      className="p-2 text-white hover:bg-white/10 rounded transition-colors"
+                      title="Zoom Out"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+                      </svg>
+                    </button>
+                    
+                    <button 
+                      onClick={handleResetZoom}
+                      className="px-3 py-2 text-xs text-white hover:bg-white/10 rounded transition-colors"
+                      title="Reset Zoom"
+                    >
+                      {zoomLevel}%
+                    </button>
+                    
+                    <button 
+                      onClick={handleZoomIn}
+                      className="p-2 text-white hover:bg-white/10 rounded transition-colors"
+                      title="Zoom In"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                
+                <a 
+                  href={selectedFile.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors"
+                  download
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download
+                </a>
+                <button 
+                  onClick={closeFilePreview}
+                  className="ml-2 p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
+                  title="Close preview"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
             </div>
+
+            {/* Image Content with Zoom */}
+            {isImageFile(selectedFile.file_type, selectedFile.name) ? (
+              <div 
+                className="flex-1 flex items-center justify-center p-4 overflow-hidden cursor-move"
+                onWheel={handleWheel}
+                onMouseDown={handleMouseDown}
+              >
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <img 
+                    ref={imageRef}
+                    id="preview-image"
+                    src={selectedFile.url} 
+                    alt={selectedFile.name}
+                    className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl transition-transform duration-200 ease-out"
+                    style={{ transform: 'scale(1)', position: 'relative', left: '0px', top: '0px', cursor: 'default' }}
+                    onError={(e) => {
+                      console.error('Failed to load image:', selectedFile.url);
+                      e.target.onerror = null;
+                      e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image not found</text><text x="200" y="170" text-anchor="middle" font-family="Arial" font-size="12" fill="%23999999">URL: ' + selectedFile.url + '</text></svg>';
+                      e.target.className = 'max-w-md mx-auto bg-gray-800 rounded-lg p-8';
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-4">
+                <div className="text-center max-w-md bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
+                  <div className="text-gray-300 mb-6">
+                    {selectedFile.file_type?.includes('pdf') || selectedFile.name?.endsWith('.pdf') ? (
+                      <FileText className="w-24 h-24 mx-auto" />
+                    ) : selectedFile.file_type?.includes('image/') ? (
+                      <ImageIcon className="w-24 h-24 mx-auto" />
+                    ) : (
+                      <FileText className="w-24 h-24 mx-auto" />
+                    )}
+                  </div>
+                  <h3 className="text-xl font-medium text-white mb-3">
+                    {getFileTypeName(selectedFile.file_type, selectedFile.name)}
+                  </h3>
+                  <p className="text-gray-300 mb-6">
+                    This file cannot be previewed in browser.
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                    <a 
+                      href={selectedFile.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                      download
+                    >
+                      <Download className="w-5 h-5 mr-2" />
+                      Download
+                    </a>
+                    <button 
+                      onClick={closeFilePreview}
+                      className="inline-flex items-center justify-center px-5 py-2.5 border border-white/30 text-white hover:bg-white/10 rounded-lg transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Footer Info with Zoom Level */}
+            <div className="absolute bottom-0 left-0 right-0 z-20 p-4 flex justify-between items-center text-white/60 text-sm">
+              <div className="flex items-center gap-2">
+                {isImageFile(selectedFile.file_type, selectedFile.name) && (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                    </svg>
+                    <span>{zoomLevel}%</span>
+                    <span className="text-xs ml-4">Drag to pan when zoomed</span>
+                  </>
+                )}
+              </div>
+              <div>
+                <span className="hidden sm:inline">Press </span>
+                <kbd className="px-2 py-1 bg-black/40 rounded text-xs mx-1">ESC</kbd>
+                <span className="hidden sm:inline"> to close</span>
+              </div>
+            </div>
+
+            {/* Close on background click */}
+            <div 
+              className="absolute inset-0 -z-10 cursor-pointer"
+              onClick={closeFilePreview}
+            />
           </div>
         </div>
       )}
-
-      {/* Footer Info */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 p-4 flex justify-between items-center text-white/60 text-sm">
-        <div>
-          <span className="hidden sm:inline">Press </span>
-          <kbd className="px-2 py-1 bg-black/40 rounded text-xs mx-1">ESC</kbd>
-          <span className="hidden sm:inline"> to close</span>
-        </div>
-      </div>
-
-      {/* Close on background click */}
-      <div 
-        className="absolute inset-0 -z-10 cursor-pointer"
-        onClick={closeFilePreview}
-      />
-    </div>
-  </div>
-)}
       {/* Success Modal */}
       {showSuccessModal && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

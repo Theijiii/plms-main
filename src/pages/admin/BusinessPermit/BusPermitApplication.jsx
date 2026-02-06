@@ -1,12 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import Swal from "sweetalert2";
+import { logTx } from '../../../lib/txLogger';
 import {
- Image,
+  Search,
+  Download,
+  RefreshCw,
   FileText,
+  Image as ImageIcon,
+  X,
+  CheckCircle,
+  User,
+  Clock,
+  File,
+  Receipt,
+  AlertCircle,
+  Building2
 } from "lucide-react";
 
 const API_BUSINESS = "/backend/business_permit/";
-const ZONING_API = "https://urbanplanning.goserveph.com/api/zoning-applications";
-const SANITATION_API = "https://health.goserveph.com/api/licensing_export.php";
 
 export default function BusPermitApplication() {
   const [selectedPermit, setSelectedPermit] = useState(null);
@@ -28,10 +39,12 @@ export default function BusPermitApplication() {
     approved: 0,
     rejected: 0
   });
-  const [zoningApplications, setZoningApplications] = useState([]);
-  const [sanitationPermits, setSanitationPermits] = useState([]);
-  const [zoningPermitDetails, setZoningPermitDetails] = useState(null);
-  const [sanitationPermitDetails, setSanitationPermitDetails] = useState(null);
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const imageRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const imagePositionRef = useRef({ x: 0, y: 0 });
 
   // Sort function for business permits
   const sortPermits = (permitsToSort, sortBy) => {
@@ -128,6 +141,86 @@ export default function BusPermitApplication() {
     
     return filtered;
   };
+
+  // Zoom and pan handlers for image preview
+  const handleWheel = useCallback((e) => {
+    if (!imageRef.current || !isImageFile(selectedFile?.file_type, selectedFile?.name)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.deltaY !== 0) {
+      const currentTransform = imageRef.current.style.transform || 'scale(1)';
+      const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      const newScale = Math.max(0.5, Math.min(currentScale + delta, 5));
+      imageRef.current.style.transform = `scale(${newScale})`;
+      imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
+      setZoomLevel(Math.round(newScale * 100));
+    }
+  }, [selectedFile]);
+
+  const handleMouseDown = useCallback((e) => {
+    if (!imageRef.current || !isImageFile(selectedFile?.file_type, selectedFile?.name)) return;
+    const currentTransform = imageRef.current.style.transform || 'scale(1)';
+    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+    if (currentScale > 1) {
+      e.preventDefault();
+      isDraggingRef.current = true;
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      imageRef.current.style.cursor = 'grabbing';
+      const handleMouseMove = (moveEvent) => {
+        if (!isDraggingRef.current || !imageRef.current) return;
+        const deltaX = moveEvent.clientX - dragStartRef.current.x;
+        const deltaY = moveEvent.clientY - dragStartRef.current.y;
+        const newX = imagePositionRef.current.x + deltaX;
+        const newY = imagePositionRef.current.y + deltaY;
+        imageRef.current.style.left = `${newX}px`;
+        imageRef.current.style.top = `${newY}px`;
+      };
+      const handleMouseUp = () => {
+        if (!imageRef.current) return;
+        isDraggingRef.current = false;
+        imageRef.current.style.cursor = 'grab';
+        if (imageRef.current.style.left && imageRef.current.style.top) {
+          imagePositionRef.current.x = parseFloat(imageRef.current.style.left);
+          imagePositionRef.current.y = parseFloat(imageRef.current.style.top);
+        }
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+  }, [selectedFile]);
+
+  const handleZoomIn = useCallback(() => {
+    if (!imageRef.current) return;
+    const currentTransform = imageRef.current.style.transform || 'scale(1)';
+    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+    const newScale = Math.min(currentScale + 0.25, 5);
+    imageRef.current.style.transform = `scale(${newScale})`;
+    imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
+    setZoomLevel(Math.round(newScale * 100));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    if (!imageRef.current) return;
+    const currentTransform = imageRef.current.style.transform || 'scale(1)';
+    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
+    const newScale = Math.max(currentScale - 0.25, 0.5);
+    imageRef.current.style.transform = `scale(${newScale})`;
+    imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
+    setZoomLevel(Math.round(newScale * 100));
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    if (!imageRef.current) return;
+    imageRef.current.style.transform = 'scale(1)';
+    imageRef.current.style.left = '0px';
+    imageRef.current.style.top = '0px';
+    imageRef.current.style.cursor = 'default';
+    setZoomLevel(100);
+    imagePositionRef.current = { x: 0, y: 0 };
+  }, []);
 
   // Helper function for sort labels
   const getSortLabel = (option) => {
@@ -318,7 +411,13 @@ export default function BusPermitApplication() {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`${API_BUSINESS}admin_fetch.php`);
+      const statusParam = activeTab !== 'all' ? activeTab.toUpperCase() : null;
+      const url = new URL(`${API_BUSINESS}/admin_fetch.php`);
+      if (statusParam) url.searchParams.append('status', statusParam);
+      if (searchQuery) url.searchParams.append('search', searchQuery);
+      if (sortOption) url.searchParams.append('sort_by', sortOption);
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -328,6 +427,9 @@ export default function BusPermitApplication() {
       
       if (result.success && result.data) {
         setPermits(result.data);
+        if (result.counts) {
+          setCounts(result.counts);
+        }
       } else {
         throw new Error(result.message || 'Failed to fetch permits');
       }
@@ -339,62 +441,34 @@ export default function BusPermitApplication() {
     }
   };
 
-  const fetchZoningApplications = async () => {
-    try {
-      const response = await fetch(ZONING_API);
-      const data = await response.json();
-      
-      if (data.success && data.data) {
-        setZoningApplications(data.data);
-      }
-    } catch (error) {
-      console.error("Error fetching zoning applications:", error);
+const fetchSinglePermit = async (permitId) => {
+  try {
+    // Use permit_id instead of id in the query
+    const response = await fetch(`${API_BUSINESS}/fetch_single.php?permit_id=${permitId}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-  };
-
-  const fetchSanitationPermits = async () => {
-    try {
-      const response = await fetch(SANITATION_API);
-      const data = await response.json();
-      
-      if (data.success && data.data) {
-        setSanitationPermits(data.data);
-      } else if (Array.isArray(data)) {
-        setSanitationPermits(data);
+    
+    const result = await response.json();
+    console.log('Fetch single result:', result);
+    
+    if (result.success && result.data) {
+      // If documents are not included, fetch them separately
+      if (!result.data.documents || result.data.documents.length === 0) {
+        const documents = await fetchPermitDocuments(permitId);
+        result.data.documents = documents;
       }
-    } catch (error) {
-      console.error("Error fetching sanitation permits:", error);
+      
+      return result.data;
+    } else {
+      throw new Error(result.message || 'Failed to fetch permit details');
     }
-  };
-
-  const fetchSinglePermit = async (permitId) => {
-    try {
-      // Use permit_id instead of id in the query
-      const response = await fetch(`${API_BUSINESS}/fetch_single.php?permit_id=${permitId}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      console.log('Fetch single result:', result);
-      
-      if (result.success && result.data) {
-        // If documents are not included, fetch them separately
-        if (!result.data.documents || result.data.documents.length === 0) {
-          const documents = await fetchPermitDocuments(permitId);
-          result.data.documents = documents;
-        }
-        
-        return result.data;
-      } else {
-        throw new Error(result.message || 'Failed to fetch permit details');
-      }
-    } catch (err) {
-      console.error('Error fetching single permit:', err);
-      return null;
-    }
-  };
+  } catch (err) {
+    console.error('Error fetching single permit:', err);
+    return null;
+  }
+};
 
   // Fetch documents separately if needed
   const fetchPermitDocuments = async (permitId) => {
@@ -556,9 +630,7 @@ export default function BusPermitApplication() {
 
   useEffect(() => {
     fetchPermits();
-    fetchZoningApplications();
-    fetchSanitationPermits();
-  }, []);
+  }, [activeTab, sortOption]);
 
   const openModal = async (permit) => {
     try {
@@ -570,33 +642,12 @@ export default function BusPermitApplication() {
           ...detailedPermit,
           uiStatus: uiStatus
         });
-        
-        // Fetch zoning and sanitation permit details if IDs exist
-        if (detailedPermit.zoning_permit_id) {
-          const zoningDetails = zoningApplications.find(
-            z => z.application_id === detailedPermit.zoning_permit_id
-          );
-          setZoningPermitDetails(zoningDetails || null);
-        } else {
-          setZoningPermitDetails(null);
-        }
-        
-        if (detailedPermit.sanitation_permit_id) {
-          const sanitationDetails = sanitationPermits.find(
-            s => s.permit_id === detailedPermit.sanitation_permit_id
-          );
-          setSanitationPermitDetails(sanitationDetails || null);
-        } else {
-          setSanitationPermitDetails(null);
-        }
       } else {
         const uiStatus = getUIStatus(permit.status);
         setSelectedPermit({
           ...permit,
           uiStatus: uiStatus
         });
-        setZoningPermitDetails(null);
-        setSanitationPermitDetails(null);
       }
       
       setActionComment('');
@@ -608,8 +659,6 @@ export default function BusPermitApplication() {
         ...permit,
         uiStatus: uiStatus
       });
-      setZoningPermitDetails(null);
-      setSanitationPermitDetails(null);
       setActionComment('');
       setShowModal(true);
     }
@@ -621,18 +670,88 @@ export default function BusPermitApplication() {
     setSelectedFile(null);
     setShowFilePreview(false);
     setShowModal(false);
-    setZoningPermitDetails(null);
-    setSanitationPermitDetails(null);
   };
 
   const handleApprove = async () => {
     if (!selectedPermit) return;
-    await updatePermitStatus(selectedPermit.permit_id, 'Approved', actionComment);
+
+    const result = await Swal.fire({
+      title: 'Approve Permit?',
+      html: `
+        <div class="text-left">
+          <p class="mb-2">You are about to approve this business permit application:</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Permit ID:</strong> ${selectedPermit.permit_id}</p>
+            <p class="text-sm"><strong>Business:</strong> ${selectedPermit.business_name}</p>
+            <p class="text-sm"><strong>Owner:</strong> ${selectedPermit.owner_first_name} ${selectedPermit.owner_last_name}</p>
+          </div>
+          <p class="text-sm text-gray-600">This action will approve the application.</p>
+        </div>
+      `,
+      icon: 'question',
+      input: 'textarea',
+      inputLabel: 'Add approval notes (optional)',
+      inputPlaceholder: 'Enter any additional notes...',
+      inputValue: actionComment,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Approve',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#4CAF50',
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+        htmlContainer: 'text-left'
+      }
+    });
+
+    if (result.isConfirmed) {
+      const notes = result.value || actionComment;
+      await updatePermitStatus(selectedPermit.permit_id, 'Approved', notes);
+      setActionComment('');
+    }
   };
 
   const handleReject = async () => {
     if (!selectedPermit) return;
-    await updatePermitStatus(selectedPermit.permit_id, 'Rejected', actionComment);
+
+    const result = await Swal.fire({
+      title: 'Reject Application?',
+      html: `
+        <div class="text-left">
+          <p class="mb-2">You are about to reject this business permit application:</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Permit ID:</strong> ${selectedPermit.permit_id}</p>
+            <p class="text-sm"><strong>Business:</strong> ${selectedPermit.business_name}</p>
+            <p class="text-sm"><strong>Owner:</strong> ${selectedPermit.owner_first_name} ${selectedPermit.owner_last_name}</p>
+          </div>
+          <p class="text-sm text-red-600">Please provide a reason for rejection.</p>
+        </div>
+      `,
+      icon: 'warning',
+      input: 'textarea',
+      inputLabel: 'Reason for rejection (required)',
+      inputPlaceholder: 'Enter the reason for rejecting this application...',
+      inputValue: actionComment,
+      inputValidator: (value) => {
+        if (!value) {
+          return 'You must provide a reason for rejection!';
+        }
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Reject',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#E53935',
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+        htmlContainer: 'text-left'
+      }
+    });
+
+    if (result.isConfirmed) {
+      await updatePermitStatus(selectedPermit.permit_id, 'Rejected', result.value);
+      setActionComment('');
+    }
   };
 
   const handleCompliance = async () => {
@@ -645,32 +764,68 @@ export default function BusPermitApplication() {
     await updatePermitStatus(selectedPermit.permit_id, 'Pending', actionComment);
   };
 
-  const viewFile = async (file) => {
-    try {
-      if (!file || !file.file_path) {
-        alert('File path not available');
-        return;
+  const handleStatusUpdate = async (status, title, message, color) => {
+    if (!selectedPermit) return;
+
+    const result = await Swal.fire({
+      title: title,
+      html: `
+        <div class="text-left">
+          <p class="mb-3">${message}</p>
+          <div class="mt-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Add a comment (optional):</label>
+            <textarea 
+              id="status-comment" 
+              class="w-full border border-gray-300 rounded-lg px-3 py-2" 
+              rows="3" 
+              placeholder="Enter any additional notes..."
+            >${actionComment}</textarea>
+          </div>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Update Status',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: color,
+      cancelButtonColor: '#6B7280',
+      preConfirm: () => {
+        const comment = document.getElementById('status-comment').value;
+        return comment;
       }
-      
-      // Extract filename
-      const filename = file.file_path.split('/').pop();
-      
-      // Call API endpoint instead of direct file access
-      const fullUrl = `${API_BUSINESS}/uploads/${encodeURIComponent(filename)}`;
-      
-      // For API, we can skip the HEAD check and just try to open/download
-      setSelectedFile({
-        ...file,
-        url: fullUrl,
-        name: file.document_name || file.document_type || 'Document'
-      });
-      setShowFilePreview(true);
-      
-    } catch (err) {
-      console.error('Error accessing file:', err);
-      alert('Unable to access the file');
+    });
+
+    if (result.isConfirmed) {
+      await updatePermitStatus(selectedPermit.permit_id, status, result.value || '');
     }
   };
+
+const viewFile = async (file) => {
+  try {
+    if (!file || !file.file_path) {
+      alert('File path not available');
+      return;
+    }
+    
+    // Extract filename
+    const filename = file.file_path.split('/').pop();
+    
+    // Call API endpoint instead of direct file access
+    const fullUrl = `${API_BUSINESS}/uploads/${encodeURIComponent(filename)}`;
+    
+    // For API, we can skip the HEAD check and just try to open/download
+    setSelectedFile({
+      ...file,
+      url: fullUrl,
+      name: file.document_name || file.document_type || 'Document'
+    });
+    setShowFilePreview(true);
+    
+  } catch (err) {
+    console.error('Error accessing file:', err);
+    alert('Unable to access the file');
+  }
+};
 
   const closeFilePreview = () => {
     setSelectedFile(null);
@@ -749,17 +904,278 @@ export default function BusPermitApplication() {
     );
   }
 
+  // Export to CSV
+  const exportToCSV = () => {
+    setExporting(true);
+    setExportType("csv");
+    
+    const headers = [
+      "Application ID",
+      "Applicant Name",
+      "Business Name",
+      "Permit Type",
+      "Permit Subtype", 
+      "TODA",
+      "Barangay",
+      "Vehicle",
+      "Plate Number",
+      "Status",
+      "Contact",
+      "Email",
+      "Application Date"
+    ];
+    
+    const csvContent = [
+      headers.join(","),
+      ...permits.map(p => [
+        p.permit_id,
+        p.owner_first_name + ' ' + p.owner_last_name,
+        p.business_name,
+        p.permit_type,
+        p.permit_subtype,
+        p.toda_name,
+        p.barangay_of_operation,
+        `${p.make_brand} ${p.model}`,
+        p.plate_number,
+        p.status,
+        p.contact_number,
+        p.email,
+        formatDate(p.created_at)
+      ].map(field => `"${field || ''}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `business-permits-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    setExporting(false);
+    setExportType("");
+  };
+
+  // Export to PDF
+  const exportToPDF = async () => {
+    setExporting(true);
+    setExportType("pdf");
+    
+    try {
+      // Create a container for PDF content
+      const pdfContainer = document.createElement("div");
+      pdfContainer.style.position = "absolute";
+      pdfContainer.style.left = "-9999px";
+      pdfContainer.style.width = "800px";
+      pdfContainer.style.backgroundColor = "#ffffff";
+      pdfContainer.style.padding = "20px";
+      pdfContainer.style.fontFamily = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+      pdfContainer.style.color = "#1f2937";
+      document.body.appendChild(pdfContainer);
+
+      // Header section
+      const header = document.createElement("div");
+      header.style.marginBottom = "20px";
+      header.style.borderBottom = "2px solid #4CAF50";
+      header.style.paddingBottom = "15px";
+      header.innerHTML = `
+        <h1 style="color: #1f2937; font-size: 24px; font-weight: bold; margin: 0;">
+          Business Permit Report
+        </h1>
+        <p style="color: #6b7280; margin:5px 0;">
+          Generated on ${new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </p>
+        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+          <span style="background: #4CAF50; color: white; padding: 3px 10px; border-radius: 15px; font-size: 11px;">
+            Total: ${dashboardStats.total}
+          </span>
+          <span style="background: #4CAF50; color: white; padding: 3px 10px; border-radius: 15px; font-size: 11px;">
+            Approved: ${dashboardStats.approved}
+          </span>
+          <span style="background: #FDA811; color: white; padding: 3px 10px; border-radius: 15px; font-size: 11px;">
+            Compliance: ${dashboardStats.compliance}
+          </span>
+          <span style="background: #E53935; color: white; padding: 3px 10px; border-radius: 15px; font-size: 11px;">
+            Rejected: ${dashboardStats.rejected}
+          </span>
+        </div>
+      `;
+      pdfContainer.appendChild(header);
+
+      // Summary section
+      const summarySection = document.createElement("div");
+      summarySection.style.marginBottom = "25px";
+      summarySection.style.padding = "15px";
+      summarySection.style.backgroundColor = "#f9fafb";
+      summarySection.style.borderRadius = "8px";
+      summarySection.style.border = "1px solid #e5e7eb";
+      summarySection.innerHTML = `
+        <h2 style="color: #1f2937; font-size: 16px; font-weight: bold; margin: 0 0 10px 0;">Summary</h2>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 12px;">
+          <div>
+            <strong>Approval Rate:</strong> ${dashboardStats.approvalRate}%
+          </div>
+          <div>
+            <strong>Top TODA:</strong> ${dashboardStats.topTODA.name} (${dashboardStats.topTODA.count} applications)
+          </div>
+          <div>
+            <strong>MTOP Applications:</strong> ${dashboardStats.mtop}
+          </div>
+          <div>
+            <strong>Franchise Applications:</strong> ${dashboardStats.franchise}
+          </div>
+        </div>
+      `;
+      pdfContainer.appendChild(summarySection);
+
+      // Applications table section
+      const tableSection = document.createElement("div");
+      tableSection.innerHTML = `
+        <h2 style="color: #1f2937; font-size: 18px; font-weight: bold; margin-bottom: 15px;">Applications List</h2>
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+          <thead>
+            <tr style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">ID</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Applicant</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Business</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">TODA</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Barangay</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Vehicle</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Plate Number</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Status</th>
+              <th style="padding: 8px; text-align: left; color: #374151; font-weight: 600; border: 1px solid #e5e7eb;">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${getFilteredPermits().slice(0, 20).map(permit => {
+              const statusColor = permit.status === "Approved" ? "#4CAF50" : 
+                                permit.status === "Compliance" ? "#FDA811" : "#E53935";
+              return `
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">BP-${String(permit.permit_id).padStart(4, '0')}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${permit.owner_first_name} ${permit.owner_last_name}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${permit.business_name}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${permit.toda_name}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${permit.barangay_of_operation}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${permit.make_brand} ${permit.model}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${permit.plate_number}</td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb; color: ${statusColor}; font-weight: 500;">
+                    ${permit.status}
+                  </td>
+                  <td style="padding: 8px; border: 1px solid #e5e7eb;">${formatDate(permit.created_at)}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+        ${getFilteredPermits().length > 20 ? 
+          `<p style="text-align: center; color: #6b7280; font-size: 10px; margin-top: 10px;">
+            ... and ${getFilteredPermits().length - 20} more applications
+          </p>` : ''}
+      `;
+      pdfContainer.appendChild(tableSection);
+
+      // Status distribution section
+      const statusSection = document.createElement("div");
+      statusSection.style.marginTop = "25px";
+      statusSection.style.padding = "15px";
+      statusSection.style.backgroundColor = "#f9fafb";
+      statusSection.style.borderRadius = "8px";
+      statusSection.style.border = "1px solid #e5e7eb";
+      statusSection.innerHTML = `
+        <h2 style="color: #1f2937; font-size: 16px; font-weight: bold; margin: 0 0 10px 0;">Status Distribution</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 12px;">
+          <div style="text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #4CAF50;">${dashboardStats.approved}</div>
+            <div style="color: #6b7280;">Approved</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #FDA811;">${dashboardStats.compliance}</div>
+            <div style="color: #6b7280;">Compliance</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="font-size: 20px; font-weight: bold; color: #E53935;">${dashboardStats.rejected}</div>
+            <div style="color: #6b7280;">Rejected</div>
+          </div>
+        </div>
+      `;
+      pdfContainer.appendChild(statusSection);
+
+      // Footer
+      const footer = document.createElement("div");
+      footer.style.marginTop = "30px";
+      footer.style.paddingTop = "15px";
+      footer.style.borderTop = "1px solid #e5e7eb";
+      footer.style.color = "#6b7280";
+      footer.style.fontSize = "10px";
+      footer.innerHTML = `
+        <p style="margin: 0;">Generated by Business Permit Management System</p>
+        <p style="margin: 5px 0 0 0;">Total Records: ${permits.length} • Filtered: ${getFilteredPermits().length}</p>
+      `;
+      pdfContainer.appendChild(footer);
+
+      // Wait for DOM to update
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Generate PDF
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+
+      const imgWidth = 190;
+      const pageHeight = 280;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 10;
+
+      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`business-permit-report-${new Date().toISOString().split("T")[0]}.pdf`);
+
+      // Clean up
+      document.body.removeChild(pdfContainer);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      Swal.fire({
+        title: "Export Failed",
+        text: "Failed to generate PDF. Please try again.",
+        icon: "error"
+      });
+    } finally {
+      setExporting(false);
+      setExportType("");
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-700 p-6 rounded-lg">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Business Permit Applications Dashboard
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Manage and review all business permit applications
-        </p>
-      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -995,53 +1411,80 @@ export default function BusPermitApplication() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Enhanced Business Permit Modal */}
       {showModal && selectedPermit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-sm p-4 overflow-auto">
-          <div className="w-full max-w-6xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5 rounded-t-xl">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Business Permit Application</h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Application ID: {selectedPermit.applicant_id} • Permit ID: BP-{String(selectedPermit.permit_id).padStart(4, '0')}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 overflow-auto animate-fadeIn">
+          <div className="w-full max-w-7xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl transform transition-all">
+            {/* Enhanced Business Permit Header */}
+            <div className="relative p-6 bg-gradient-to-r from-gray-50 via-white to-gray-50 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 border-b-4 border-green-400">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="bg-gradient-to-br from-green-400 to-green-500 p-3 rounded-2xl shadow-xl">
+                    <Building2 className="w-10 h-10 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Business Permit</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Business Permit Application Details</p>
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={closeModal}
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Info Cards Row */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Permit ID Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Permit ID</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white font-mono">
+                    BP-{String(selectedPermit.permit_id).padStart(4, '0')}
                   </p>
-                  <span className={`mt-2 px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(selectedPermit.status)}`}>
+                </div>
+
+                {/* Application ID Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-purple-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Applicant ID</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white">
+                    {selectedPermit.applicant_id}
+                  </p>
+                </div>
+
+                {/* Status Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Status</p>
+                  <span className={`inline-block px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedPermit.status)}`}>
                     {selectedPermit.uiStatus || getUIStatus(selectedPermit.status)}
                   </span>
                 </div>
-                <button 
-                  onClick={closeModal}
-                  className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors"
-                >
-                  <span className="text-xl">×</span>
-                </button>
+
+                {/* Date Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-orange-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Date Applied</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white">
+                    {selectedPermit.application_date ? new Date(selectedPermit.application_date).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              {/* Tabs for different sections */}
-              <div className="border-b border-gray-200 dark:border-slate-700">
-                <nav className="flex space-x-8">
-                  {['Personal', 'Business', 'Operations', 'Documents', 'Review'].map((tab) => (
-                    <button
-                      key={tab}
-                      className="py-4 px-1 text-sm font-medium border-b-2 border-transparent hover:text-[#4CAF50]"
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-
-              {/* Personal Information */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Applicant Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Full Name</label>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto bg-gradient-to-b from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
+              {/* Personal Information Section */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-blue-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Owner Information</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-700 dark:to-slate-600 p-4 rounded-xl">
+                    <label className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Full Name</label>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white mt-2">
                       {selectedPermit.owner_last_name}, {selectedPermit.owner_first_name} {selectedPermit.owner_middle_name}
                     </p>
                   </div>
@@ -1091,8 +1534,13 @@ export default function BusPermitApplication() {
               </div>
 
               {/* Business Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Business Information</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-green-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-3 rounded-xl shadow-lg">
+                    <Building2 className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Business Information</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <div className="md:col-span-2">
                     <label className="text-sm font-medium text-gray-500">Business Name</label>
@@ -1133,8 +1581,13 @@ export default function BusPermitApplication() {
               </div>
 
               {/* Business Address */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Business Address</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-purple-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-3 rounded-xl shadow-lg">
+                    <Building2 className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Business Address</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">House/Building No.</label>
@@ -1176,8 +1629,13 @@ export default function BusPermitApplication() {
               </div>
 
               {/* Operations Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Operations Information</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-orange-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-xl shadow-lg">
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Operations Information</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Operation Hours</label>
@@ -1218,302 +1676,87 @@ export default function BusPermitApplication() {
                 </div>
               </div>
 
-              {/* Prerequisite Permits - Only show for NEW permit type */}
-              {selectedPermit.permit_type === 'NEW' && (
-                <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Prerequisite Permits</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Zoning Permit */}
-                    <div className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-gray-50 dark:bg-slate-700/50">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                            </svg>
-                          </div>
-                          <label className="text-sm font-semibold text-gray-900 dark:text-white">Zoning Permit</label>
-                        </div>
-                        {zoningPermitDetails && (
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            zoningPermitDetails.status === 'approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                            zoningPermitDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                            zoningPermitDetails.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                            'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
-                          }`}>
-                            {zoningPermitDetails.status ? zoningPermitDetails.status.toUpperCase() : 'N/A'}
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Permit ID</p>
-                          <p className="text-sm font-mono font-medium text-gray-900 dark:text-white">
-                            {selectedPermit.zoning_permit_id || 'Not provided'}
-                          </p>
-                        </div>
-                        {zoningPermitDetails && (
-                          <>
-                            <div>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">Applicant</p>
-                              <p className="text-sm text-gray-900 dark:text-white">
-                                {zoningPermitDetails.first_name} {zoningPermitDetails.last_name}
-                              </p>
-                            </div>
-                            {zoningPermitDetails.business_name && (
-                              <div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Business</p>
-                                <p className="text-sm text-gray-900 dark:text-white">
-                                  {zoningPermitDetails.business_name}
-                                </p>
-                              </div>
-                            )}
-                            {zoningPermitDetails.application_date && (
-                              <div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Application Date</p>
-                                <p className="text-sm text-gray-900 dark:text-white">
-                                  {new Date(zoningPermitDetails.application_date).toLocaleDateString()}
-                                </p>
-                              </div>
-                            )}
-                          </>
-                        )}
-                        {!zoningPermitDetails && selectedPermit.zoning_permit_id && (
-                          <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
-                            ⚠️ Permit details not found in zoning system
-                          </div>
-                        )}
-                      </div>
+              {/* Documents Section */}
+              {selectedPermit.documents && selectedPermit.documents.length > 0 ? (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-indigo-100 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-3 rounded-xl shadow-lg">
+                      <FileText className="w-6 h-6 text-white" />
                     </div>
-
-                    {/* Sanitation Permit */}
-                    <div className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 bg-gray-50 dark:bg-slate-700/50">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                            <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                            </svg>
-                          </div>
-                          <label className="text-sm font-semibold text-gray-900 dark:text-white">Sanitation Permit</label>
-                        </div>
-                        {sanitationPermitDetails && (
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            sanitationPermitDetails.status === 'approved' || sanitationPermitDetails.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                            sanitationPermitDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                            sanitationPermitDetails.status === 'rejected' || sanitationPermitDetails.status === 'expired' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                            'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
-                          }`}>
-                            {sanitationPermitDetails.status ? sanitationPermitDetails.status.toUpperCase() : 'N/A'}
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Permit ID</p>
-                          <p className="text-sm font-mono font-medium text-gray-900 dark:text-white">
-                            {selectedPermit.sanitation_permit_id || 'Not provided'}
-                          </p>
-                        </div>
-                        {sanitationPermitDetails && (
-                          <>
-                            <div>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">Establishment</p>
-                              <p className="text-sm text-gray-900 dark:text-white">
-                                {sanitationPermitDetails.establishment_name || sanitationPermitDetails.business_name || 'N/A'}
-                              </p>
-                            </div>
-                            {sanitationPermitDetails.owner_name && (
-                              <div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Owner</p>
-                                <p className="text-sm text-gray-900 dark:text-white">
-                                  {sanitationPermitDetails.owner_name}
-                                </p>
-                              </div>
-                            )}
-                            {sanitationPermitDetails.issue_date && (
-                              <div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Issue Date</p>
-                                <p className="text-sm text-gray-900 dark:text-white">
-                                  {new Date(sanitationPermitDetails.issue_date).toLocaleDateString()}
-                                </p>
-                              </div>
-                            )}
-                            {sanitationPermitDetails.expiry_date && (
-                              <div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Expiry Date</p>
-                                <p className="text-sm text-gray-900 dark:text-white">
-                                  {new Date(sanitationPermitDetails.expiry_date).toLocaleDateString()}
-                                </p>
-                              </div>
-                            )}
-                          </>
-                        )}
-                        {!sanitationPermitDetails && selectedPermit.sanitation_permit_id && (
-                          <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
-                            ⚠️ Permit details not found in sanitation system
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Documents Section - Updated */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Submitted Documents</h3>
-                  {selectedPermit.documents && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {selectedPermit.documents.length} document{selectedPermit.documents.length !== 1 ? 's' : ''}
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                    <span className="ml-auto bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold">
+                      {selectedPermit.documents.length} files
                     </span>
-                  )}
-                </div>
-                
-                {selectedPermit.documents && selectedPermit.documents.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {selectedPermit.documents.map((doc, index) => {
-                      const fileIcon = getFileIcon(doc.file_type, doc.document_name);
-                      const fileTypeName = getFileTypeName(doc.file_type, doc.document_name);
-                      const fileExtension = getFileExtension(doc.document_name);
                       const isImage = isImageFile(doc.file_type, doc.document_name);
                       const displayName = doc.document_type ? doc.document_type.replace(/_/g, ' ') : 'Document';
                       
                       return (
-                        <div 
-                          key={index} 
-                          className="flex items-center justify-between p-4 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            {/* File Type Icon */}
-                            <div className={`p-3 rounded-lg ${fileIcon.bgColor} ${fileIcon.textColor}`}>
-                              {doc.file_type?.includes('image/') ? (
-                                <Image className="w-6 h-6" />
-                              ) : doc.file_type?.includes('pdf') || doc.document_name?.endsWith('.pdf') ? (
-                                <FileText className="w-6 h-6" />
-                              ) : doc.file_type?.includes('word') || doc.document_name?.endsWith('.doc') || doc.document_name?.endsWith('.docx') ? (
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                              ) : doc.file_type?.includes('excel') || doc.document_name?.endsWith('.xls') || doc.document_name?.endsWith('.xlsx') ? (
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                              ) : doc.file_type?.includes('powerpoint') || doc.document_name?.endsWith('.ppt') || doc.document_name?.endsWith('.pptx') ? (
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                </svg>
-                              ) : (
-                                <FileText className="w-6 h-6" />
-                              )}
-                            </div>
-                            
-                            {/* Document Info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                  {displayName}
-                                </span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${fileIcon.bgColor} ${fileIcon.textColor}`}>
-                                  {fileExtension}
-                                </span>
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                {doc.document_name || 'No filename'}
-                              </div>
-                              <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                {fileTypeName} • {(doc.file_size / 1024).toFixed(2)} KB
-                              </div>
-                              <div className="text-xs text-gray-400 dark:text-gray-500">
-                                Uploaded: {doc.upload_date ? new Date(doc.upload_date).toLocaleDateString() : 'N/A'}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Action Buttons - Only show View for images, Download for all */}
-                          <div className="flex flex-col gap-2">
+                        <div key={index} className="flex items-center justify-between p-3 border border-gray-200 dark:border-slate-600 rounded-lg">
+                          <div className="flex items-center gap-2">
                             {isImage ? (
-                              <>
-                                <button 
-                                  onClick={() => viewFile(doc)}
-                                  className="px-3 py-1.5 text-xs bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px]"
-                                  title="Preview image"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                  </svg>
-                                  View
-                                </button>
-                                
-                                <a 
-                                  href={doc.file_path ? `${API_BUSINESS}/${doc.file_path}` : '#'}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-3 py-1.5 text-xs bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px] text-center"
-                                  title="Download image"
-                                  onClick={(e) => {
-                                    if (!doc.file_path) {
-                                      e.preventDefault();
-                                      alert('Download link not available');
-                                    }
-                                  }}
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                  </svg>
-                                  Download
-                                </a>
-                              </>
+                              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                                <ImageIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                              </div>
                             ) : (
-                              // Only Download button for non-image files
-                              <a 
-                                href={doc.file_path ? `${API_BUSINESS}/${doc.file_path}` : '#'}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-2 text-xs bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors flex items-center justify-center gap-1 w-full min-w-[80px] text-center"
-                                title="Download document"
-                                onClick={(e) => {
-                                  if (!doc.file_path) {
-                                    e.preventDefault();
-                                    alert('Download link not available');
-                                  }
-                                }}
-                              >
-                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                Download
-                              </a>
+                              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                                <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                              </div>
                             )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                                {displayName}
+                              </p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {doc.document_name}
+                              </p>
+                            </div>
                           </div>
+                          <button 
+                            onClick={() => viewFile(doc)}
+                            className="px-3 py-1 text-xs bg-[#4CAF50] text-white rounded hover:bg-[#FDA811] transition-colors whitespace-nowrap"
+                          >
+                            View
+                          </button>
                         </div>
                       );
                     })}
                   </div>
-                ) : (
-                  <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
-                    <svg className="w-16 h-16 text-gray-300 dark:text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <p className="text-gray-500 dark:text-gray-400">
-                      No documents submitted for this application.
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-gradient-to-br from-gray-400 to-gray-500 p-3 rounded-xl shadow-lg">
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                  </div>
+                  <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-xl">
+                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      No files uploaded for this application.
                     </p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Review Comments Section */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Review Comments
-                  {selectedPermit.comments && (
-                    <span className="text-sm font-normal text-gray-500 ml-2">
-                      ({formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''})
-                    </span>
-                  )}
-                </h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-yellow-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 p-3 rounded-xl shadow-lg">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Review Comments</h3>
+                    {selectedPermit.comments && (
+                      <span className="text-sm font-normal text-gray-500">
+                        ({formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''})
+                      </span>
+                    )}
+                  </div>
+                </div>
                 
                 {/* Display all comments */}
   <div className="space-y-4 mb-6">
@@ -1593,52 +1836,133 @@ export default function BusPermitApplication() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3 justify-end pt-6 border-t border-gray-200 dark:border-slate-700">
-                {/* Show different actions based on current status */}
-                {selectedPermit.status === "PENDING" ? (
-                  <>
-                    <button 
-                      onClick={handleCompliance}
-                      className="px-6 py-3 bg-[#FDA811] text-white rounded-lg hover:bg-[#FDA811]/80 transition-colors font-medium"
+              <div className="flex gap-4 justify-between pt-8 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl p-6 border-t-4 border-gray-300 dark:border-slate-600">
+                {/* Actions Dropdown - Show for pending/compliance status */}
+                {(selectedPermit.status === "COMPLIANCE" || selectedPermit.status === "PENDING" || !selectedPermit.status) && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
                     >
-                      Mark for Compliance
+                      Actions
+                      <svg className={`w-4 h-4 transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
                     </button>
-                    <button 
-                      onClick={handleReject}
-                      className="px-6 py-3 bg-[#E53935] text-white rounded-lg hover:bg-[#E53935]/80 transition-colors font-medium"
-                    >
-                      Reject Application
-                    </button>
-                    <button 
-                      onClick={handleApprove}
-                      className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-all font-medium shadow-sm"
-                    >
-                      Approve Permit
-                    </button>
-                  </>
-                ) : selectedPermit.status === "COMPLIANCE" ? (
-                  <>
-                    <button 
-                      onClick={handlePending}
-                      className="px-6 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors font-medium"
-                    >
-                      Return to Pending
-                    </button>
-                    <button 
-                      onClick={handleApprove}
-                      className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-all font-medium shadow-sm"
-                    >
-                      Approve After Compliance
-                    </button>
-                  </>
-                ) : (
-                  <button 
-                    onClick={closeModal}
-                    className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors font-medium"
-                  >
-                    Close
-                  </button>
+
+                    {/* Dropdown Menu */}
+                    {showActionsDropdown && (
+                      <div className="absolute left-0 bottom-full mb-2 w-72 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden z-50 max-h-96 overflow-y-auto">
+                        {/* Processing Status Updates */}
+                        <div className="px-3 py-2 bg-gray-100 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
+                          <p className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">Processing Steps</p>
+                        </div>
+                        
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Under Review', 'Mark as Under Review', 'Application is now being reviewed by the team.', '#3B82F6');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <FileText className="w-5 h-5 text-blue-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Under Review</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Document Verification', 'Document Verification', 'Documents are being verified for completeness and authenticity.', '#8B5CF6');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-purple-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <FileText className="w-5 h-5 text-purple-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Document Verification</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Payment Verification', 'Verify Payment', 'Payment is being verified.', '#F59E0B');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-amber-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <Receipt className="w-5 h-5 text-amber-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Payment Verification</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('For Manager Approval', 'Send for Manager Approval', 'Application is being sent to manager for approval.', '#6366F1');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <User className="w-5 h-5 text-indigo-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">For Manager Approval</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Ready for Release', 'Mark Ready for Release', 'Permit is ready for release to applicant.', '#10B981');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-emerald-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <CheckCircle className="w-5 h-5 text-emerald-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Ready for Release</span>
+                        </button>
+
+                        {/* Compliance & Actions */}
+                        <div className="px-3 py-2 bg-gray-100 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
+                          <p className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">Actions</p>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleCompliance();
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-yellow-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <AlertCircle className="w-5 h-5 text-yellow-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Mark for Compliance</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleReject();
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <X className="w-5 h-5 text-red-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Reject Application</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleApprove();
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-green-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3"
+                        >
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">✓ Approve Permit</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
+
+                {/* Close Button - Always visible */}
+                <button 
+                  onClick={closeModal}
+                  className="px-8 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2 ml-auto"
+                >
+                  <X className="w-5 h-5" />
+                  Close
+                </button>
               </div>
             </div>
           </div>
@@ -1652,9 +1976,11 @@ export default function BusPermitApplication() {
       <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
         <div className="flex items-center gap-3 text-white">
           <div className="flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
+            {isImageFile(selectedFile.file_type, selectedFile.name) ? (
+              <ImageIcon className="w-5 h-5" />
+            ) : (
+              <FileText className="w-5 h-5" />
+            )}
             <span className="text-sm font-medium truncate max-w-xs">
               {selectedFile.name}
             </span>
@@ -1669,15 +1995,7 @@ export default function BusPermitApplication() {
           {isImageFile(selectedFile.file_type, selectedFile.name) && (
             <div className="flex items-center gap-1 mr-4 bg-black/40 rounded-lg p-1">
               <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const img = document.getElementById('preview-image');
-                  if (img) {
-                    const currentTransform = img.style.transform || 'scale(1)';
-                    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
-                    img.style.transform = `scale(${Math.max(currentScale - 0.25, 0.5)})`;
-                  }
-                }}
+                onClick={handleZoomOut}
                 className="p-2 text-white hover:bg-white/10 rounded transition-colors"
                 title="Zoom Out"
               >
@@ -1687,29 +2005,15 @@ export default function BusPermitApplication() {
               </button>
               
               <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const img = document.getElementById('preview-image');
-                  if (img) {
-                    img.style.transform = 'scale(1)';
-                  }
-                }}
+                onClick={handleResetZoom}
                 className="px-3 py-2 text-xs text-white hover:bg-white/10 rounded transition-colors"
                 title="Reset Zoom"
               >
-                100%
+                {zoomLevel}%
               </button>
               
               <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const img = document.getElementById('preview-image');
-                  if (img) {
-                    const currentTransform = img.style.transform || 'scale(1)';
-                    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
-                    img.style.transform = `scale(${Math.min(currentScale + 0.25, 3)})`;
-                  }
-                }}
+                onClick={handleZoomIn}
                 className="p-2 text-white hover:bg-white/10 rounded transition-colors"
                 title="Zoom In"
               >
@@ -1748,57 +2052,21 @@ export default function BusPermitApplication() {
       {isImageFile(selectedFile.file_type, selectedFile.name) ? (
         <div 
           className="flex-1 flex items-center justify-center p-4 overflow-hidden cursor-move"
-          onWheel={(e) => {
-            e.preventDefault();
-            const img = document.getElementById('preview-image');
-            if (img && e.deltaY !== 0) {
-              const currentTransform = img.style.transform || 'scale(1)';
-              const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
-              const delta = e.deltaY > 0 ? -0.1 : 0.1;
-              const newScale = Math.max(0.5, Math.min(currentScale + delta, 5));
-              img.style.transform = `scale(${newScale})`;
-              img.style.cursor = newScale > 1 ? 'grab' : 'default';
-            }
-          }}
-          onMouseDown={(e) => {
-            const img = document.getElementById('preview-image');
-            if (img && img.style.transform && parseFloat(img.style.transform.match(/scale\(([^)]+)\)/)?.[1] || 1) > 1) {
-              e.preventDefault();
-              const startX = e.clientX;
-              const startY = e.clientY;
-              const startLeft = parseFloat(img.style.left || '0');
-              const startTop = parseFloat(img.style.top || '0');
-              
-              const handleMouseMove = (moveEvent) => {
-                moveEvent.preventDefault();
-                const deltaX = moveEvent.clientX - startX;
-                const deltaY = moveEvent.clientY - startY;
-                img.style.left = `${startLeft + deltaX}px`;
-                img.style.top = `${startTop + deltaY}px`;
-                img.style.cursor = 'grabbing';
-              };
-              
-              const handleMouseUp = () => {
-                document.removeEventListener('mousemove', handleMouseMove);
-                document.removeEventListener('mouseup', handleMouseUp);
-                if (img) img.style.cursor = 'grab';
-              };
-              
-              document.addEventListener('mousemove', handleMouseMove);
-              document.addEventListener('mouseup', handleMouseUp);
-            }
-          }}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
         >
           <div className="relative w-full h-full flex items-center justify-center">
             <img 
+              ref={imageRef}
               id="preview-image"
               src={selectedFile.url} 
               alt={selectedFile.name}
               className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl transition-transform duration-200 ease-out"
-              style={{ transform: 'scale(1)', position: 'relative', left: '0px', top: '0px' }}
+              style={{ transform: 'scale(1)', position: 'relative', left: '0px', top: '0px', cursor: 'default' }}
               onError={(e) => {
+                console.error('Failed to load image:', selectedFile.url);
                 e.target.onerror = null;
-                e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image preview not available</text></svg>';
+                e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image not found</text><text x="200" y="170" text-anchor="middle" font-family="Arial" font-size="12" fill="%23999999">URL: ' + selectedFile.url + '</text></svg>';
                 e.target.className = 'max-w-md mx-auto bg-gray-800 rounded-lg p-8';
               }}
             />
@@ -1811,11 +2079,9 @@ export default function BusPermitApplication() {
               {selectedFile.file_type?.includes('pdf') || selectedFile.name?.endsWith('.pdf') ? (
                 <FileText className="w-24 h-24 mx-auto" />
               ) : selectedFile.file_type?.includes('image/') ? (
-                <Image className="w-24 h-24 mx-auto" />
+                <ImageIcon className="w-24 h-24 mx-auto" />
               ) : (
-                <svg className="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                <FileText className="w-24 h-24 mx-auto" />
               )}
             </div>
             <h3 className="text-xl font-medium text-white mb-3">
@@ -1832,9 +2098,7 @@ export default function BusPermitApplication() {
                 className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                 download
               >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
+                <Download className="w-5 h-5 mr-2" />
                 Download
               </a>
               <button 
@@ -1856,7 +2120,7 @@ export default function BusPermitApplication() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
               </svg>
-              <span id="zoom-level">100%</span>
+              <span>{zoomLevel}%</span>
               <span className="text-xs ml-4">Drag to pan when zoomed</span>
             </>
           )}

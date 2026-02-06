@@ -43,7 +43,14 @@ import {
   Plane,
   Landmark,
   Shield,
-  Image as ImageIcon
+  Image as ImageIcon,
+  X,
+  MessageSquare,
+  ChevronRight,
+  Phone,
+  Mail,
+  MapPin,
+  Tag
 } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -135,13 +142,19 @@ const PURPOSE_CATEGORIES = [
 
 // Helper functions for file preview
 const isImageFile = (fileType, fileName) => {
-  if (fileType) {
-    return fileType.startsWith('image/');
+  if (fileType && fileType.startsWith('image/')) {
+    return true;
   }
   if (fileName) {
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
     return imageExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
   }
+  return false;
+};
+
+const isPdfFile = (fileType, fileName) => {
+  if (fileType && fileType === 'application/pdf') return true;
+  if (fileName && fileName.toLowerCase().endsWith('.pdf')) return true;
   return false;
 };
 
@@ -211,6 +224,7 @@ export default function BarangayPermitAnalytics() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(100);
+  const [showSubmittedDocs, setShowSubmittedDocs] = useState(false);
   const imageRef = useRef(null);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -532,8 +546,15 @@ export default function BarangayPermitAnalytics() {
   const viewFile = (file) => {
     console.log('Viewing file:', file);
     
+    // Ensure the URL is properly constructed as absolute
+    let fileUrl = file.url;
+    if (fileUrl && !fileUrl.startsWith('http')) {
+      fileUrl = `http://localhost/plms-main${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+    }
+    
     const fileWithType = {
       ...file,
+      url: fileUrl,
       file_type: file.type || getFileType(file.name)
     };
     
@@ -1117,6 +1138,11 @@ export default function BarangayPermitAnalytics() {
     setSelectedPermit(null);
     setActionComment('');
     setShowModal(false);
+    setShowSubmittedDocs(false);
+  };
+
+  const toggleSubmittedDocs = () => {
+    setShowSubmittedDocs(prev => !prev);
   };
 
   const handleApprove = async () => {
@@ -1938,37 +1964,80 @@ export default function BarangayPermitAnalytics() {
         </div>
       )}
 
-      {/* Permit Details Modal */}
+      {/* Permit Details Modal - Modern Design */}
       {showModal && selectedPermit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-sm p-4 overflow-auto">
-          <div className="w-full max-w-6xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5 rounded-t-xl">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Barangay Permit Details</h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Permit ID: BP-{String(selectedPermit.permit_id).padStart(4, '0')}
-                  </p>
-                  <div className="mt-2 flex items-center">
-                    <span className={`text-sm font-medium ${getStatusText(getUIStatus(selectedPermit.status)).color} font-poppins`}>
-                      {getUIStatus(selectedPermit.status)}
-                    </span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 overflow-auto animate-fadeIn">
+          <div className="w-full max-w-7xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl transform transition-all">
+            {/* Redesigned Barangay Permit Header */}
+            <div className="relative p-6 bg-gradient-to-r from-gray-50 via-white to-gray-50 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 border-b-4 border-green-400">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="bg-gradient-to-br from-green-400 to-green-500 p-3 rounded-2xl shadow-xl">
+                    <Shield className="w-10 h-10 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Barangay Permit</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Barangay Clearance Application Details</p>
                   </div>
                 </div>
+                
                 <button 
                   onClick={closeModal}
-                  className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors"
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all"
                 >
-                  <span className="text-xl">×</span>
+                  <X className="w-6 h-6" />
                 </button>
+              </div>
+
+              {/* Info Cards Row */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Permit ID Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Permit ID</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white font-mono">
+                    BP-{String(selectedPermit.permit_id).padStart(4, '0')}
+                  </p>
+                </div>
+
+                {/* Date Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-purple-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Date Applied</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white">
+                    {selectedPermit.application_date ? new Date(selectedPermit.application_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
+                  </p>
+                </div>
+
+                {/* Status Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Status</p>
+                  <span className={`inline-block px-3 py-1 text-sm font-bold rounded-full ${
+                    getUIStatus(selectedPermit.status) === 'Approved' ? 'text-[#4CAF50] bg-[#4CAF50]/10' :
+                    getUIStatus(selectedPermit.status) === 'Rejected' ? 'text-[#E53935] bg-[#E53935]/10' :
+                    'text-[#FDA811] bg-[#FDA811]/10'
+                  }`}>
+                    {getUIStatus(selectedPermit.status)}
+                  </span>
+                </div>
+
+                {/* Purpose Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-orange-500">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Purpose</p>
+                  <p className="text-sm font-bold text-gray-800 dark:text-white truncate" title={selectedPermit.purpose || 'N/A'}>
+                    {selectedPermit.purpose || 'N/A'}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto bg-gradient-to-b from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
               {/* Personal Information Section */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Personal Information</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-blue-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Personal Information</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Full Name</label>
@@ -1998,8 +2067,13 @@ export default function BarangayPermitAnalytics() {
               </div>
 
               {/* Address Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Address Information</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-green-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-3 rounded-xl shadow-lg">
+                    <MapPin className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Address Information</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">House No.</label>
@@ -2029,8 +2103,13 @@ export default function BarangayPermitAnalytics() {
               </div>
 
               {/* Permit Details */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Permit Details</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-orange-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-xl shadow-lg">
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Permit Details</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Purpose</label>
@@ -2048,9 +2127,14 @@ export default function BarangayPermitAnalytics() {
               </div>
 
               {/* Payment Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Payment Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-purple-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-3 rounded-xl shadow-lg">
+                    <Tag className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Payment Information</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Clearance Fee</label>
                     <p className="text-xl font-bold text-[#4CAF50] mt-1">
@@ -2066,47 +2150,113 @@ export default function BarangayPermitAnalytics() {
                 </div>
               </div>
 
-              {/* Submitted Attachments Section */}
-              {parseAttachments(selectedPermit.attachments).length > 0 && (
-                <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Submitted Files</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {parseAttachments(selectedPermit.attachments).map((file) => (
-                      <div key={file.id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-                        <div className="flex items-center gap-2">
-                          {isImageFile(file.type, file.name) ? (
-                            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                              <ImageIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
-                            </div>
-                          ) : (
-                            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
-                              {file.name}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {getFileTypeName(file.type, file.name)}
-                            </p>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => viewFile(file)}
-                          className="px-3 py-1 text-xs bg-[#4CAF50] text-white rounded hover:bg-[#FDA811] transition-colors flex items-center gap-1"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
+              {/* Submitted Attachments */}
+              {parseAttachments(selectedPermit.attachments).length > 0 ? (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-indigo-100 dark:border-slate-700">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-3 rounded-xl shadow-lg">
+                        <FileText className="w-6 h-6 text-white" />
                       </div>
-                    ))}
+                      <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                      <span className="ml-2 bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold">
+                        {parseAttachments(selectedPermit.attachments).length} files
+                      </span>
+                    </div>
+                    <button
+                      onClick={toggleSubmittedDocs}
+                      className="flex items-center gap-2 text-sm text-[#4CAF50] hover:text-[#FDA811] transition-colors"
+                    >
+                      <span>{showSubmittedDocs ? 'Hide' : 'View'} Documents</span>
+                      <ChevronRight className={`w-4 h-4 transition-transform ${showSubmittedDocs ? 'rotate-90' : ''}`} />
+                    </button>
+                  </div>
+
+                {showSubmittedDocs && (
+                  <div className="mt-4">
+                    {parseAttachments(selectedPermit.attachments).length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {parseAttachments(selectedPermit.attachments).map((file) => (
+                          <div 
+                            key={file.id} 
+                            className="flex items-center justify-between p-4 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`p-3 rounded-lg ${
+                                isImageFile(file.type, file.name)
+                                  ? 'bg-green-100 dark:bg-green-900/30' 
+                                  : 'bg-blue-100 dark:bg-blue-900/30'
+                              }`}>
+                                {isImageFile(file.type, file.name) ? (
+                                  <ImageIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                ) : (
+                                  <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                  {file.id.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                  {file.name}
+                                </p>
+                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                  {getFileTypeName(file.type, file.name)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => viewFile(file)}
+                                className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors"
+                                title="View document"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <a 
+                                href={file.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors"
+                                title="Download document"
+                                download
+                              >
+                                <Download className="w-4 h-4" />
+                              </a>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
+                        <FileText className="w-12 h-12 text-gray-300 dark:text-gray-500 mx-auto mb-3" />
+                        <p className="text-gray-500 dark:text-gray-400">
+                          No documents submitted for this application.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-gradient-to-br from-gray-400 to-gray-500 p-3 rounded-xl shadow-lg">
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                  </div>
+                  <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-xl">
+                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      No files uploaded for this application.
+                    </p>
                   </div>
                 </div>
               )}
 
               {/* Review Comments Section */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-yellow-100 dark:border-slate-700">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   Review Comments
                   {selectedPermit.comments && (
@@ -2116,38 +2266,58 @@ export default function BarangayPermitAnalytics() {
                   )}
                 </h3>
                 
-                {/* Display all comments */}
-                {selectedPermit.comments && selectedPermit.comments.trim() ? (
-                  <div className="space-y-4 mb-4">
-                    {formatComments(selectedPermit.comments).map((comment, index) => (
-                      <div key={index} className="p-4 bg-gray-50 dark:bg-slate-700 rounded-lg">
-                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2 font-medium">
-                          {comment.timestamp}
-                        </div>
-                        <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
-                          {comment.comment}
-                        </p>
+                {/* Display all comments in one box */}
+                <div className="space-y-4 mb-6">
+                  {selectedPermit.comments && selectedPermit.comments.trim() ? (
+                    <div className="bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                      <div className="max-h-64 overflow-y-auto p-4">
+                        {formatComments(selectedPermit.comments).map((comment, index) => (
+                          <div key={index} className={`mb-4 ${index !== 0 ? 'pt-4 border-t border-gray-200 dark:border-slate-600' : ''}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                <User className="w-4 h-4 mr-2" />
+                                Admin Comment
+                              </div>
+                              <div className="flex items-center text-xs text-gray-400">
+                                <Clock className="w-3 h-3 mr-1" />
+                                {comment.timestamp}
+                              </div>
+                            </div>
+                            <div className="pl-6">
+                              <p className="text-gray-900 dark:text-white bg-white dark:bg-slate-800 p-3 rounded border border-gray-100 dark:border-slate-500">
+                                {comment.comment}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-4 bg-gray-50 dark:bg-slate-700 rounded-lg mb-4">
-                    <p className="text-gray-500 dark:text-gray-400 italic">
-                      No comments yet. Add your first comment below.
-                    </p>
-                  </div>
-                )}
+                      <div className="px-4 py-3 bg-gray-100 dark:bg-slate-800 border-t border-gray-200 dark:border-slate-600">
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          Total: {formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
+                      <MessageSquare className="w-12 h-12 text-gray-300 dark:text-gray-500 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400">
+                        No comments yet. Add your first comment below.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3 justify-end pt-6 border-t border-gray-200 dark:border-slate-700">
+              {/* Close Button */}
+              <div className="flex justify-end pt-8 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl p-6 border-t-4 border-gray-300 dark:border-slate-600">
                 <button 
                   onClick={closeModal}
-                  className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                  className="px-8 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
                 >
+                  <X className="w-5 h-5" />
                   Close
                 </button>
-                
               </div>
             </div>
           </div>
@@ -2234,10 +2404,10 @@ export default function BarangayPermitAnalytics() {
               </div>
             </div>
 
-            {/* Image Content with Zoom */}
+            {/* File Content - Image / PDF / Other */}
             {isImageFile(selectedFile.file_type, selectedFile.name) ? (
               <div 
-                className="flex-1 flex items-center justify-center p-4 overflow-hidden cursor-move"
+                className="flex-1 flex items-center justify-center p-4 pt-20 pb-16 overflow-hidden cursor-move"
                 onWheel={handleWheel}
                 onMouseDown={handleMouseDown}
               >
@@ -2247,29 +2417,33 @@ export default function BarangayPermitAnalytics() {
                     id="preview-image"
                     src={selectedFile.url} 
                     alt={selectedFile.name}
+                    crossOrigin="anonymous"
                     className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl transition-transform duration-200 ease-out"
-                    style={{ transform: 'scale(1)', position: 'relative', left: '0px', top: '0px', cursor: 'default' }}
+                    style={{ transform: `scale(${zoomLevel / 100})`, position: 'relative', left: '0px', top: '0px', cursor: zoomLevel > 100 ? 'move' : 'default' }}
+                    onLoad={() => console.log('Image loaded successfully:', selectedFile.url)}
                     onError={(e) => {
+                      console.error('Failed to load image:', selectedFile.url);
                       e.target.onerror = null;
-                      e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image preview not available</text></svg>';
+                      e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="140" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image failed to load</text><text x="200" y="170" text-anchor="middle" font-family="Arial" font-size="11" fill="%23999999">Check browser console for URL</text></svg>';
                       e.target.className = 'max-w-md mx-auto bg-gray-800 rounded-lg p-8';
                     }}
                   />
                 </div>
               </div>
+            ) : isPdfFile(selectedFile.file_type, selectedFile.name) ? (
+              <div className="flex-1 flex items-center justify-center p-4 pt-20 pb-16">
+                <iframe
+                  src={selectedFile.url}
+                  title={selectedFile.name}
+                  className="w-full h-full rounded-lg border-0"
+                  style={{ minHeight: '70vh' }}
+                />
+              </div>
             ) : (
               <div className="flex-1 flex items-center justify-center p-4">
                 <div className="text-center max-w-md bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
                   <div className="text-gray-300 mb-6">
-                    {selectedFile.file_type?.includes('pdf') || selectedFile.name?.endsWith('.pdf') ? (
-                      <FileText className="w-24 h-24 mx-auto" />
-                    ) : selectedFile.file_type?.includes('image/') ? (
-                      <ImageIcon className="w-24 h-24 mx-auto" />
-                    ) : (
-                      <svg className="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    )}
+                    <FileText className="w-24 h-24 mx-auto" />
                   </div>
                   <h3 className="text-xl font-medium text-white mb-3">
                     {getFileTypeName(selectedFile.file_type, selectedFile.name)}
@@ -2285,9 +2459,7 @@ export default function BarangayPermitAnalytics() {
                       className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                       download
                     >
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
+                      <Download className="w-5 h-5 mr-2" />
                       Download
                     </a>
                     <button 

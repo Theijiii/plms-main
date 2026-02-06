@@ -1,4 +1,20 @@
-import { useEffect, useState, useRef, useCallback } from "react"; // Added useRef and useCallback
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import Swal from "sweetalert2";
+import { logTx } from '../../../lib/txLogger';
+import {
+  Search,
+  Download,
+  RefreshCw,
+  FileText,
+  Image as ImageIcon,
+  X,
+  CheckCircle,
+  User,
+  Clock,
+  File,
+  Receipt,
+  AlertCircle
+} from "lucide-react";
 
 const API_BRGY = "/backend/barangay_permit";
 
@@ -8,7 +24,7 @@ const isImageFile = (fileType, fileName) => {
     return fileType.startsWith('image/');
   }
   if (fileName) {
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.NPwebp', '.svg'];
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
     return imageExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
   }
   return false;
@@ -33,7 +49,6 @@ const getFileTypeName = (fileType, fileName) => {
     }
   }
   
-  // Fallback based on file extension
   if (fileName) {
     const ext = fileName.split('.').pop().toLowerCase();
     switch (ext) {
@@ -59,19 +74,6 @@ const getFileTypeName = (fileType, fileName) => {
   return 'File';
 };
 
-// File icon components
-const FileTextIcon = ({ className }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-  </svg>
-);
-
-const ImageIcon = ({ className }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-  </svg>
-);
-
 export default function BrgyPermitApplication() {
   const [selectedPermit, setSelectedPermit] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -86,11 +88,12 @@ export default function BrgyPermitApplication() {
   const [successMessage, setSuccessMessage] = useState('');
   const [sortOption, setSortOption] = useState('latest');
   const [searchQuery, setSearchQuery] = useState('');
-  const [zoomLevel, setZoomLevel] = useState(100); // Track zoom level in state
-  const imageRef = useRef(null); // Ref for the image element
-  const isDraggingRef = useRef(false); // Track dragging state
-  const dragStartRef = useRef({ x: 0, y: 0 }); // Track drag start position
-  const imagePositionRef = useRef({ x: 0, y: 0 }); // Track image position
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const imageRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const imagePositionRef = useRef({ x: 0, y: 0 });
 
   // Helper function to update zoom level display
   const updateZoomLevel = useCallback(() => {
@@ -721,17 +724,122 @@ const parseAttachments = (attachmentsData) => {
 
   const handleApprove = async () => {
     if (!selectedPermit) return;
-    await updatePermitStatus(selectedPermit.permit_id, 'Approved', actionComment);
+
+    const result = await Swal.fire({
+      title: 'Approve Permit?',
+      html: `
+        <div class="text-left">
+          <p class="mb-2">You are about to approve this barangay permit application:</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Permit ID:</strong> ${selectedPermit.permit_id}</p>
+            <p class="text-sm"><strong>Applicant:</strong> ${selectedPermit.first_name} ${selectedPermit.last_name}</p>
+            <p class="text-sm"><strong>Purpose:</strong> ${selectedPermit.purpose || 'N/A'}</p>
+          </div>
+          <p class="text-sm text-gray-600">This action will approve the application.</p>
+        </div>
+      `,
+      icon: 'question',
+      input: 'textarea',
+      inputLabel: 'Add approval notes (optional)',
+      inputPlaceholder: 'Enter any additional notes...',
+      inputValue: actionComment,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Approve',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#4CAF50',
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+        htmlContainer: 'text-left'
+      }
+    });
+
+    if (result.isConfirmed) {
+      const notes = result.value || actionComment;
+      await updatePermitStatus(selectedPermit.permit_id, 'Approved', notes);
+      setActionComment('');
+    }
   };
 
   const handleReject = async () => {
     if (!selectedPermit) return;
-    await updatePermitStatus(selectedPermit.permit_id, 'Rejected', actionComment);
+
+    const result = await Swal.fire({
+      title: 'Reject Application?',
+      html: `
+        <div class="text-left">
+          <p class="mb-2">You are about to reject this barangay permit application:</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Permit ID:</strong> ${selectedPermit.permit_id}</p>
+            <p class="text-sm"><strong>Applicant:</strong> ${selectedPermit.first_name} ${selectedPermit.last_name}</p>
+            <p class="text-sm"><strong>Purpose:</strong> ${selectedPermit.purpose || 'N/A'}</p>
+          </div>
+          <p class="text-sm text-red-600">Please provide a reason for rejection.</p>
+        </div>
+      `,
+      icon: 'warning',
+      input: 'textarea',
+      inputLabel: 'Reason for rejection (required)',
+      inputPlaceholder: 'Enter the reason for rejecting this application...',
+      inputValue: actionComment,
+      inputValidator: (value) => {
+        if (!value) {
+          return 'You must provide a reason for rejection!';
+        }
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Reject',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#E53935',
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+        htmlContainer: 'text-left'
+      }
+    });
+
+    if (result.isConfirmed) {
+      await updatePermitStatus(selectedPermit.permit_id, 'Rejected', result.value);
+      setActionComment('');
+    }
   };
 
   const handleForCompliance = async () => {
     if (!selectedPermit) return;
-    await updatePermitStatus(selectedPermit.permit_id, 'Compliance', actionComment);
+
+    const result = await Swal.fire({
+      title: 'Mark for Compliance?',
+      html: `
+        <div class="text-left">
+          <p class="mb-2">Mark this application for compliance review:</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Permit ID:</strong> ${selectedPermit.permit_id}</p>
+            <p class="text-sm"><strong>Applicant:</strong> ${selectedPermit.first_name} ${selectedPermit.last_name}</p>
+          </div>
+          <p class="text-sm text-gray-600">Please specify what compliance items are needed.</p>
+        </div>
+      `,
+      icon: 'info',
+      input: 'textarea',
+      inputLabel: 'Compliance notes (optional)',
+      inputPlaceholder: 'List required compliance items...',
+      inputValue: actionComment,
+      showCancelButton: true,
+      confirmButtonText: 'Mark for Compliance',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#FDA811',
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+        htmlContainer: 'text-left'
+      }
+    });
+
+    if (result.isConfirmed) {
+      const notes = result.value || actionComment;
+      await updatePermitStatus(selectedPermit.permit_id, 'Compliance', notes);
+      setActionComment('');
+    }
   };
 
 const viewFile = (file) => {
@@ -1532,7 +1640,7 @@ const viewFile = (file) => {
                 <div className="text-center max-w-md bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
                   <div className="text-gray-300 mb-6">
                     {selectedFile.file_type?.includes('pdf') || selectedFile.name?.endsWith('.pdf') ? (
-                      <FileTextIcon className="w-24 h-24 mx-auto" />
+                      <FileText className="w-24 h-24 mx-auto" />
                     ) : selectedFile.file_type?.includes('image/') ? (
                       <ImageIcon className="w-24 h-24 mx-auto" />
                     ) : (
