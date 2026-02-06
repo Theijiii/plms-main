@@ -210,13 +210,9 @@ function App() {
             } 
           />
           
-         <Route path="barangaypermit" 
-      element={ <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
-      <BarangayPermit />
-    </ProtectedRoute>} 
-  />
+
   <Route 
-    path="permitapplication" 
+    path="barangaydashboard" 
     element={
       <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
         <BrgyPermitApplication />
