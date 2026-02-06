@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Upload, Check, X, Eye, FileText, AlertCircle, Loader2, Shield } from "lucide-react";
 import { createWorker } from 'tesseract.js';
+import Swal from 'sweetalert2';
 
 const COLORS = {
   primary: '#4A90E2',
@@ -17,17 +18,25 @@ const NATIONALITIES = [
   "Afghan", "Albanian", "Algerian", "American", "Andorran", "Angolan", "Antiguans", "Argentinean", "Armenian", "Australian", "Austrian", "Azerbaijani", "Bahamian", "Bahraini", "Bangladeshi", "Barbadian", "Barbudans", "Batswana", "Belarusian", "Belgian", "Belizean", "Beninese", "Bhutanese", "Bolivian", "Bosnian", "Brazilian", "British", "Bruneian", "Bulgarian", "Burkinabe", "Burmese", "Burundian", "Cambodian", "Cameroonian", "Canadian", "Cape Verdean", "Central African", "Chadian", "Chilean", "Chinese", "Colombian", "Comoran", "Congolese", "Costa Rican", "Croatian", "Cuban", "Cypriot", "Czech", "Danish", "Djibouti", "Dominican", "Dutch", "East Timorese", "Ecuadorean", "Egyptian", "Emirian", "Equatorial Guinean", "Eritrean", "Estonian", "Ethiopian", "Fijian", "Filipino", "Finnish", "French", "Gabonese", "Gambian", "Georgian", "German", "Ghanaian", "Greek", "Grenadian", "Guatemalan", "Guinea-Bissauan", "Guinean", "Guyanese", "Haitian", "Herzegovinian", "Honduran", "Hungarian", "I-Kiribati", "Icelander", "Indian", "Indonesian", "Iranian", "Iraqi", "Irish", "Israeli", "Italian", "Ivorian", "Jamaican", "Japanese", "Jordanian", "Kazakhstani", "Kenyan", "Kittian and Nevisian", "Kuwaiti", "Kyrgyz", "Laotian", "Latvian", "Lebanese", "Liberian", "Libyan", "Liechtensteiner", "Lithuanian", "Luxembourger", "Macedonian", "Malagasy", "Malawian", "Malaysian", "Maldivan", "Malian", "Maltese", "Marshallese", "Mauritanian", "Mauritian", "Mexican", "Micronesian", "Moldovan", "Monacan", "Mongolian", "Moroccan", "Mosotho", "Motswana", "Mozambican", "Namibian", "Nauruan", "Nepalese", "New Zealander", "Nicaraguan", "Nigerian", "Nigerien", "North Korean", "Northern Irish", "Norwegian", "Omani", "Pakistani", "Palauan", "Palestinian", "Panamanian", "Papua New Guinean", "Paraguayan", "Peruvian", "Polish", "Portuguese", "Qatari", "Romanian", "Russian", "Rwandan", "Saint Lucian", "Salvadoran", "Samoan", "San Marinese", "Sao Tomean", "Saudi", "Scottish", "Senegalese", "Serbian", "Seychellois", "Sierra Leonean", "Singaporean", "Slovakian", "Slovenian", "Solomon Islander", "Somali", "South African", "South Korean", "Spanish", "Sri Lankan", "Sudanese", "Surinamer", "Swazi", "Swedish", "Swiss", "Syrian", "Taiwanese", "Tajik", "Tanzanian", "Thai", "Togolese", "Tongan", "Trinidadian or Tobagonian", "Tunisian", "Turkish", "Tuvaluan", "Ugandan", "Ukrainian", "Uruguayan", "Uzbekistani", "Venezuelan", "Vietnamese", "Welsh", "Yemenite", "Zambian", "Zimbabwean"
 ];
 
+// Helper function to calculate age
+const calculateAge = (birthdate) => {
+  if (!birthdate) return null;
+  const today = new Date();
+  const birthDate = new Date(birthdate);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
+
 export default function BarangayNew() {
   const location = useLocation();
   const navigate = useNavigate();
   const permitType = location.state?.permitType || 'NEW';
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [showErrorModal, setShowErrorModal] = useState(false);
-  const [modalMessage, setModalMessage] = useState('');
-  const [modalTitle, setModalTitle] = useState('');
   const [agreeDeclaration, setAgreeDeclaration] = useState(false);
   const [showPreview, setShowPreview] = useState({});
   
@@ -62,8 +71,8 @@ export default function BarangayNew() {
     house_no: '',
     street: '',
     barangay: '',
-    city_municipality: '',
-    province: '',
+    city_municipality: 'Caloocan City',
+    province: 'Metro Manila',
     zip_code: '',
     
     // Clearance Details
@@ -118,10 +127,12 @@ export default function BarangayNew() {
       }
     } else if (name === "mobile_number") {
       const onlyNums = value.replace(/[^0-9]/g, "");
-      setFormData(prev => ({
-        ...prev,
-        [name]: onlyNums
-      }));
+      if (onlyNums.length <= 11) {
+        setFormData(prev => ({
+          ...prev,
+          [name]: onlyNums
+        }));
+      }
     } else {
       setFormData(prev => ({
         ...prev,
@@ -154,63 +165,31 @@ export default function BarangayNew() {
     return text.toLowerCase().replace(/[^a-z0-9]/g, '');
   };
 
-  // Improved fuzzy matching using Levenshtein distance
-  const levenshteinDistance = (str1, str2) => {
-    const s1 = str1.toLowerCase();
-    const s2 = str2.toLowerCase();
-    const len1 = s1.length;
-    const len2 = s2.length;
-    const matrix = [];
-
-    for (let i = 0; i <= len2; i++) {
-      matrix[i] = [i];
-    }
-    for (let j = 0; j <= len1; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= len2; i++) {
-      for (let j = 1; j <= len1; j++) {
-        if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          );
-        }
-      }
-    }
-    return matrix[len2][len1];
-  };
-
   const fuzzyMatch = (str1, str2, threshold = 0.7) => {
-    if (!str1 || !str2) return 0;
-    
     const s1 = normalizeText(str1);
     const s2 = normalizeText(str2);
     
-    // Exact match
     if (s1 === s2) return 1.0;
+    if (s1.includes(s2) || s2.includes(s1)) return 0.9;
     
-    // Check if one contains the other
-    if (s1.includes(s2) || s2.includes(s1)) return 0.95;
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
     
-    // Use Levenshtein distance for similarity
-    const maxLen = Math.max(s1.length, s2.length);
-    if (maxLen === 0) return 1.0;
+    if (longer.length === 0) return 0.0;
     
-    const distance = levenshteinDistance(s1, s2);
-    const similarity = 1 - (distance / maxLen);
+    let matches = 0;
+    for (let i = 0; i < shorter.length; i++) {
+      if (longer.includes(shorter[i])) matches++;
+    }
     
+    const similarity = matches / longer.length;
     return similarity >= threshold ? similarity : 0;
   };
 
   const ID_TYPE_PATTERNS = {
     "Philippine National ID (PhilSys ID)": ["philsys", "philippine national id", "national id", "phil id", "republic of the philippines", "pambansang pagkakakilanlan", "philippine identification card", "pcn"],
     "Passport (DFA)": ["passport", "dfa", "department of foreign affairs", "p <", "republic of the philippines passport"],
-    "Driver's License (LTO)": ["driver", "license", "licence", "lto", "land transportation", "dl no", "department of transportation", "driver's license", "drivers license"],
+    "Driver's License (LTO)": ["driver", "license", "licence", "lto", "land transportation", "dl no", "department of transportation", "driver's license", "drivers license", "license no", "license number"],
     "UMID": ["umid", "unified multi-purpose id", "sss", "gsis"],
     "PRC ID": ["prc", "professional regulation commission", "professional id"],
     "Voter's ID": ["voter", "comelec", "commission on elections", "voter's identification"],
@@ -321,97 +300,27 @@ export default function BarangayNew() {
       setVerificationStatus(prev => ({ ...prev, progress: 90 }));
 
       const extractedText = text.toLowerCase();
-      console.log('🔍 OCR Extracted Text:', text);
       
-      // First name matching - check both full name and variations
       const firstNameMatch = fuzzyMatch(formData.first_name, extractedText);
-      console.log(`✓ First Name Match: ${formData.first_name} = ${firstNameMatch.toFixed(2)}`);
+      const lastNameMatch = fuzzyMatch(formData.last_name, extractedText);
       
-      // Last name matching - check multiple variations
-      let lastNameMatch = fuzzyMatch(formData.last_name, extractedText);
-      // Also check if last name appears as separate word (common in IDs)
-      const lastNameWords = formData.last_name.toLowerCase().split(' ');
-      lastNameWords.forEach(word => {
-        if (word.length > 2) {
-          const wordMatch = fuzzyMatch(word, extractedText);
-          if (wordMatch > lastNameMatch) lastNameMatch = wordMatch;
-        }
-      });
-      console.log(`✓ Last Name Match: ${formData.last_name} = ${lastNameMatch.toFixed(2)}`);
-      
-      // Middle name/initial matching - handle both full names and initials
+      // Check middle name or initial - be flexible
       let middleNameMatch = null;
       if (formData.middle_name) {
-        const middleName = formData.middle_name.trim();
-        
-        // Check if it's just an initial (1-2 characters possibly with dot)
-        const isInitial = middleName.replace(/\./g, '').length <= 2;
-        
-        if (isInitial) {
-          // If initial, check if the first letter appears in common middle name patterns
-          const initial = middleName.charAt(0).toLowerCase();
-          const middleNamePattern = new RegExp(`\\b${initial}[a-z]*\\b`, 'i');
-          middleNameMatch = middleNamePattern.test(text) ? 0.85 : fuzzyMatch(middleName, extractedText);
-          console.log(`✓ Middle Initial Match: ${middleName} (initial) = ${middleNameMatch ? middleNameMatch.toFixed(2) : '0.00'}`);
-        } else {
-          // If full middle name, try normal fuzzy match
-          middleNameMatch = fuzzyMatch(middleName, extractedText);
-          // Also check just the initial of the provided middle name
-          const initial = middleName.charAt(0).toLowerCase();
-          const initialPattern = new RegExp(`\\b${initial}\\.?\\b`, 'i');
-          if (initialPattern.test(text) && middleNameMatch < 0.7) {
-            middleNameMatch = Math.max(middleNameMatch, 0.8);
-          }
-          console.log(`✓ Middle Name Match: ${middleName} = ${middleNameMatch.toFixed(2)}`);
-        }
+        // Check if full middle name matches
+        const fullMiddleMatch = fuzzyMatch(formData.middle_name, extractedText);
+        // Check if middle initial exists in text
+        const middleInitial = formData.middle_name.charAt(0).toLowerCase();
+        const hasMiddleInitial = extractedText.includes(middleInitial);
+        // Accept if either full name OR initial is found
+        middleNameMatch = fullMiddleMatch > 0 || hasMiddleInitial;
       }
       
-      // Enhanced ID number verification for Philippine National ID and other formats
-      let idNumberMatch = false;
       const idNumberNormalized = normalizeText(formData.id_number);
-      const userIdNumber = formData.id_number.trim();
-      
-      // Check if this is Philippine National ID format (XXXX-XXXX-XXXX-XXXX or 16 digits)
-      const isPhilippineNationalID = formData.id_type === "Philippine National ID (PhilSys ID)";
-      
-      if (isPhilippineNationalID) {
-        // Philippine National ID specific verification
-        // Format: XXXX-XXXX-XXXX-XXXX (16 digits with dashes)
-        const digitsOnly = userIdNumber.replace(/[^0-9]/g, '');
-        
-        // Check various possible formats in the extracted text:
-        // 1. Exact match with dashes: XXXX-XXXX-XXXX-XXXX
-        // 2. With spaces: XXXX XXXX XXXX XXXX
-        // 3. Without separators: XXXXXXXXXXXXXXXX
-        // 4. OCR might misread dashes as other chars
-        const possibleFormats = [
-          userIdNumber, // Original format
-          digitsOnly, // Just digits
-          digitsOnly.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1-$2-$3-$4'), // With dashes
-          digitsOnly.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1 $2 $3 $4'), // With spaces
-          digitsOnly.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1.$2.$3.$4'), // With dots
-        ];
-        
-        // Check if any format appears in the text
-        idNumberMatch = possibleFormats.some(format => {
-          const normalizedFormat = normalizeText(format);
-          return extractedText.includes(normalizedFormat) || 
-                 text.includes(format) ||
-                 normalizeText(text).includes(normalizedFormat);
-        });
-        
-        // Also check for partial matches with high confidence for 16-digit IDs
-        if (!idNumberMatch && digitsOnly.length === 16) {
-          // Look for the 16 consecutive digits in the extracted text
-          const textDigitsOnly = text.replace(/[^0-9]/g, '');
-          idNumberMatch = textDigitsOnly.includes(digitsOnly);
-        }
-      } else {
-        // Standard ID number verification for other ID types
-        idNumberMatch = extractedText.includes(idNumberNormalized) || 
-                       text.includes(userIdNumber) ||
-                       fuzzyMatch(userIdNumber, extractedText) > 0.8;
-      }
+      const extractedTextNormalized = normalizeText(extractedText);
+      const idNumberMatch = extractedTextNormalized.includes(idNumberNormalized) || 
+        extractedText.includes(idNumberNormalized) ||
+        fuzzyMatch(formData.id_number, extractedText) > 0.8;
 
       let birthdateMatch = null;
       if (formData.birthdate) {
@@ -465,6 +374,71 @@ export default function BarangayNew() {
       const detectedID = detectIDType(text);
       const idTypeMatch = detectedID && detectedID.type === formData.id_type;
 
+      // Check for expiration date
+      let expirationDate = null;
+      let isExpired = false;
+      const expirationKeywords = ['expiry', 'expiration', 'valid until', 'expires', 'exp date', 'expiry date', 'expiration date'];
+      const hasExpirationKeyword = expirationKeywords.some(keyword => extractedText.includes(keyword));
+      
+      if (hasExpirationKeyword) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Common date patterns for expiration dates
+        const datePatterns = [
+          /(?:expiry|expiration|valid until|expires|exp date)\s*:?\s*(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/i,
+          /(?:expiry|expiration|valid until|expires|exp date)\s*:?\s*(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/i,
+          /(?:expiry|expiration|valid until|expires|exp date)\s*:?\s*(\w+)\s+(\d{1,2}),?\s+(\d{4})/i,
+          /(?:expiry|expiration|valid until|expires|exp date)\s*:?\s*(\d{1,2})\s+(\w+)\s+(\d{4})/i,
+          /(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?=\s*(?:expiry|expiration|exp))/i,
+          /(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})(?=\s*(?:expiry|expiration|exp))/i
+        ];
+        
+        for (const pattern of datePatterns) {
+          const match = text.match(pattern);
+          if (match) {
+            try {
+              let expDate;
+              if (match[0].includes('/') || match[0].includes('-')) {
+                // Try different date formats
+                const parts = match[0].split(/[\/-]/);
+                if (parts[0].length === 4) {
+                  // YYYY-MM-DD or YYYY/MM/DD
+                  expDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                } else {
+                  // MM-DD-YYYY or DD-MM-YYYY (assume MM-DD-YYYY for US-style dates)
+                  expDate = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+                }
+              } else {
+                // Month name format
+                const monthNames = ['january', 'february', 'march', 'april', 'may', 'june',
+                                   'july', 'august', 'september', 'october', 'november', 'december'];
+                const monthNamesShort = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                                         'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                
+                const monthStr = match[1].toLowerCase();
+                let monthIndex = monthNames.indexOf(monthStr);
+                if (monthIndex === -1) {
+                  monthIndex = monthNamesShort.indexOf(monthStr.substring(0, 3));
+                }
+                
+                if (monthIndex !== -1) {
+                  expDate = new Date(parseInt(match[3]), monthIndex, parseInt(match[2]));
+                }
+              }
+              
+              if (expDate && !isNaN(expDate.getTime())) {
+                expirationDate = expDate;
+                isExpired = expDate < today;
+                break;
+              }
+            } catch (e) {
+              console.log('Error parsing expiration date:', e);
+            }
+          }
+        }
+      }
+
       const results = {
         firstName: {
           matched: firstNameMatch > 0,
@@ -477,8 +451,8 @@ export default function BarangayNew() {
           value: formData.last_name
         },
         middleName: formData.middle_name ? {
-          matched: middleNameMatch > 0,
-          confidence: middleNameMatch,
+          matched: middleNameMatch === true || middleNameMatch > 0,
+          confidence: middleNameMatch === true ? 1.0 : (middleNameMatch || 0),
           value: formData.middle_name
         } : null,
         idNumber: {
@@ -496,6 +470,11 @@ export default function BarangayNew() {
           matched: idTypeMatch,
           confidence: detectedID ? detectedID.confidence : 0
         },
+        expiration: {
+          date: expirationDate,
+          isExpired: isExpired,
+          found: expirationDate !== null
+        },
         extractedText: text
       };
 
@@ -504,13 +483,23 @@ export default function BarangayNew() {
                         results.idNumber.matched &&
                         results.idType.matched &&
                         (!formData.middle_name || results.middleName.matched) &&
-                        (!formData.birthdate || results.birthdate.matched);
+                        (!formData.birthdate || results.birthdate.matched) &&
+                        !results.expiration.isExpired;
+
+      let errorMessage = null;
+      if (!allMatched) {
+        if (results.expiration.isExpired) {
+          errorMessage = 'ID document has expired and cannot be used';
+        } else {
+          errorMessage = 'Some information does not match the ID';
+        }
+      }
 
       setVerificationStatus({
         isVerifying: false,
         isVerified: allMatched,
         verificationResults: results,
-        verificationError: allMatched ? null : 'Some information does not match the ID',
+        verificationError: errorMessage,
         progress: 100
       });
 
@@ -533,21 +522,17 @@ export default function BarangayNew() {
     if (step === 1) {
       if (!formData.first_name || formData.first_name.trim() === '') newErrors.first_name = 'First name is required';
       if (!formData.last_name || formData.last_name.trim() === '') newErrors.last_name = 'Last name is required';
-      if (!formData.mobile_number || formData.mobile_number.trim() === '') newErrors.mobile_number = 'Mobile number is required';
+      if (!formData.mobile_number || formData.mobile_number.trim() === '') {
+        newErrors.mobile_number = 'Mobile number is required';
+      } else if (!formData.mobile_number.startsWith('09')) {
+        newErrors.mobile_number = 'Mobile number must start with 09';
+      } else if (formData.mobile_number.length !== 11) {
+        newErrors.mobile_number = 'Mobile number must be exactly 11 digits';
+      }
       if (!formData.birthdate) {
         newErrors.birthdate = 'Birth date is required';
-      } else {
-        // Validate age is 18 or above
-        const today = new Date();
-        const birthDate = new Date(formData.birthdate);
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const monthDiff = today.getMonth() - birthDate.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-          age--;
-        }
-        if (age < 18) {
-          newErrors.birthdate = 'You must be at least 18 years old to apply';
-        }
+      } else if (calculateAge(formData.birthdate) < 18) {
+        newErrors.birthdate = 'You must be at least 18 years old to apply';
       }
       if (!formData.gender) newErrors.gender = 'Gender is required';
       if (!formData.civil_status) newErrors.civil_status = 'Civil status is required';
@@ -582,16 +567,8 @@ export default function BarangayNew() {
       if (!formData.first_name || formData.first_name.trim() === '') return false;
       if (!formData.last_name || formData.last_name.trim() === '') return false;
       if (!formData.mobile_number || formData.mobile_number.trim() === '') return false;
+      if (!formData.mobile_number.startsWith('09') || formData.mobile_number.length !== 11) return false;
       if (!formData.birthdate) return false;
-      // Check age is 18 or above
-      const today = new Date();
-      const birthDate = new Date(formData.birthdate);
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-      if (age < 18) return false;
       if (!formData.gender) return false;
       if (!formData.civil_status) return false;
       if (!formData.nationality || formData.nationality.trim() === '') return false;
@@ -630,7 +607,7 @@ export default function BarangayNew() {
     }
   };
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     if (currentStep < steps.length - 1) {
       // For steps 1-4, just go to next step
@@ -643,8 +620,39 @@ export default function BarangayNew() {
         setErrors({});
       }
     } else {
-      // On Step 5 (Review), show confirmation modal
-      setShowConfirmModal(true);
+      // On Step 5 (Review), show SweetAlert2 confirmation
+      const result = await Swal.fire({
+        title: 'Confirm Submission',
+        html: `
+          <div class="text-left">
+            <p class="mb-3 text-sm">Are you sure you want to submit your barangay clearance application? Please review your information before submitting.</p>
+            <div class="p-4 bg-gray-50 rounded-lg border mb-4">
+              <p class="text-sm font-semibold mb-2">Declaration:</p>
+              <p class="text-sm mb-3">I hereby declare that all information provided is true and correct to the best of my knowledge. I understand that any false information may result in the rejection of my application.</p>
+            </div>
+          </div>
+        `,
+        icon: 'question',
+        input: 'checkbox',
+        inputValue: 0,
+        inputPlaceholder: 'I agree to the above declaration',
+        confirmButtonText: 'Confirm & Submit',
+        confirmButtonColor: COLORS.success,
+        cancelButtonText: 'Cancel',
+        cancelButtonColor: COLORS.danger,
+        showCancelButton: true,
+        inputValidator: (result) => {
+          return !result && 'You must agree to the declaration!';
+        },
+        customClass: {
+          popup: 'text-left',
+          htmlContainer: 'text-left'
+        }
+      });
+
+      if (result.isConfirmed) {
+        await handleSubmit();
+      }
     }
   };
 
@@ -654,24 +662,43 @@ export default function BarangayNew() {
     }
   };
 
-  const showSuccessMessage = (message) => {
-    setModalTitle('Success!');
-    setModalMessage(message);
-    setShowSuccessModal(true);
+  const showSuccessMessage = async (message) => {
+    await Swal.fire({
+      title: 'Success!',
+      html: `
+        <div class="text-center">
+          <p class="mb-3">${message}</p>
+          <p class="text-xs text-gray-500">You will be redirected to your dashboard...</p>
+        </div>
+      `,
+      icon: 'success',
+      confirmButtonText: 'Track Application',
+      confirmButtonColor: COLORS.success,
+      timer: 3000,
+      timerProgressBar: true
+    }).then((result) => {
+      if (result.isConfirmed || result.dismiss === Swal.DismissReason.timer) {
+        navigate("/user/permittracker");
+      }
+    });
   };
 
-  const showErrorMessage = (message) => {
-    setModalTitle('Error');
-    setModalMessage(message);
-    setShowErrorModal(true);
+  const showErrorMessage = async (message) => {
+    await Swal.fire({
+      title: 'Error',
+      html: `
+        <div class="text-center">
+          <p class="mb-3">${message}</p>
+          <p class="text-xs text-gray-500">Please check your information and try again.</p>
+        </div>
+      `,
+      icon: 'error',
+      confirmButtonText: 'Close',
+      confirmButtonColor: COLORS.danger
+    });
   };
 
   const handleSubmit = async () => {
-    if (!agreeDeclaration) {
-      showErrorMessage("You must agree to the declaration before submitting.");
-      return;
-    }
-
     setIsSubmitting(true);
 
     // Validate steps
@@ -761,56 +788,48 @@ export default function BarangayNew() {
 
       // Success
       if (data.success) {
-        setShowConfirmModal(false);
-        showSuccessMessage(data.message || "Application submitted successfully!");
+        await showSuccessMessage(data.message || "Application submitted successfully!");
         
         // Reset form after successful submission
-        setTimeout(() => {
-          setFormData({
-            permit_type: permitType,
-            application_date: new Date().toISOString().split('T')[0],
-            status: 'pending',
-            first_name: '',
-            middle_name: '',
-            last_name: '',
-            suffix: '',
-            mobile_number: '',
-            email: '',
-            birthdate: '',
-            gender: '',
-            civil_status: '',
-            nationality: '',
-            house_no: '',
-            street: '',
-            barangay: '',
-            city_municipality: '',
-            province: '',
-            zip_code: '',
-            purpose: '',
-            duration: '',
-            id_type: '',
-            id_number: '',
-            clearance_fee: 0.00,
-            receipt_number: '',
-            user_id: null,
-            applicant_signature: '',
-            valid_id_file: null,
-            proof_of_residence_file: null,
-            receipt_file: null,
-            signature_file: null,
-            photo_fingerprint_file: null,
-            attachments: '',
-          });
-          setCurrentStep(1);
-          setAgreeDeclaration(false);
-        }, 2000);
-
-        // Navigate after showing success message
-        setTimeout(() => {
-          navigate("/user/permittracker");
-        }, 3000);
+        setFormData({
+          permit_type: permitType,
+          application_date: new Date().toISOString().split('T')[0],
+          status: 'pending',
+          first_name: '',
+          middle_name: '',
+          last_name: '',
+          suffix: '',
+          mobile_number: '',
+          email: '',
+          birthdate: '',
+          gender: '',
+          civil_status: '',
+          nationality: '',
+          house_no: '',
+          street: '',
+          barangay: '',
+          city_municipality: '',
+          province: '',
+          zip_code: '',
+          purpose: '',
+          duration: '',
+          id_type: '',
+          id_number: '',
+          clearance_fee: 0.00,
+          receipt_number: '',
+          user_id: null,
+          applicant_signature: '',
+          valid_id_file: null,
+          proof_of_residence_file: null,
+          receipt_file: null,
+          signature_file: null,
+          photo_fingerprint_file: null,
+          attachments: '',
+        });
+        setCurrentStep(1);
+        setAgreeDeclaration(false);
       } else {
-        showErrorMessage(data.message || "Failed to submit application.");
+        await showErrorMessage(data.message || "Failed to submit application.");
       }
 
     } catch (error) {
@@ -831,7 +850,7 @@ export default function BarangayNew() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>First Name *</label>
-                <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First Name " className={`w-full p-3 border border-black rounded-lg ${errors.first_name ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="First Name" className={`w-full p-3 border border-black rounded-lg ${errors.first_name ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
                 {errors.first_name && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.first_name}</p>}
               </div>
               <div>
@@ -849,7 +868,7 @@ export default function BarangayNew() {
               </div>
               <div>
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Mobile Number *</label>
-                <input type="text" name="mobile_number" value={formData.mobile_number} onChange={handleChange} placeholder="Mobile Number" className={`w-full p-3 border border-black rounded-lg ${errors.mobile_number ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                <input type="text" name="mobile_number" value={formData.mobile_number} onChange={handleChange} placeholder="09XXXXXXXXX" className={`w-full p-3 border border-black rounded-lg ${errors.mobile_number ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
                 {errors.mobile_number && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.mobile_number}</p>}
               </div>
               <div>
@@ -858,7 +877,20 @@ export default function BarangayNew() {
               </div>
               <div>
                 <label className="block mb-2 font-medium" style={{ color: COLORS.secondary }}>Birth Date *</label>
-                <input type="date" name="birthdate" value={formData.birthdate} onChange={handleChange} className={`w-full p-3 border border-black rounded-lg ${errors.birthdate ? 'border-red-500' : ''}`} style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+                <input 
+                  type="date" 
+                  name="birthdate" 
+                  value={formData.birthdate} 
+                  onChange={handleChange} 
+                  max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+                  className={`w-full p-3 border border-black rounded-lg ${errors.birthdate ? 'border-red-500' : ''}`} 
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }} 
+                />
+                {formData.birthdate && calculateAge(formData.birthdate) < 18 && (
+                  <p className="text-red-600 text-sm mt-1 font-semibold" style={{ fontFamily: COLORS.font }}>
+                    ⚠️ You must be at least 18 years old to apply for a barangay clearance.
+                  </p>
+                )}
                 {errors.birthdate && <p className="text-red-600 text-sm mt-1" style={{ fontFamily: COLORS.font }}>{errors.birthdate}</p>}
               </div>
               <div>
@@ -1256,6 +1288,19 @@ export default function BarangayNew() {
                                 )}
                               </div>
                             )}
+                            {verificationStatus.verificationResults.expiration && verificationStatus.verificationResults.expiration.found && (
+                              <div className="flex items-center justify-between">
+                                <span className={verificationStatus.verificationResults.expiration.isExpired ? 'font-bold' : ''}>
+                                  Expiration: {verificationStatus.verificationResults.expiration.date.toLocaleDateString()}
+                                  {verificationStatus.verificationResults.expiration.isExpired && ' (EXPIRED)'}
+                                </span>
+                                {!verificationStatus.verificationResults.expiration.isExpired ? (
+                                  <Check className="w-4 h-4 text-green-600" />
+                                ) : (
+                                  <X className="w-4 h-4 text-red-600" />
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {!verificationStatus.isVerified && (
@@ -1264,6 +1309,11 @@ export default function BarangayNew() {
                                 ⚠️ You cannot proceed until your ID is verified as VALID. Issues found:
                               </p>
                               <ul className="text-xs text-red-700 mt-1 ml-4 list-disc" style={{ fontFamily: COLORS.font }}>
+                                {verificationStatus.verificationResults.expiration && verificationStatus.verificationResults.expiration.isExpired && (
+                                  <li className="font-semibold text-red-900">
+                                    ⚠️ ID DOCUMENT HAS EXPIRED on {verificationStatus.verificationResults.expiration.date.toLocaleDateString()}. You must use a valid, non-expired ID.
+                                  </li>
+                                )}
                                 {!verificationStatus.verificationResults.idType.matched && (
                                   <li className="font-semibold">
                                     ID Type Mismatch: You selected "{verificationStatus.verificationResults.idType.selected}" but the system detected "{verificationStatus.verificationResults.idType.detected}". Please select the correct ID type.
@@ -1284,8 +1334,12 @@ export default function BarangayNew() {
                                 {verificationStatus.verificationResults.birthdate && !verificationStatus.verificationResults.birthdate.matched && (
                                   <li>Birthdate does not match the ID</li>
                                 )}
-                                <li className="mt-1">Ensure your ID image is clear and readable</li>
-                                <li>Verify the information you entered exactly matches your ID</li>
+                                {!verificationStatus.verificationResults.expiration.isExpired && (
+                                  <>
+                                    <li className="mt-1">Ensure your ID image is clear and readable</li>
+                                    <li>Verify the information you entered exactly matches your ID</li>
+                                  </>
+                                )}
                               </ul>
                             </div>
                           )}
@@ -1862,189 +1916,6 @@ export default function BarangayNew() {
         </div>
       )}
 
-      {/* Confirmation Modal */}
-      {showConfirmModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div 
-            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
-            style={{ 
-              background: 'rgba(255, 255, 255, 0.95)',
-              fontFamily: COLORS.font,
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <h2 className="text-xl font-bold mb-6" style={{ color: COLORS.primary }}>Confirm Submission</h2>
-            
-            <div className="mb-6">
-              <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                Are you sure you want to submit your barangay clearance application? Please review your information before submitting.
-              </p>
-            </div>
-
-            <div className="p-4 bg-gray-50 rounded-lg border mb-6">
-              <p className="text-sm font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Declaration:</p>
-              <p className="text-sm mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                I hereby declare that all information provided is true and correct to the best of my knowledge. I understand that any false information may result in the rejection of my application.
-              </p>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="declaration-checkbox"
-                  checked={agreeDeclaration}
-                  onChange={(e) => setAgreeDeclaration(e.target.checked)}
-                  className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                />
-                <label htmlFor="declaration-checkbox" className="ml-2 text-sm" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  I agree to the above declaration *
-                </label>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={() => {
-                  setShowConfirmModal(false);
-                  setAgreeDeclaration(false);
-                }}
-                disabled={isSubmitting}
-                style={{ background: COLORS.danger }}
-                onMouseEnter={e => {
-                  if (!isSubmitting) e.currentTarget.style.background = COLORS.accent;
-                }}
-                onMouseLeave={e => {
-                  if (!isSubmitting) e.currentTarget.style.background = COLORS.danger;
-                }}
-                className={`px-6 py-2 rounded-lg font-semibold text-white ${
-                  isSubmitting ? 'cursor-not-allowed' : 'transition-colors duration-300'
-                }`}
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting || !agreeDeclaration}
-                style={{ background: (isSubmitting || !agreeDeclaration) ? '#9CA3AF' : COLORS.success }}
-                onMouseEnter={e => {
-                  if (!(isSubmitting || !agreeDeclaration)) e.currentTarget.style.background = COLORS.accent;
-                }}
-                onMouseLeave={e => {
-                  if (!(isSubmitting || !agreeDeclaration)) e.currentTarget.style.background = COLORS.success;
-                }}
-                className={`px-6 py-2 rounded-lg font-semibold text-white ${
-                  (isSubmitting || !agreeDeclaration) ? 'cursor-not-allowed' : 'transition-colors duration-300'
-                }`}
-              >
-                {isSubmitting ? 'Submitting...' : 'Confirm & Submit'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div 
-            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
-            style={{ 
-              background: 'rgba(255, 255, 255, 0.95)',
-              fontFamily: COLORS.font,
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-                <Check className="w-8 h-8 text-green-600" />
-              </div>
-            </div>
-            
-            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.primary }}>{modalTitle}</h2>
-            
-            <div className="mb-6">
-              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                {modalMessage}
-              </p>
-              <p className="text-xs text-center text-gray-500" style={{ fontFamily: COLORS.font }}>
-                You will be redirected to your dashboard in a few seconds...
-              </p>
-            </div>
-
-            <div className="flex justify-center">
-              <button
-                onClick={() => {
-                  setShowSuccessModal(false);
-                  navigate("/user/permittracker");
-                }}
-                style={{ background: COLORS.success }}
-                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-                onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-              >
-                Track Application
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Error Modal */}
-      {showErrorModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm z-50 p-4">
-          <div 
-            className="p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-200"
-            style={{ 
-              background: 'rgba(255, 255, 255, 0.95)',
-              fontFamily: COLORS.font,
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            <div className="flex items-center justify-center mb-6">
-              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-                <X className="w-8 h-8 text-red-600" />
-              </div>
-            </div>
-            
-            <h2 className="text-xl font-bold text-center mb-4" style={{ color: COLORS.danger }}>{modalTitle}</h2>
-            
-            <div className="mb-6">
-              <p className="text-sm text-center mb-3" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                {modalMessage}
-              </p>
-              <p className="text-xs text-center text-gray-500" style={{ fontFamily: COLORS.font }}>
-                Please check your information and try again.
-              </p>
-            </div>
-
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={() => setShowErrorModal(false)}
-                style={{ background: COLORS.danger }}
-                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-                onMouseLeave={e => e.currentTarget.style.background = COLORS.danger}
-                className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-              >
-                Close
-              </button>
-              
-              {!showConfirmModal && (
-                <button
-                  onClick={() => {
-                    setShowErrorModal(false);
-                    setShowConfirmModal(true);
-                  }}
-                  style={{ background: COLORS.success }}
-                  onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-                  onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-                  className="px-6 py-2 rounded-lg font-semibold text-white transition-colors duration-300"
-                >
-                  Try Again
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

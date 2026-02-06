@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Bar, Pie, Line } from "react-chartjs-2";
+import { Bar, Pie, Line, Doughnut } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,9 +11,21 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler
 } from "chart.js";
+import {
+  FileText,
+  TrendingUp,
+  Clock,
+  CheckCircle,
+  Building,
+  Briefcase,
+  Users,
+  Home,
+  User
+} from "lucide-react";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Title, Tooltip, Legend, Filler);
 
 export default function AdminDashboard() {
   const [isDark, setIsDark] = useState(false);
@@ -97,36 +109,37 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen p-8 bg-white dark:bg-slate-900 text-black dark:text-white transition-colors duration-300 font-sans">
-      {/* Header Card */}
-      <div className="relative shadow-lg rounded-2xl border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row items-center justify-between mb-8 overflow-hidden min-h-[250px] p-12 bg-white dark:bg-slate-800 transition-colors duration-300">
-        <div className="absolute inset-0 bg-[url('/front-end/src/assets/admin-dash-bg.jpg')] bg-cover bg-center opacity-30"></div>
-        <div className="relative">
-          <h2 className="text-3xl font-extrabold text-[#4CAF50] tracking-wide font-[Montserrat]">
-            Permit & Licensing Management System
-          </h2>
-          <p className="mt-2 text-sm md:text-base max-w-2xl text-gray-600 dark:text-gray-300">
-            Welcome Back <span className="font-semibold">Admin!,</span> Here's a quick look at today's stats and recent activities.
-          </p>
+    <div className="min-h-screen p-4 md:p-6 bg-[#FBFBFB] font-poppins">
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#4D4A4A] font-montserrat">
+              Admin Dashboard
+            </h1>
+            <p className="text-[#4D4A4A] text-opacity-70 mt-2">
+              Overview of all permit types and system-wide analytics
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+      <div className="flex border-b border-[#E9E7E7] mb-6 bg-white rounded-lg p-1">
         <button
-          className={`py-2 px-4 font-medium ${activeTab === "dashboard" ? "border-b-2 border-[#4CAF50] text-[#4CAF50]" : "text-gray-500 dark:text-gray-400"}`}
+          className={`py-2 px-6 font-medium font-montserrat rounded-lg transition-all ${activeTab === "dashboard" ? "bg-[#4CAF50] text-white" : "text-[#4D4A4A] hover:bg-[#FBFBFB]"}`}
           onClick={() => setActiveTab("dashboard")}
         >
           Dashboard
         </button>
         <button
-          className={`py-2 px-4 font-medium ${activeTab === "analytics" ? "border-b-2 border-[#4CAF50] text-[#4CAF50]" : "text-gray-500 dark:text-gray-400"}`}
+          className={`py-2 px-6 font-medium font-montserrat rounded-lg transition-all ${activeTab === "analytics" ? "bg-[#4CAF50] text-white" : "text-[#4D4A4A] hover:bg-[#FBFBFB]"}`}
           onClick={() => setActiveTab("analytics")}
         >
           Analytics
         </button>
         <button
-          className={`py-2 px-4 font-medium ${activeTab === "reports" ? "border-b-2 border-[#4CAF50] text-[#4CAF50]" : "text-gray-500 dark:text-gray-400"}`}
+          className={`py-2 px-6 font-medium font-montserrat rounded-lg transition-all ${activeTab === "reports" ? "bg-[#4CAF50] text-white" : "text-[#4D4A4A] hover:bg-[#FBFBFB]"}`}
           onClick={() => setActiveTab("reports")}
         >
           Reports
@@ -136,32 +149,40 @@ export default function AdminDashboard() {
       {activeTab === "dashboard" && (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-blue-100 dark:bg-blue-900 p-5 rounded-lg shadow transition-colors duration-300">
-              <p className="text-blue-800 dark:text-blue-300 text-sm font-medium">Total Permits</p>
-              <p className="text-blue-900 dark:text-blue-100 text-2xl font-bold">{total}</p>
-            </div>
-            <div className="bg-green-100 dark:bg-green-900 p-5 rounded-lg shadow transition-colors duration-300">
-              <p className="text-green-800 dark:text-green-300 text-sm font-medium">Approved</p>
-              <p className="text-green-900 dark:text-green-100 text-2xl font-bold">{approved}</p>
-            </div>
-            <div className="bg-red-100 dark:bg-red-900 p-5 rounded-lg shadow transition-colors duration-300">
-              <p className="text-red-800 dark:text-red-300 text-sm font-medium">Rejected</p>
-              <p className="text-red-900 dark:text-red-100 text-2xl font-bold">{rejected}</p>
-            </div>
-            <div className="bg-yellow-100 dark:bg-yellow-900 p-5 rounded-lg shadow transition-colors duration-300">
-              <p className="text-yellow-800 dark:text-yellow-300 text-sm font-medium">Pending</p>
-              <p className="text-yellow-900 dark:text-yellow-100 text-2xl font-bold">{pending}</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {[
+              { title: "Total Permits", value: total, icon: FileText, color: "#4CAF50", trend: "+12%", trendUp: true },
+              { title: "Approved", value: approved, icon: CheckCircle, color: "#4CAF50", trend: "+8%", trendUp: true },
+              { title: "Pending", value: pending, icon: Clock, color: "#FDA811", trend: "+5%", trendUp: true },
+              { title: "Rejected", value: rejected, icon: TrendingUp, color: "#E53935", trend: "-2%", trendUp: false }
+            ].map((stat, idx) => (
+              <div key={idx} className="bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7] transition-all hover:shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-[#4D4A4A] text-opacity-70">{stat.title}</p>
+                    <p className="text-2xl font-bold text-[#4D4A4A] mt-2 font-montserrat">{stat.value}</p>
+                    <div className="mt-2">
+                      <span className={`text-sm ${stat.trendUp ? 'text-[#4CAF50]' : 'text-[#E53935]'}`}>
+                        {stat.trend}
+                      </span>
+                      <span className="text-xs text-[#4D4A4A] text-opacity-60 ml-1">vs last month</span>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-lg" style={{ backgroundColor: stat.color }}>
+                    <stat.icon className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Bar Chart */}
-            <div className="rounded-xl shadow p-6 flex-1 col-span-2 bg-white dark:bg-slate-800 transition-colors duration-300 min-h-[420px]">
-              <div className="flex justify-between items-center mb-4">
-                <span className="font-semibold text-black dark:text-white text-lg">Active Applications</span>
-                <button className="text-gray-400 dark:text-gray-300 hover:text-orange-500 text-xl">⋮</button>
+            <div className="lg:col-span-2 bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Applications by Permit Type</h3>
+                <p className="text-sm text-[#4D4A4A] text-opacity-70">Distribution across all permit categories</p>
               </div>
               <div className="h-[300px]">
                 <Bar
@@ -171,103 +192,146 @@ export default function AdminDashboard() {
                       {
                         label: "Applications",
                         data: [120, 90, 70, 110],
-                        backgroundColor: ["#FFF7A3", "#B5F5B5", "#FFB5B5", "#B5D8FF"],
+                        backgroundColor: ["#4CAF50", "#4A90E2", "#FDA811", "#9C27B0"],
                         borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: "#ccc",
+                        borderWidth: 0,
                       },
                     ],
                   }}
                   options={{
                     maintainAspectRatio: false,
                     plugins: {
-                      legend: { labels: { color: isDark ? "#fff" : "#000", font: { weight: "bold" } } },
+                      legend: { display: false },
                     },
                     scales: {
-                      x: { ticks: { color: isDark ? "#fff" : "#000" }, grid: { color: "rgba(0,0,0,0.05)" } },
-                      y: { ticks: { color: isDark ? "#fff" : "#000" }, grid: { color: "rgba(0,0,0,0.05)" }, beginAtZero: true },
+                      x: { 
+                        ticks: { color: "#4D4A4A", font: { family: 'Poppins' } }, 
+                        grid: { color: "rgba(233, 231, 231, 0.5)" } 
+                      },
+                      y: { 
+                        ticks: { color: "#4D4A4A", font: { family: 'Poppins' } }, 
+                        grid: { color: "rgba(233, 231, 231, 0.5)" }, 
+                        beginAtZero: true 
+                      },
                     },
                   }}
                 />
               </div>
             </div>
 
-            {/* Pie Chart */}
-            <div className="rounded-xl shadow p-6 flex flex-col items-center justify-center bg-white dark:bg-slate-800 transition-colors duration-300 min-h-[420px]">
-              <span className="font-semibold mb-6 text-black dark:text-white text-lg">Applications Status</span>
-              <div className="h-[260px] w-[260px]">
-                <Pie
+            {/* Doughnut Chart */}
+            <div className="bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Status Distribution</h3>
+                <p className="text-sm text-[#4D4A4A] text-opacity-70">Overall approval status</p>
+              </div>
+              <div className="h-[250px] flex items-center justify-center">
+                <Doughnut
                   data={{
                     labels: ["Approved", "Pending", "Rejected"],
                     datasets: [
                       {
                         data: [approved, pending, rejected],
-                        backgroundColor: ["#B5F5B5", "#FFF7A3", "#FFB5B5"],
-                        borderColor: "#fff",
-                        borderWidth: 2,
+                        backgroundColor: ["#4CAF50", "#FDA811", "#E53935"],
+                        hoverBackgroundColor: ["#45a049", "#fc9d0b", "#d32f2f"],
+                        borderColor: "#ffffff",
+                        borderWidth: 3,
                       },
                     ],
                   }}
                   options={{
+                    maintainAspectRatio: false,
+                    cutout: '65%',
                     plugins: {
                       legend: {
                         position: "bottom",
-                        labels: { color: isDark ? "#fff" : "#000", font: { weight: "500" } },
+                        labels: { 
+                          color: "#4D4A4A", 
+                          font: { family: 'Poppins' },
+                          padding: 15,
+                          usePointStyle: true
+                        },
                       },
                     },
-                    maintainAspectRatio: false,
                   }}
                 />
               </div>
-              <span className="text-sm mt-6 text-gray-700 dark:text-gray-300">
-                {approved} approved / {total} total applications
-              </span>
             </div>
           </div>
 
-          {/* Table */}
-          <div className="rounded-xl shadow p-6 bg-white dark:bg-slate-800 transition-colors duration-300">
-            <div className="flex justify-between items-center mb-4">
-              <span className="font-semibold text-lg text-black dark:text-white">All Permit Applications</span>
-              <button className="text-gray-400 dark:text-gray-300 hover:text-orange-500 text-xl">⋮</button>
+          {/* Recent Applications - Visual Cards */}
+          <div className="bg-white rounded-lg shadow-sm border border-[#E9E7E7] p-5">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Recent Permit Applications</h3>
+              <p className="text-sm text-[#4D4A4A] text-opacity-70">Latest applications across all permit types</p>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full shadow rounded-lg transition-colors duration-300">
-                <thead className="bg-gray-50 dark:bg-slate-700">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID No.</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Applicant Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Permit Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Application Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {permitApplications.map((t) => (
-                    <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
-                      <td className="px-6 py-4 text-sm">{t.id}</td>
-                      <td className="px-6 py-4 text-sm">{t.applicant}</td>
-                      <td className="px-6 py-4 text-sm">{t.type}</td>
-                      <td className="px-6 py-4 text-sm">{t.date}</td>
-                      <td className="px-6 py-4 text-sm">{t.applicationType}</td>
-                      <td className="px-6 py-4 text-sm">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            t.status === "Approved"
-                              ? "bg-green-100 dark:bg-green-700 text-green-700 dark:text-green-100"
-                              : t.status === "Pending"
-                              ? "bg-yellow-100 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-100"
-                              : "bg-red-100 dark:bg-red-700 text-red-700 dark:text-red-100"
-                          }`}
-                        >
-                          {t.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {permitApplications.map((app) => {
+                const getPermitIcon = (type) => {
+                  switch(type) {
+                    case "Business": return Briefcase;
+                    case "Franchise": return Users;
+                    case "Building": return Building;
+                    case "Barangay": return Home;
+                    default: return FileText;
+                  }
+                };
+                
+                const getPermitColor = (type) => {
+                  switch(type) {
+                    case "Business": return "#4CAF50";
+                    case "Franchise": return "#4A90E2";
+                    case "Building": return "#FDA811";
+                    case "Barangay": return "#9C27B0";
+                    default: return "#4D4A4A";
+                  }
+                };
+                
+                const PermitIcon = getPermitIcon(app.type);
+                const permitColor = getPermitColor(app.type);
+                
+                return (
+                  <div 
+                    key={app.id} 
+                    className="border border-[#E9E7E7] rounded-lg p-4 hover:shadow-md transition-all cursor-pointer"
+                    style={{ borderLeftWidth: '4px', borderLeftColor: permitColor }}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 rounded-lg" style={{ backgroundColor: `${permitColor}15` }}>
+                          <PermitIcon className="w-5 h-5" style={{ color: permitColor }} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-mono font-semibold text-[#4D4A4A]">{app.id}</p>
+                          <p className="text-xs text-[#4D4A4A] text-opacity-70">{app.type} Permit</p>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        app.status === "Approved" ? "bg-[#4CAF50]/10 text-[#4CAF50]" :
+                        app.status === "Pending" ? "bg-[#FDA811]/10 text-[#FDA811]" :
+                        "bg-[#E53935]/10 text-[#E53935]"
+                      }`}>
+                        {app.status}
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center">
+                        <User className="w-4 h-4 text-[#4D4A4A] text-opacity-50 mr-2" />
+                        <p className="text-sm text-[#4D4A4A] font-poppins">{app.applicant}</p>
+                      </div>
+                      <div className="flex items-center">
+                        <Clock className="w-4 h-4 text-[#4D4A4A] text-opacity-50 mr-2" />
+                        <p className="text-xs text-[#4D4A4A] text-opacity-70 font-poppins">{app.date}</p>
+                      </div>
+                      <div className="flex items-center">
+                        <FileText className="w-4 h-4 text-[#4D4A4A] text-opacity-50 mr-2" />
+                        <p className="text-xs text-[#4D4A4A] text-opacity-70 font-poppins">{app.applicationType}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </>
@@ -277,9 +341,9 @@ export default function AdminDashboard() {
         <div className="space-y-6">
           {/* Analytics Header with Date Filter */}
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold">Analytics Overview</h2>
+            <h2 className="text-xl font-bold text-[#4D4A4A] font-montserrat">Analytics Overview</h2>
             <select 
-              className="bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2"
+              className="bg-white border border-[#E9E7E7] rounded-lg px-4 py-2 text-[#4D4A4A] font-poppins focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent"
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
             >
@@ -293,12 +357,15 @@ export default function AdminDashboard() {
           {/* Analytics Charts Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Monthly Trends Chart */}
-            <div className="rounded-xl shadow p-6 bg-white dark:bg-slate-800 transition-colors duration-300">
-              <div className="flex justify-between items-center mb-4">
-                <span className="font-semibold text-lg">Monthly Application Trends</span>
+            <div className="bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Monthly Application Trends</h3>
+                  <p className="text-sm text-[#4D4A4A] text-opacity-70">Applications and approvals over time</p>
+                </div>
                 <button 
                   onClick={exportChart}
-                  className="bg-[#4CAF50] text-white px-3 py-1 rounded-lg text-sm hover:bg-[#45a049] transition-colors"
+                  className="bg-[#4CAF50] text-white px-3 py-2 rounded-lg text-sm hover:bg-[#45a049] transition-colors font-montserrat"
                 >
                   Export
                 </button>
@@ -330,11 +397,29 @@ export default function AdminDashboard() {
                   options={{
                     maintainAspectRatio: false,
                     plugins: {
-                      legend: { labels: { color: isDark ? "#fff" : "#000" } },
+                      legend: { 
+                        labels: { 
+                          color: "#4D4A4A",
+                          font: { family: 'Poppins' }
+                        } 
+                      },
                     },
                     scales: {
-                      x: { ticks: { color: isDark ? "#fff" : "#000" } },
-                      y: { ticks: { color: isDark ? "#fff" : "#000" }, beginAtZero: true },
+                      x: { 
+                        ticks: { 
+                          color: "#4D4A4A",
+                          font: { family: 'Poppins' }
+                        },
+                        grid: { color: "rgba(233, 231, 231, 0.5)" }
+                      },
+                      y: { 
+                        ticks: { 
+                          color: "#4D4A4A",
+                          font: { family: 'Poppins' }
+                        }, 
+                        grid: { color: "rgba(233, 231, 231, 0.5)" },
+                        beginAtZero: true 
+                      },
                     },
                   }}
                 />
@@ -342,9 +427,10 @@ export default function AdminDashboard() {
             </div>
 
             {/* Permit Type Distribution */}
-            <div className="rounded-xl shadow p-6 bg-white dark:bg-slate-800 transition-colors duration-300">
-              <div className="flex justify-between items-center mb-4">
-                <span className="font-semibold text-lg">Permit Type Distribution</span>
+            <div className="bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7]">
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Permit Type Distribution</h3>
+                <p className="text-sm text-[#4D4A4A] text-opacity-70">Breakdown by permit category</p>
               </div>
               <div className="h-80">
                 <Pie
@@ -364,7 +450,12 @@ export default function AdminDashboard() {
                     plugins: {
                       legend: { 
                         position: "bottom",
-                        labels: { color: isDark ? "#fff" : "#000", font: { size: 12 } }
+                        labels: { 
+                          color: "#4D4A4A", 
+                          font: { family: 'Poppins', size: 12 },
+                          padding: 15,
+                          usePointStyle: true
+                        }
                       },
                     },
                   }}
@@ -373,20 +464,20 @@ export default function AdminDashboard() {
             </div>
 
             {/* Performance Metrics */}
-            <div className="rounded-xl shadow p-6 bg-white dark:bg-slate-800 transition-colors duration-300 lg:col-span-2">
-              <h3 className="font-semibold text-lg mb-4">Performance Metrics</h3>
+            <div className="bg-white rounded-lg p-5 shadow-sm border border-[#E9E7E7] lg:col-span-2">
+              <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat mb-4">Performance Metrics</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                  <p className="text-blue-800 dark:text-blue-300 text-sm">Approval Rate</p>
-                  <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{((approved / total) * 100).toFixed(1)}%</p>
+                <div className="bg-[#4CAF50]/10 p-4 rounded-lg border-l-4 border-[#4CAF50]">
+                  <p className="text-[#4D4A4A] text-opacity-70 text-sm font-poppins">Approval Rate</p>
+                  <p className="text-2xl font-bold text-[#4CAF50] font-montserrat mt-1">{((approved / total) * 100).toFixed(1)}%</p>
                 </div>
-                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                  <p className="text-green-800 dark:text-green-300 text-sm">Avg. Processing Time</p>
-                  <p className="text-2xl font-bold text-green-900 dark:text-green-100">3.2 days</p>
+                <div className="bg-[#4A90E2]/10 p-4 rounded-lg border-l-4 border-[#4A90E2]">
+                  <p className="text-[#4D4A4A] text-opacity-70 text-sm font-poppins">Avg. Processing Time</p>
+                  <p className="text-2xl font-bold text-[#4A90E2] font-montserrat mt-1">3.2 days</p>
                 </div>
-                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
-                  <p className="text-purple-800 dark:text-purple-300 text-sm">Satisfaction Score</p>
-                  <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">4.5/5.0</p>
+                <div className="bg-[#FDA811]/10 p-4 rounded-lg border-l-4 border-[#FDA811]">
+                  <p className="text-[#4D4A4A] text-opacity-70 text-sm font-poppins">Satisfaction Score</p>
+                  <p className="text-2xl font-bold text-[#FDA811] font-montserrat mt-1">4.5/5.0</p>
                 </div>
               </div>
             </div>
@@ -398,8 +489,8 @@ export default function AdminDashboard() {
         <div className="space-y-6">
           {/* Reports Header */}
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold">Reports & Exports</h2>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
+            <h2 className="text-xl font-bold text-[#4D4A4A] font-montserrat">Reports & Exports</h2>
+            <div className="text-sm text-[#4D4A4A] text-opacity-70 font-poppins">
               Last generated: {new Date().toLocaleDateString()}
             </div>
           </div>
@@ -407,26 +498,26 @@ export default function AdminDashboard() {
           {/* Report Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Summary Report */}
-            <div className="rounded-xl shadow p-6 bg-white dark:bg-slate-800 transition-colors duration-300">
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-[#E9E7E7]">
               <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center mr-4">
-                  <span className="text-blue-600 dark:text-blue-300 text-xl">📊</span>
+                <div className="w-12 h-12 bg-[#4CAF50]/10 rounded-lg flex items-center justify-center mr-4">
+                  <FileText className="w-6 h-6 text-[#4CAF50]" />
                 </div>
                 <div>
-                  <h3 className="font-semibold">Summary Report</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Overview of all permit applications</p>
+                  <h3 className="font-semibold text-[#4D4A4A] font-montserrat">Summary Report</h3>
+                  <p className="text-sm text-[#4D4A4A] text-opacity-70 font-poppins">Overview of all permit applications</p>
                 </div>
               </div>
               <div className="flex space-x-2 mt-4">
                 <button 
                   onClick={() => downloadReport("pdf")}
-                  className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 px-3 rounded-lg text-sm transition-colors"
+                  className="flex-1 bg-[#E53935] hover:bg-[#d32f2f] text-white py-2 px-3 rounded-lg text-sm transition-colors font-montserrat"
                 >
                   PDF
                 </button>
                 <button 
                   onClick={() => downloadReport("csv")}
-                  className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded-lg text-sm transition-colors"
+                  className="flex-1 bg-[#4CAF50] hover:bg-[#45a049] text-white py-2 px-3 rounded-lg text-sm transition-colors font-montserrat"
                 >
                   CSV
                 </button>
@@ -434,26 +525,26 @@ export default function AdminDashboard() {
             </div>
 
             {/* Analytics Report */}
-            <div className="rounded-xl shadow p-6 bg-white dark:bg-slate-800 transition-colors duration-300">
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-[#E9E7E7]">
               <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center mr-4">
-                  <span className="text-green-600 dark:text-green-300 text-xl">📈</span>
+                <div className="w-12 h-12 bg-[#4A90E2]/10 rounded-lg flex items-center justify-center mr-4">
+                  <TrendingUp className="w-6 h-6 text-[#4A90E2]" />
                 </div>
                 <div>
-                  <h3 className="font-semibold">Analytics Report</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Detailed analytics and trends</p>
+                  <h3 className="font-semibold text-[#4D4A4A] font-montserrat">Analytics Report</h3>
+                  <p className="text-sm text-[#4D4A4A] text-opacity-70 font-poppins">Detailed analytics and trends</p>
                 </div>
               </div>
               <div className="flex space-x-2 mt-4">
                 <button 
                   onClick={() => downloadReport("pdf")}
-                  className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 px-3 rounded-lg text-sm transition-colors"
+                  className="flex-1 bg-[#E53935] hover:bg-[#d32f2f] text-white py-2 px-3 rounded-lg text-sm transition-colors font-montserrat"
                 >
                   PDF
                 </button>
                 <button 
                   onClick={() => downloadReport("xlsx")}
-                  className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded-lg text-sm transition-colors"
+                  className="flex-1 bg-[#4CAF50] hover:bg-[#45a049] text-white py-2 px-3 rounded-lg text-sm transition-colors font-montserrat"
                 >
                   Excel
                 </button>
@@ -461,18 +552,18 @@ export default function AdminDashboard() {
             </div>
 
             {/* Custom Report */}
-            <div className="rounded-xl shadow p-6 bg-white dark:bg-slate-800 transition-colors duration-300">
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-[#E9E7E7]">
               <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center mr-4">
-                  <span className="text-purple-600 dark:text-purple-300 text-xl">🎛️</span>
+                <div className="w-12 h-12 bg-[#FDA811]/10 rounded-lg flex items-center justify-center mr-4">
+                  <Building className="w-6 h-6 text-[#FDA811]" />
                 </div>
                 <div>
-                  <h3 className="font-semibold">Custom Report</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Generate custom reports</p>
+                  <h3 className="font-semibold text-[#4D4A4A] font-montserrat">Custom Report</h3>
+                  <p className="text-sm text-[#4D4A4A] text-opacity-70 font-poppins">Generate custom reports</p>
                 </div>
               </div>
               <div className="space-y-3 mt-4">
-                <select className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm">
+                <select className="w-full bg-white border border-[#E9E7E7] rounded-lg px-3 py-2 text-sm text-[#4D4A4A] font-poppins focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent">
                   <option>Select report type</option>
                   <option>Monthly Performance</option>
                   <option>Permit Type Analysis</option>
@@ -480,7 +571,7 @@ export default function AdminDashboard() {
                 </select>
                 <button 
                   onClick={() => downloadReport("pdf")}
-                  className="w-full bg-[#4CAF50] hover:bg-[#45a049] text-white py-2 rounded-lg text-sm transition-colors"
+                  className="w-full bg-[#4CAF50] hover:bg-[#45a049] text-white py-2 rounded-lg text-sm transition-colors font-montserrat"
                 >
                   Generate Report
                 </button>
@@ -489,44 +580,51 @@ export default function AdminDashboard() {
           </div>
 
           {/* Recent Reports Table */}
-          <div className="rounded-xl shadow p-6 bg-white dark:bg-slate-800 transition-colors duration-300">
-            <h3 className="font-semibold text-lg mb-4">Recently Generated Reports</h3>
+          <div className="bg-white rounded-lg shadow-sm border border-[#E9E7E7] overflow-hidden">
+            <div className="p-5 border-b border-[#E9E7E7]">
+              <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Recently Generated Reports</h3>
+              <p className="text-sm text-[#4D4A4A] text-opacity-70 font-poppins">Download or manage your generated reports</p>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-slate-700">
+                <thead className="bg-[#FBFBFB]">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Report Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Generated On</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Format</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Size</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">Report Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">Generated On</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">Format</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">Size</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  <tr>
-                    <td className="px-6 py-4 text-sm">Monthly Summary - October 2025</td>
-                    <td className="px-6 py-4 text-sm">Oct 28, 2025</td>
-                    <td className="px-6 py-4 text-sm">PDF</td>
-                    <td className="px-6 py-4 text-sm">2.4 MB</td>
+                <tbody className="bg-white divide-y divide-[#E9E7E7]">
+                  <tr className="hover:bg-[#FBFBFB] transition-colors">
+                    <td className="px-6 py-4 text-sm text-[#4D4A4A] font-poppins">Monthly Summary - October 2025</td>
+                    <td className="px-6 py-4 text-sm text-[#4D4A4A] font-poppins">Oct 28, 2025</td>
                     <td className="px-6 py-4 text-sm">
-                      <button className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm mr-3">
+                      <span className="px-2 py-1 bg-[#E53935]/10 text-[#E53935] rounded-full text-xs font-medium">PDF</span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-[#4D4A4A] font-poppins">2.4 MB</td>
+                    <td className="px-6 py-4 text-sm">
+                      <button className="text-[#4CAF50] hover:text-[#45a049] text-sm mr-3 font-montserrat">
                         Download
                       </button>
-                      <button className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm">
+                      <button className="text-[#E53935] hover:text-[#d32f2f] text-sm font-montserrat">
                         Delete
                       </button>
                     </td>
                   </tr>
-                  <tr>
-                    <td className="px-6 py-4 text-sm">Q3 Analytics Report</td>
-                    <td className="px-6 py-4 text-sm">Oct 15, 2025</td>
-                    <td className="px-6 py-4 text-sm">Excel</td>
-                    <td className="px-6 py-4 text-sm">1.8 MB</td>
+                  <tr className="hover:bg-[#FBFBFB] transition-colors">
+                    <td className="px-6 py-4 text-sm text-[#4D4A4A] font-poppins">Q3 Analytics Report</td>
+                    <td className="px-6 py-4 text-sm text-[#4D4A4A] font-poppins">Oct 15, 2025</td>
                     <td className="px-6 py-4 text-sm">
-                      <button className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm mr-3">
+                      <span className="px-2 py-1 bg-[#4CAF50]/10 text-[#4CAF50] rounded-full text-xs font-medium">Excel</span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-[#4D4A4A] font-poppins">1.8 MB</td>
+                    <td className="px-6 py-4 text-sm">
+                      <button className="text-[#4CAF50] hover:text-[#45a049] text-sm mr-3 font-montserrat">
                         Download
                       </button>
-                      <button className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm">
+                      <button className="text-[#E53935] hover:text-[#d32f2f] text-sm font-montserrat">
                         Delete
                       </button>
                     </td>
