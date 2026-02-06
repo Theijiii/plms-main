@@ -312,13 +312,7 @@ export default function BusPermitApplication() {
       setLoading(true);
       setError(null);
       
-      const statusParam = activeTab !== 'all' ? activeTab.toUpperCase() : null;
-      const url = new URL(`${API_BUSINESS}/admin_fetch.php`);
-      if (statusParam) url.searchParams.append('status', statusParam);
-      if (searchQuery) url.searchParams.append('search', searchQuery);
-      if (sortOption) url.searchParams.append('sort_by', sortOption);
-      
-      const response = await fetch(url);
+      const response = await fetch(`${API_BUSINESS}admin_fetch.php`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -328,9 +322,6 @@ export default function BusPermitApplication() {
       
       if (result.success && result.data) {
         setPermits(result.data);
-        if (result.counts) {
-          setCounts(result.counts);
-        }
       } else {
         throw new Error(result.message || 'Failed to fetch permits');
       }
@@ -531,7 +522,7 @@ const fetchSinglePermit = async (permitId) => {
 
   useEffect(() => {
     fetchPermits();
-  }, [activeTab, sortOption]);
+  }, []);
 
   const openModal = async (permit) => {
     try {
