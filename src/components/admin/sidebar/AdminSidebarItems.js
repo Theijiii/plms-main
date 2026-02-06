@@ -67,7 +67,6 @@ const AdminSidebarItems = [
     department: ["building", "super"],
   },
 
-  // FRANCHISE / TRANSPORT
   {
     id: "franchiseDashboard",
     label: "Permit Dashboard",
@@ -84,7 +83,7 @@ const AdminSidebarItems = [
   },
 
   {
-    id: "barangayDashboard",
+    id: "brgydashboard",
     label: "Permit Dashboard",
     icon: Home,
     path: "/admin/brgydashboard",

@@ -52,7 +52,7 @@ import BuildingProcess from "./pages/admin/BuildingPermit/BuildingProcess";
 import Franchise from "./pages/admin/FranchisePermit/Franchise";
 import FranchisePermitApplication from "./pages/admin/FranchisePermit/FranchisePermitApplication" 
 
-import BarangayPermit from "./pages/admin/BarangayPermit/Barangay";
+import BarangayPermitAnalytics from "./pages/admin/BarangayPermit/BarangayPermitAnalytics";
 import BrgyPermitApplication from "./pages/admin/BarangayPermit/BrgyPermitApplication";
 
 import Tracker from "./pages/admin/PermitTracker/Tracker";
@@ -211,22 +211,23 @@ function App() {
           />
           
 
-  <Route 
-    path="barangaydashboard" 
-    element={
-      <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
-        <BrgyPermitApplication />
-      </ProtectedRoute>
-    } 
-  />
-    <Route 
-    path="brgypermit" 
-    element={
-      <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
-        <BusPermitApplication />
-      </ProtectedRoute>
-    } 
-  />
+ <Route 
+  path="brgydashboard" 
+  element={
+    <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
+      <BarangayPermitAnalytics />  {/* Dashboard/analytics component */}
+    </ProtectedRoute>
+  } 
+/>
+
+<Route 
+  path="brgypermit" 
+  element={
+    <ProtectedRoute requiredRole="admin" allowedDepartments={['barangay', 'barangaystaff', 'super']}>
+      <BrgyPermitApplication />  {/* Clearance requests component */}
+    </ProtectedRoute>
+  } 
+/>
           
 
           <Route 
