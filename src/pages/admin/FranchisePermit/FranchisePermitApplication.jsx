@@ -122,7 +122,7 @@ export default function FranchisePermitApplication() {
   const imagePositionRef = useRef({ x: 0, y: 0 });
   
   const ITEMS_PER_PAGE = 10;
-  const API_BASE = "http://localhost/plms-main/backend/franchise_permit";
+  const API_BASE = "/backend/franchise_permit";
 
   // Format date for display
   const formatDate = (dateString) => {

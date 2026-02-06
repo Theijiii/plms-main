@@ -51,7 +51,7 @@ import {
   File,
   FileText as FileTextIcon,
   FileSpreadsheet,
-  Image,
+  Image as ImageIcon,
   X,
   AlertTriangle,
   User,
@@ -81,7 +81,7 @@ ChartJS.register(
   Filler
 );
 
-const API_BASE = "http://localhost/plms-main/backend/business_permit";
+const API_BASE = "/backend/business_permit";
 
 // Business types and categories
 const BUSINESS_CATEGORIES = [
@@ -975,7 +975,7 @@ export default function BusPermitAnalytics() {
     
     if (fileTypeLower.includes('image/')) {
       return {
-        icon: Image,
+        icon: ImageIcon,
         bgColor: 'bg-purple-100',
         textColor: 'text-purple-600',
         iconColor: '#7c3aed'
