@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef, useCallback } from "react"; // Added useRef and useCallback
-import { logTx } from '../../../lib/txLogger';
 
 const API_BRGY = "/backend/barangay_permit";
 

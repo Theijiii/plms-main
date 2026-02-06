@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { logTx } from '../../../lib/txLogger';
 import {
  Image,
   FileText,
