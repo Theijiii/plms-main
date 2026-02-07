@@ -54,7 +54,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       // Fetch user profile
-      const res = await fetch('http://localhost/plms-latest/backend/login/get_profile.php?action=get', {
+      const res = await fetch('/backend/login/get_profile.php?action=get', {
         method: 'GET',
         credentials: 'include',
         headers: headers
@@ -186,7 +186,7 @@ export const AuthProvider = ({ children }) => {
       // Clear any existing auth
       clearAuth();
       
-      const response = await fetch('http://localhost/plms-latest/backend/login/login.php', {
+      const response = await fetch('/backend/login/login.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -238,7 +238,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const token = localStorage.getItem('auth_token');
       
-      await fetch('http://localhost/plms-latest/backend/login/logout.php', {
+      await fetch('/backend/login/logout.php', {
         method: 'POST',
         credentials: 'include',
         headers: token ? {
