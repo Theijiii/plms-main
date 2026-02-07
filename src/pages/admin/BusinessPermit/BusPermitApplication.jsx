@@ -377,10 +377,12 @@ export default function BusPermitApplication() {
       setError(null);
       
       const statusParam = activeTab !== 'all' ? activeTab.toUpperCase() : null;
-      const url = new URL(`${API_BUSINESS}/admin_fetch.php`);
-      if (statusParam) url.searchParams.append('status', statusParam);
-      if (searchQuery) url.searchParams.append('search', searchQuery);
-      if (sortOption) url.searchParams.append('sort_by', sortOption);
+      const params = new URLSearchParams();
+      if (statusParam) params.append('status', statusParam);
+      if (searchQuery) params.append('search', searchQuery);
+      if (sortOption) params.append('sort_by', sortOption);
+      
+      const url = `${API_BUSINESS}/admin_fetch.php${params.toString() ? '?' + params.toString() : ''}`;
       
       const response = await fetch(url);
       

@@ -232,29 +232,66 @@ export default function ProfessionalRegistration() {
       }
     });
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const submitData = new FormData();
       
-      Swal.fire({
-        icon: 'success',
-        title: 'Registration Submitted!',
-        html: `
-          <div style="font-family: ${COLORS.font};">
-            <p class="mb-2">Your professional registration has been submitted successfully.</p>
-            <p class="text-sm text-gray-600">You will receive a confirmation email shortly.</p>
-            <div class="mt-3 p-3 bg-green-50 rounded text-sm">
-              <p><strong>Registration ID:</strong> PR-${Date.now().toString().slice(-6)}</p>
-              <p><strong>Status:</strong> Pending Review</p>
-            </div>
-          </div>
-        `,
-        confirmButtonColor: COLORS.success,
-        confirmButtonText: 'Back to Dashboard'
-      }).then(() => {
-        navigate('/user/dashboard');
+      Object.keys(formData).forEach(key => {
+        const value = formData[key];
+        if (value instanceof File) return;
+        if (value !== null && value !== undefined && value !== '') {
+          submitData.append(key, value);
+        }
       });
-    }, 1500);
+      
+      if (formData.prc_id_file) submitData.append('prc_id_file', formData.prc_id_file);
+      if (formData.ptr_file) submitData.append('ptr_file', formData.ptr_file);
+      if (formData.signature_file) submitData.append('signature_file', formData.signature_file);
+      
+      const response = await fetch('/backend/building_permit/professional_registration.php', {
+        method: 'POST',
+        body: submitData
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        Swal.fire({
+          icon: 'success',
+          title: 'Registration Submitted!',
+          html: `
+            <div style="font-family: ${COLORS.font};">
+              <p class="mb-2">Your professional registration has been submitted successfully.</p>
+              <p class="text-sm text-gray-600">You will receive a confirmation email shortly.</p>
+              <div class="mt-3 p-3 bg-green-50 rounded text-sm">
+                <p><strong>Registration ID:</strong> ${data.data?.registration_id || 'N/A'}</p>
+                <p><strong>Status:</strong> ${data.data?.status || 'Pending Review'}</p>
+              </div>
+            </div>
+          `,
+          confirmButtonColor: COLORS.success,
+          confirmButtonText: 'Back to Dashboard'
+        }).then(() => {
+          navigate('/user/building/type');
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Submission Failed',
+          text: data.message || 'Failed to submit registration. Please try again.',
+          confirmButtonColor: COLORS.primary
+        });
+      }
+    } catch (error) {
+      console.error('Submission error:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Network Error',
+        text: 'Could not connect to the server. Please check your connection and try again.',
+        confirmButtonColor: COLORS.primary
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderStepContent = () => {

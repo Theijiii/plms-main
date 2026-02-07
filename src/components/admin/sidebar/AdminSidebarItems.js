@@ -9,6 +9,7 @@ import {
   Ticket,
   Home,
   ShieldCheck,
+  UserCheck,
 } from "lucide-react";
 
 const AdminSidebarItems = [
@@ -64,6 +65,13 @@ const AdminSidebarItems = [
     label: "Building Processing",
     icon: FileText,
     path: "/admin/buildingprocessing",
+    department: ["building", "super"],
+  },
+  {
+    id: "professionalRegistration",
+    label: "Professional Registration",
+    icon: UserCheck,
+    path: "/admin/building-permit/professional-registration",
     department: ["building", "super"],
   },
 
