@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
@@ -34,7 +35,9 @@ import {
   ArrowUpDown,
   ZoomIn,
   ZoomOut,
-  RotateCcw
+  RotateCcw,
+  UserCheck,
+  Award
 } from "lucide-react";
 
 export default function BuildingPermitApplication() {
@@ -60,6 +63,7 @@ export default function BuildingPermitApplication() {
   const [exportType, setExportType] = useState("");
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const actionsRef = useRef(null);
+  const navigate = useNavigate();
 
   const ITEMS_PER_PAGE = 10;
   const API_BASE = "/backend/building_permit";
@@ -415,6 +419,13 @@ export default function BuildingPermitApplication() {
           </div>
           <div className="flex items-center space-x-3 mt-4 md:mt-0">
             <button onClick={fetchPermits} className="p-2 rounded-lg bg-white border border-[#E9E7E7] hover:bg-gray-50 transition-colors" title="Refresh"><RefreshCw className="w-5 h-5 text-[#4D4A4A]" /></button>
+            <button 
+              onClick={() => navigate('/admin/building-permit/professional-registration')} 
+              className="px-4 py-2 bg-[#4A90E2] text-white rounded-lg hover:bg-opacity-90 transition-colors flex items-center space-x-2 font-montserrat"
+              title="View Professional Registrations"
+            >
+              <UserCheck className="w-5 h-5" /><span>Professionals</span>
+            </button>
             <button onClick={exportToCSV} disabled={exporting} className="px-4 py-2 bg-[#4CAF50] text-white rounded-lg hover:bg-opacity-90 transition-colors flex items-center space-x-2 disabled:opacity-50 font-montserrat">
               <DownloadCloud className="w-5 h-5" /><span>{exporting && exportType === "csv" ? "Exporting..." : "CSV"}</span>
             </button>

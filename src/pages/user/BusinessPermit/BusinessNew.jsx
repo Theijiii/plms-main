@@ -24,7 +24,7 @@ const COLORS = {
 
 const API_BUS = "/backend/business_permit/business_permit.php";
 const ZONING_API = "https://urbanplanning.goserveph.com/api/zoning-applications";
-const BARANGAY_API = "/backend/barangay_permit/admin_fetch.php";
+const BARANGAY_API = "https://e-plms.goserveph.com/backend/barangay_permit/admin_fetch.php";
 const SANITATION_API = "https://health.goserveph.com/api/licensing_export.php";
 const NATIONALITIES = [
   "Afghan", "Albanian", "Algerian", "American", "Andorran", "Angolan", "Antiguans", "Argentinean", "Armenian", "Australian", "Austrian", "Azerbaijani", "Bahamian", "Bahraini", "Bangladeshi", "Barbadian", "Barbudans", "Batswana", "Belarusian", "Belgian", "Belizean", "Beninese", "Bhutanese", "Bolivian", "Bosnian", "Brazilian", "British", "Bruneian", "Bulgarian", "Burkinabe", "Burmese", "Burundian", "Cambodian", "Cameroonian", "Canadian", "Cape Verdean", "Central African", "Chadian", "Chilean", "Chinese", "Colombian", "Comoran", "Congolese", "Costa Rican", "Croatian", "Cuban", "Cypriot", "Czech", "Danish", "Djibouti", "Dominican", "Dutch", "East Timorese", "Ecuadorean", "Egyptian", "Emirian", "Equatorial Guinean", "Eritrean", "Estonian", "Ethiopian", "Fijian", "Filipino", "Finnish", "French", "Gabonese", "Gambian", "Georgian", "German", "Ghanaian", "Greek", "Grenadian", "Guatemalan", "Guinea-Bissauan", "Guinean", "Guyanese", "Haitian", "Herzegovinian", "Honduran", "Hungarian", "I-Kiribati", "Icelander", "Indian", "Indonesian", "Iranian", "Iraqi", "Irish", "Israeli", "Italian", "Ivorian", "Jamaican", "Japanese", "Jordanian", "Kazakhstani", "Kenyan", "Kittian and Nevisian", "Kuwaiti", "Kyrgyz", "Laotian", "Latvian", "Lebanese", "Liberian", "Libyan", "Liechtensteiner", "Lithuanian", "Luxembourger", "Macedonian", "Malagasy", "Malawian", "Malaysian", "Maldivan", "Malian", "Maltese", "Marshallese", "Mauritanian", "Mauritian", "Mexican", "Micronesian", "Moldovan", "Monacan", "Mongolian", "Moroccan", "Mosotho", "Motswana", "Mozambican", "Namibian", "Nauruan", "Nepalese", "New Zealander", "Nicaraguan", "Nigerian", "Nigerien", "North Korean", "Northern Irish", "Norwegian", "Omani", "Pakistani", "Palauan", "Palestinian", "Panamanian", "Papua New Guinean", "Paraguayan", "Peruvian", "Polish", "Portuguese", "Qatari", "Romanian", "Russian", "Rwandan", "Saint Lucian", "Salvadoran", "Samoan", "San Marinese", "Sao Tomean", "Saudi", "Scottish", "Senegalese", "Serbian", "Seychellois", "Sierra Leonean", "Singaporean", "Slovakian", "Slovenian", "Solomon Islander", "Somali", "South African", "South Korean", "Spanish", "Sri Lankan", "Sudanese", "Surinamer", "Swazi", "Swedish", "Swiss", "Syrian", "Taiwanese", "Tajik", "Tanzanian", "Thai", "Togolese", "Tongan", "Trinidadian or Tobagonian", "Tunisian", "Turkish", "Tuvaluan", "Ugandan", "Ukrainian", "Uruguayan", "Uzbekistani", "Venezuelan", "Vietnamese", "Welsh", "Yemenite", "Zambian", "Zimbabwean"
@@ -327,74 +327,6 @@ export default function BusinessNew() {
     
     const similarity = matches / longer.length;
     return similarity >= threshold ? similarity : 0;
-  };
-
-  // Month name recognition for birth date extraction from documents
-  const MONTH_NAMES = {
-    january: ['january', 'jan', 'enero', 'ene'],
-    february: ['february', 'feb', 'febrero', 'pebrero'],
-    march: ['march', 'mar', 'marzo'],
-    april: ['april', 'apr', 'abril', 'abr'],
-    may: ['may', 'mayo'],
-    june: ['june', 'jun', 'junio'],
-    july: ['july', 'jul', 'julio'],
-    august: ['august', 'aug', 'agosto', 'agos'],
-    september: ['september', 'sept', 'sep', 'septiembre', 'septyembre'],
-    october: ['october', 'oct', 'octubre', 'oktubre'],
-    november: ['november', 'nov', 'noviembre', 'nobyembre'],
-    december: ['december', 'dec', 'diciembre', 'disyembre']
-  };
-
-  // Normalize month name to standard format (recognizes English and Filipino variants)
-  const normalizeMonthName = (text) => {
-    const textLower = text.toLowerCase().trim();
-    
-    for (const [standardMonth, variations] of Object.entries(MONTH_NAMES)) {
-      for (const variant of variations) {
-        if (textLower === variant || textLower.includes(variant)) {
-          return standardMonth;
-        }
-      }
-    }
-    return null;
-  };
-
-  // Extract dates with month names from text (handles multiple formats)
-  const extractDatesWithMonthNames = (text) => {
-    const dates = [];
-    
-    // Pattern: Day Month Year (e.g., "15 January 1990", "15 JAN 1990")
-    const pattern1 = /(\d{1,2})\s+(january|jan|enero|ene|february|feb|febrero|pebrero|march|mar|marzo|april|apr|abril|abr|may|mayo|june|jun|junio|july|jul|julio|august|aug|agosto|agos|september|sept|sep|septiembre|septyembre|october|oct|octubre|oktubre|november|nov|noviembre|nobyembre|december|dec|diciembre|disyembre)\s+(\d{2,4})/gi;
-    
-    // Pattern: Month Day, Year (e.g., "January 15, 1990")
-    const pattern2 = /(january|jan|enero|ene|february|feb|febrero|pebrero|march|mar|marzo|april|apr|abril|abr|may|mayo|june|jun|junio|july|jul|julio|august|aug|agosto|agos|september|sept|sep|septiembre|septyembre|october|oct|octubre|oktubre|november|nov|noviembre|nobyembre|december|dec|diciembre|disyembre)\s+(\d{1,2}),?\s+(\d{2,4})/gi;
-    
-    let match;
-    while ((match = pattern1.exec(text)) !== null) {
-      const monthName = normalizeMonthName(match[2]);
-      if (monthName) {
-        dates.push({
-          raw: match[0],
-          month: monthName,
-          day: match[1],
-          year: match[3]
-        });
-      }
-    }
-    
-    while ((match = pattern2.exec(text)) !== null) {
-      const monthName = normalizeMonthName(match[1]);
-      if (monthName) {
-        dates.push({
-          raw: match[0],
-          month: monthName,
-          day: match[2],
-          year: match[3]
-        });
-      }
-    }
-    
-    return dates;
   };
 
   // Document type patterns for verification

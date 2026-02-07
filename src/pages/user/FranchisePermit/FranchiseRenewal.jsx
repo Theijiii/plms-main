@@ -1881,7 +1881,8 @@ const checkExistingPermit = async () => {
 
     setIsSubmitting(true);
     
-    const backendUrl = "http://localhost/plms-main/backend/franchise_permit/franchise_permit.php";
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/backend';
+    const backendUrl = `${apiBaseUrl}/franchise_permit/franchise_permit.php`;
     
     try {
       const formDataToSend = new FormData();
