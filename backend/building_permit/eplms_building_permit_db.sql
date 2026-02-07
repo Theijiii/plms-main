@@ -184,37 +184,6 @@ CREATE TABLE `other_requirements` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `professionals`
---
-
-CREATE TABLE `professionals` (
-  `id` char(36) NOT NULL DEFAULT uuid(),
-  `user_id` char(36) DEFAULT NULL,
-  `first_name` varchar(100) NOT NULL,
-  `middle_initial` varchar(10) DEFAULT NULL,
-  `last_name` varchar(100) NOT NULL,
-  `suffix` varchar(20) DEFAULT NULL,
-  `birth_date` date NOT NULL,
-  `contact_number` varchar(20) NOT NULL,
-  `email` varchar(255) NOT NULL,
-  `prc_license` varchar(50) NOT NULL,
-  `prc_expiry` date NOT NULL,
-  `ptr_number` varchar(50) NOT NULL,
-  `profession` varchar(100) NOT NULL,
-  `role` varchar(100) NOT NULL,
-  `status` varchar(20) DEFAULT 'pending',
-  `is_active` tinyint(1) DEFAULT 1,
-  `registration_date` timestamp NOT NULL DEFAULT current_timestamp(),
-  `last_updated` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `approved_date` timestamp NULL DEFAULT NULL,
-  `approved_by` char(36) DEFAULT NULL,
-  `rejection_reason` text DEFAULT NULL,
-  `notes` text DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
-
--- --------------------------------------------------------
-
---
 -- Table structure for table `professional_registrations`
 --
 
@@ -362,20 +331,6 @@ ALTER TABLE `other_requirements`
   ADD KEY `application_id` (`application_id`);
 
 --
--- Indexes for table `professionals`
---
-ALTER TABLE `professionals`
-  ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `email` (`email`),
-  ADD UNIQUE KEY `prc_license` (`prc_license`),
-  ADD KEY `idx_professionals_status` (`status`),
-  ADD KEY `idx_professionals_prc_license` (`prc_license`),
-  ADD KEY `idx_professionals_email` (`email`),
-  ADD KEY `idx_professionals_user_id` (`user_id`),
-  ADD KEY `idx_professionals_is_active` (`is_active`),
-  ADD KEY `idx_professionals_prc_expiry` (`prc_expiry`);
-
---
 -- Indexes for table `professional_registrations`
 --
 ALTER TABLE `professional_registrations`
@@ -484,8 +439,7 @@ ALTER TABLE `building_permit_submission`
 --
 -- Constraints for table `files`
 --
-ALTER TABLE `files`
-  ADD CONSTRAINT `files_ibfk_1` FOREIGN KEY (`professional_id`) REFERENCES `professionals` (`id`) ON DELETE CASCADE;
+-- (No foreign key constraints for files table)
 
 --
 -- Constraints for table `occupancy_classification`

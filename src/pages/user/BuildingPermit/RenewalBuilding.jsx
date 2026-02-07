@@ -88,7 +88,7 @@ export default function RenewalBuilding() {
     const { name, value, type, files } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "file" ? (files && files[0] ? files[0] : null) : value,
+      [name]: type === "file" ? (files && files[0] ? files[0] : null) : (type === "text" || type === "email" || type === "tel" ? value.toUpperCase() : value),
     }));
   };
 
@@ -217,15 +217,18 @@ export default function RenewalBuilding() {
       case 1:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4">Previous Permit Details</h3>
+            <div>
+              <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>{steps[0].title}</h3>
+              <p className="text-sm text-gray-600 mb-4">{steps[0].description}</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block mb-2 font-medium">Previous Permit Number *</label>
-                <input type="text" name="previous_permit_number" value={formData.previous_permit_number} onChange={handleChange} className="w-full p-3 border rounded-lg" required />
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Previous Permit Number <span className="text-red-500">*</span></label>
+                <input type="text" name="previous_permit_number" value={formData.previous_permit_number} onChange={handleChange} placeholder="Enter previous permit number" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
               </div>
               <div>
-                <label className="block mb-2 font-medium">Previous Permit Expiry *</label>
-                <input type="date" name="previous_permit_expiry" value={formData.previous_permit_expiry} onChange={handleChange} className="w-full p-3 border rounded-lg" required />
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Previous Permit Expiry <span className="text-red-500">*</span></label>
+                <input type="date" name="previous_permit_expiry" value={formData.previous_permit_expiry} onChange={handleChange} className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
               </div>
             </div>
           </div>
@@ -233,58 +236,55 @@ export default function RenewalBuilding() {
       case 2:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4">Applicant Information</h3>
+            <div>
+              <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>{steps[1].title}</h3>
+              <p className="text-sm text-gray-600 mb-4">{steps[1].description}</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <NameFields formData={formData} handleChange={handleChange} errors={errors} required />
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>First Name <span className="text-red-500">*</span></label>
+                <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} placeholder="Enter first name" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
               </div>
               <div>
-                <label className="block mb-2 font-medium">Contact Number *</label>
-                <input type="tel" name="contact_number" value={formData.contact_number} onChange={handleChange} className={`w-full p-3 border rounded-lg ${errors.contact_number ? 'border-red-500' : ''}`} required />
-                {errors.contact_number && <p className="text-red-600 text-sm">{errors.contact_number}</p>}
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Last Name <span className="text-red-500">*</span></label>
+                <input type="text" name="last_name" value={formData.last_name} onChange={handleChange} placeholder="Enter last name" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
               </div>
               <div>
-                <label className="block mb-2 font-medium">Email Address *</label>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full p-3 border rounded-lg" required />
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Middle Initial</label>
+                <input type="text" name="middle_initial" value={formData.middle_initial} onChange={handleChange} placeholder="M.I." className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
               </div>
               <div>
-                <label className="block mb-2 font-medium">Birth Date *</label>
-                <input type="date" name="birth_date" value={formData.birth_date} onChange={handleChange} className="w-full p-3 border rounded-lg" required />
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Suffix</label>
+                <input type="text" name="suffix" value={formData.suffix} onChange={handleChange} placeholder="Jr., Sr., III" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
               </div>
               <div>
-                <label className="block mb-2 font-medium">Gender *</label>
-                <select name="gender" value={formData.gender} onChange={handleChange} className="w-full p-3 border rounded-lg" required>
-                  <option value="">Select Gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Contact Number <span className="text-red-500">*</span></label>
+                <input type="tel" name="contact_no" value={formData.contact_no} onChange={handleChange} placeholder="09XXXXXXXXX" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Email Address <span className="text-red-500">*</span></label>
+                <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="email@example.com" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Citizenship <span className="text-red-500">*</span></label>
+                <input type="text" name="citizenship" value={formData.citizenship} onChange={handleChange} placeholder="Filipino" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>TIN <span className="text-red-500">*</span></label>
+                <input type="text" name="tin" value={formData.tin} onChange={handleChange} placeholder="TIN Number" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Home Address <span className="text-red-500">*</span></label>
+                <input type="text" name="home_address" value={formData.home_address} onChange={handleChange} placeholder="Complete home address" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Form of Ownership <span className="text-red-500">*</span></label>
+                <select name="form_of_ownership" value={formData.form_of_ownership} onChange={handleChange} className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  <option value="">Select Ownership</option>
+                  <option value="Individual">Individual</option>
+                  <option value="Enterprise">Enterprise</option>
+                  <option value="Others">Others</option>
                 </select>
-              </div>
-              <div>
-                <label className="block mb-2 font-medium">Civil Status *</label>
-                <select name="civil_status" value={formData.civil_status} onChange={handleChange} className="w-full p-3 border rounded-lg" required>
-                  <option value="">Select Civil Status</option>
-                  <option value="Single">Single</option>
-                  <option value="Married">Married</option>
-                  <option value="Widowed">Widowed</option>
-                  <option value="Divorced">Divorced</option>
-                </select>
-              </div>
-              <div>
-                <label className="block mb-2 font-medium">Nationality *</label>
-                <input type="text" name="nationality" value={formData.nationality} onChange={handleChange} className="w-full p-3 border rounded-lg" required />
-              </div>
-              <div>
-                <label className="block mb-2 font-medium">TIN</label>
-                <input type="text" name="tin" value={formData.tin} onChange={handleChange} className="w-full p-3 border rounded-lg" />
-              </div>
-              <div>
-                <label className="block mb-2 font-medium">SSS Number</label>
-                <input type="text" name="sss_no" value={formData.sss_no} onChange={handleChange} className="w-full p-3 border rounded-lg" />
-              </div>
-              <div>
-                <label className="block mb-2 font-medium">PhilHealth Number</label>
-                <input type="text" name="philhealth_no" value={formData.philhealth_no} onChange={handleChange} className="w-full p-3 border rounded-lg" />
               </div>
             </div>
           </div>
@@ -292,46 +292,50 @@ export default function RenewalBuilding() {
       case 3:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4">Updated Building Information</h3>
+            <div>
+              <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>{steps[2].title}</h3>
+              <p className="text-sm text-gray-600 mb-4">{steps[2].description}</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block mb-2 font-medium">Building Name *</label>
-                <input type="text" name="building_name" value={formData.building_name} onChange={handleChange} className="w-full p-3 border rounded-lg" required />
-              </div>
-              <div>
-                <label className="block mb-2 font-medium">Trade Name</label>
-                <input type="text" name="trade_name" value={formData.trade_name} onChange={handleChange} className="w-full p-3 border rounded-lg" />
-              </div>
-              <div>
-                <label className="block mb-2 font-medium">Building Structure *</label>
-                <select name="building_structure" value={formData.building_structure} onChange={handleChange} className="w-full p-3 border rounded-lg" required>
-                  <option value="">Select Structure</option>
-                  <option value="Sole Proprietorship">Sole Proprietorship</option>
-                  <option value="Partnership">Partnership</option>
-                  <option value="Corporation">Corporation</option>
-                  <option value="Cooperative">Cooperative</option>
-                </select>
-              </div>
-              <div>
-                <label className="block mb-2 font-medium">Ownership Status *</label>
-                <select name="ownership_status" value={formData.ownership_status} onChange={handleChange} className="w-full p-3 border rounded-lg" required>
-                  <option value="">Select Status</option>
-                  <option value="Owned">Owned</option>
-                  <option value="Leased">Leased</option>
-                  <option value="Rented">Rented</option>
-                </select>
-              </div>
-              <div>
-                <label className="block mb-2 font-medium">Registration Number</label>
-                <input type="text" name="registration_number" value={formData.registration_number} onChange={handleChange} className="w-full p-3 border rounded-lg" />
-              </div>
-              <div>
-                <label className="block mb-2 font-medium">Building Activity *</label>
-                <input type="text" name="building_activity" value={formData.building_activity} onChange={handleChange} className="w-full p-3 border rounded-lg" required />
-              </div>
               <div className="md:col-span-2">
-                <label className="block mb-2 font-medium">Building Description *</label>
-                <textarea name="building_description" value={formData.building_description} onChange={handleChange} rows="3" className="w-full p-3 border rounded-lg" required />
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Permit Group <span className="text-red-500">*</span></label>
+                <select name="permit_group" value={formData.permit_group} onChange={handleChange} className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
+                  <option value="">Select Permit Group</option>
+                  <option value="GROUP A">GROUP A: Single / Duplex / Residential</option>
+                  <option value="GROUP B">GROUP B: Hotel / Motel / Dormitory</option>
+                  <option value="GROUP C">GROUP C: School / Civic Center</option>
+                  <option value="GROUP D">GROUP D: Hospital / Government Office</option>
+                  <option value="GROUP E">GROUP E: Bank / Store / Mall</option>
+                  <option value="Others">Others</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Use of Permit <span className="text-red-500">*</span></label>
+                <input type="text" name="use_of_permit" value={formData.use_of_permit} onChange={handleChange} placeholder="E.g. Residential" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Lot Number <span className="text-red-500">*</span></label>
+                <input type="text" name="lot_no" value={formData.lot_no} onChange={handleChange} placeholder="Lot No." className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Block Number <span className="text-red-500">*</span></label>
+                <input type="text" name="blk_no" value={formData.blk_no} onChange={handleChange} placeholder="Block No." className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Street <span className="text-red-500">*</span></label>
+                <input type="text" name="street" value={formData.street} onChange={handleChange} placeholder="Street" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Barangay <span className="text-red-500">*</span></label>
+                <input type="text" name="barangay" value={formData.barangay} onChange={handleChange} placeholder="Barangay" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>City / Municipality <span className="text-red-500">*</span></label>
+                <input type="text" name="city_municipality" value={formData.city_municipality} onChange={handleChange} placeholder="City/Municipality" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Province <span className="text-red-500">*</span></label>
+                <input type="text" name="province" value={formData.province} onChange={handleChange} placeholder="Province" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
               </div>
             </div>
           </div>
@@ -339,11 +343,24 @@ export default function RenewalBuilding() {
       case 4:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold mb-4">Uploads</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block mb-2 font-medium">Upload Required Documents *</label>
-                <input type="file" name="attachments" onChange={handleChange} className="w-full p-3 border rounded-lg" multiple required />
+            <div>
+              <h3 className="text-xl font-semibold mb-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>{steps[3].title}</h3>
+              <p className="text-sm text-gray-600 mb-4">{steps[3].description}</p>
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Signature <span className="text-red-500">*</span></label>
+                <div className="flex items-center gap-3 p-3 border border-black rounded-lg w-full bg-white">
+                  <Upload className="w-5 h-5 text-gray-500" />
+                  <input
+                    type="file"
+                    name="signature"
+                    onChange={handleChange}
+                    accept="image/*"
+                    className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -354,73 +371,89 @@ export default function RenewalBuilding() {
   };
 
   return (
-    <div className="mx-1 mt-1 p-6 rounded-lg min-h-screen" style={{ background: '#fbfbfb', color: '#222' }}>
+    <div className="mx-1 mt-1 p-6 rounded-lg min-h-screen" style={{ background: COLORS.background, color: COLORS.secondary, fontFamily: COLORS.font }}>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl md:text-4xl font-bold" style={{ color: '#4a90e2' }}>Renewal Building Permit</h1>
-          <p className="mt-2" style={{ color: '#9aa5b1' }}>
+          <h1 className="text-2xl md:text-4xl font-bold" style={{ color: COLORS.primary, fontFamily: COLORS.font }}>Renewal Building Permit</h1>
+          <p className="mt-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
             Renew your existing building permit here. Please provide your previous permit details and any updated information.
           </p>
         </div>
-                         <button
+        <button
           onClick={() => navigate('/user/building/type')}
-          className="px-4 py-2 rounded-lg text-white font-semibold"
-          style={{ background: '#4CAF50' }}
+          className="px-4 py-2 rounded-lg font-semibold text-white transition-all duration-300 hover:shadow-lg"
+          style={{ background: COLORS.success, fontFamily: COLORS.font }}
+          onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+          onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
         >
           Change Type
         </button>
       </div>
 
-      {/* Progress Steps */}
-      <div className="mb-8">
+      <div className="mb-8 bg-white p-6 rounded-xl shadow-sm">
         <div className="flex items-center justify-between">
           {steps.map((step, index) => (
             <div key={step.id} className="flex items-center">
-              <div
-                className="flex items-center justify-center w-10 h-10 rounded-full border-2"
-                style={{
-                  background: currentStep >= step.id ? '#4a90e2' : '#fff',
-                  borderColor: currentStep >= step.id ? '#4a90e2' : '#9aa5b1',
-                  color: currentStep >= step.id ? '#fff' : '#9aa5b1',
-                }}
-              >
-                {step.id}
-              </div>
+              <div className="flex items-center justify-center w-12 h-12 rounded-full border-2 font-bold transition-all duration-300" style={{
+                background: currentStep >= step.id ? COLORS.primary : '#fff',
+                borderColor: currentStep >= step.id ? COLORS.primary : '#E5E7EB',
+                color: currentStep >= step.id ? '#fff' : '#9CA3AF',
+                fontFamily: COLORS.font,
+                boxShadow: currentStep === step.id ? '0 4px 12px rgba(74, 144, 226, 0.3)' : 'none'
+              }}>{step.id}</div>
               <div className="ml-3 hidden md:block">
-                <p className="text-sm font-medium" style={{ color: currentStep >= step.id ? '#4a90e2' : '#9aa5b1' }}>{step.title}</p>
-                <p className="text-xs" style={{ color: '#9aa5b1' }}>{step.description}</p>
+                <p className="text-sm font-semibold" style={{ color: currentStep >= step.id ? COLORS.primary : '#6B7280', fontFamily: COLORS.font }}>{step.title}</p>
+                <p className="text-xs text-gray-500" style={{ fontFamily: COLORS.font }}>{step.description}</p>
               </div>
-              {index < steps.length - 1 && (
-                <div className="hidden md:block w-16 h-0.5 mx-4" style={{ background: currentStep > step.id ? '#4a90e2' : '#9aa5b1' }} />
-              )}
+              {index < steps.length - 1 && <div className="hidden md:block w-16 h-0.5 mx-4 transition-all duration-300" style={{ background: currentStep > step.id ? COLORS.primary : '#E5E7EB' }} />}
             </div>
           ))}
         </div>
       </div>
 
-      {submitStatus && (
-        <div className="p-4 mb-6 rounded" style={{ background: submitStatus.type === 'success' ? '#e6f9ed' : '#fdecea', color: submitStatus.type === 'success' ? '#4caf50' : '#e53935', border: `1px solid ${submitStatus.type === 'success' ? '#4caf50' : '#e53935'}` }}>
-          {submitStatus.message}
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-8">
-        {renderStepContent()}
-        <div className="flex justify-between pt-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm">
+          {renderStepContent()}
+        </div>
+
+        <div className="flex justify-between pt-6 bg-white p-6 rounded-xl shadow-sm">
           {currentStep > 1 && (
-            <button type="button" onClick={prevStep} className="px-6 py-3 rounded-lg font-semibold" style={{ background: '#9aa5b1', color: '#fff' }}>
-              Previous
+            <button
+              type="button"
+              onClick={prevStep}
+              className="px-8 py-3 rounded-lg font-semibold text-white transition-all duration-300 hover:shadow-lg flex items-center gap-2"
+              style={{ background: '#6B7280', fontFamily: COLORS.font }}
+              onMouseEnter={e => e.currentTarget.style.background = '#4B5563'}
+              onMouseLeave={e => e.currentTarget.style.background = '#6B7280'}
+            >
+              ← Previous
             </button>
           )}
-          {currentStep < steps.length ? (
-            <button type="button" onClick={nextStep} className="px-6 py-3 rounded-lg font-semibold" style={{ background: '#4a90e2', color: '#fff' }}>
-              Next
-            </button>
-          ) : (
-            <button type="submit" disabled={isSubmitting} className="px-6 py-3 rounded-lg font-semibold" style={{ background: isSubmitting ? '#9aa5b1' : '#4caf50', color: '#fff', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
-              {isSubmitting ? 'Submitting...' : 'Submit Renewal'}
-            </button>
-          )}
+          <div className={currentStep === 1 ? 'ml-auto' : ''}>
+            {currentStep < steps.length ? (
+              <button
+                type="button"
+                onClick={nextStep}
+                className="px-8 py-3 rounded-lg font-semibold text-white transition-all duration-300 hover:shadow-lg flex items-center gap-2"
+                style={{ background: COLORS.primary, fontFamily: COLORS.font }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                onMouseLeave={e => e.currentTarget.style.background = COLORS.primary}
+              >
+                Next →
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`px-8 py-3 rounded-lg font-semibold text-white transition-all duration-300 ${!isSubmitting && 'hover:shadow-lg'} ${isSubmitting ? 'cursor-not-allowed opacity-60' : ''}`}
+                style={{ background: isSubmitting ? '#9CA3AF' : COLORS.success, fontFamily: COLORS.font }}
+                onMouseEnter={e => { if (!isSubmitting) e.currentTarget.style.background = COLORS.accent; }}
+                onMouseLeave={e => { if (!isSubmitting) e.currentTarget.style.background = COLORS.success; }}
+              >
+                {isSubmitting ? '⏳ Submitting...' : '✓ Submit Renewal'}
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </div>

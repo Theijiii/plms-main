@@ -50,7 +50,7 @@ export default function BuildingNew() {
 
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "file" ? (files && files[0] ? files[0] : null) : value,
+      [name]: type === "file" ? (files && files[0] ? files[0] : null) : (type === "text" || type === "email" || type === "tel" ? value.toUpperCase() : value),
     }));
   };
 
@@ -190,23 +190,23 @@ export default function BuildingNew() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>First Name <span className="text-red-500">*</span></label>
-              <input type="text" name="first_name" value={formData.first_name || ""} onChange={handleChange} placeholder="Enter first name" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="first_name" value={formData.first_name || ""} onChange={handleChange} placeholder="Enter first name" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Last Name <span className="text-red-500">*</span></label>
-              <input type="text" name="last_name" value={formData.last_name || ""} onChange={handleChange} placeholder="Enter last name" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="last_name" value={formData.last_name || ""} onChange={handleChange} placeholder="Enter last name" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Middle Name <span className="text-red-500">*</span></label>
-              <input type="text" name="middle_initial" value={formData.middle_initial || ""} onChange={handleChange} placeholder="Enter middle initial" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="middle_initial" value={formData.middle_initial || ""} onChange={handleChange} placeholder="Enter middle initial" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Suffix</label>
-              <input type="text" name="suffix" value={formData.suffix || ""} onChange={handleChange} placeholder="Enter suffix" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="suffix" value={formData.suffix || ""} onChange={handleChange} placeholder="Enter suffix" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Citizenship <span className="text-red-500">*</span></label>
-              <input list="nationalities" name="citizenship" value={formData.citizenship || ""} onChange={handleChange} placeholder="Enter citizenship" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input list="nationalities" name="citizenship" value={formData.citizenship || ""} onChange={handleChange} placeholder="Enter citizenship" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
               <datalist id="nationalities">
                 {NATIONALITIES.map((n) => (<option key={n} value={n} />))}
               </datalist>
@@ -221,11 +221,11 @@ export default function BuildingNew() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Email Address <span className="text-red-500">*</span></label>
-              <input type="email" name="email" value={formData.email || ""} onChange={handleChange} placeholder="Enter email address" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="email" name="email" value={formData.email || ""} onChange={handleChange} placeholder="Enter email address" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Home Address <span className="text-red-500">*</span></label>
-              <input type="text" name="home_address" value={formData.home_address || ""} onChange={handleChange} placeholder="Enter home address" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="home_address" value={formData.home_address || ""} onChange={handleChange} placeholder="Enter home address" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Form of Ownership <span className="text-red-500">*</span></label>
@@ -298,7 +298,7 @@ export default function BuildingNew() {
 
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Specify Permit Use <span className="text-red-500">*</span></label>
-              <input type="text" name="use_of_permit" value={formData.use_of_permit || ""} onChange={handleChange} placeholder="E.g Hotel" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="use_of_permit" value={formData.use_of_permit || ""} onChange={handleChange} placeholder="E.g Hotel" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Proposed Date of Construction <span className="text-red-500">*</span></label>
@@ -334,19 +334,19 @@ export default function BuildingNew() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Street <span className="text-red-500">*</span></label>
-              <input type="text" name="street" value={formData.street || ""} onChange={handleChange} placeholder="Enter Street" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="street" value={formData.street || ""} onChange={handleChange} placeholder="Enter Street" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Barangay <span className="text-red-500">*</span></label>
-              <input type="text" name="barangay" value={formData.barangay || ""} onChange={handleChange} placeholder="Enter Barangay" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="barangay" value={formData.barangay || ""} onChange={handleChange} placeholder="Enter Barangay" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>City / Municipality <span className="text-red-500">*</span></label>
-              <input type="text" name="city_municipality" value={formData.city_municipality || ""} onChange={handleChange} placeholder="Enter City or Municipality" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="city_municipality" value={formData.city_municipality || ""} onChange={handleChange} placeholder="Enter City or Municipality" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Province <span className="text-red-500">*</span></label>
-              <input type="text" name="province" value={formData.province || ""} onChange={handleChange} placeholder="Enter Province" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="province" value={formData.province || ""} onChange={handleChange} placeholder="Enter Province" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>TCT Number <span className="text-red-500">*</span></label>
@@ -461,7 +461,7 @@ export default function BuildingNew() {
 
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Professional Name <span className="text-red-500">*</span></label>
-              <input type="text" name="professional_name" value={formData.professional_name || ""} onChange={handleChange} placeholder="Enter Professional Name" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="professional_name" value={formData.professional_name || ""} onChange={handleChange} placeholder="Enter Professional Name" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>PRC Number <span className="text-red-500">*</span></label>
@@ -481,11 +481,11 @@ export default function BuildingNew() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Place Issued <span className="text-red-500">*</span></label>
-              <input type="text" name="place_issued" value={formData.place_issued || ""} onChange={handleChange} placeholder="Enter Place Issued" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="place_issued" value={formData.place_issued || ""} onChange={handleChange} placeholder="Enter Place Issued" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Remarks</label>
-              <input type="text" name="remarks" value={formData.remarks || ""} onChange={handleChange} placeholder="Enter remarks" className="p-3 border border-black rounded-lg w-full" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
+              <input type="text" name="remarks" value={formData.remarks || ""} onChange={handleChange} placeholder="Enter remarks" className="p-3 border border-black rounded-lg w-full uppercase" style={{ color: COLORS.secondary, fontFamily: COLORS.font }} />
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Signature <span className="text-red-500">*</span></label>
