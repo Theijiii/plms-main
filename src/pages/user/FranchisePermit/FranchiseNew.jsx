@@ -848,6 +848,92 @@ export default function FranchiseNew() {
     return similarity >= threshold ? similarity : 0;
   };
 
+  // Month name recognition for birth date extraction from documents
+  const MONTH_NAMES = {
+    january: ['january', 'jan', 'enero', 'ene'],
+    february: ['february', 'feb', 'febrero', 'pebrero'],
+    march: ['march', 'mar', 'marzo'],
+    april: ['april', 'apr', 'abril', 'abr'],
+    may: ['may', 'mayo'],
+    june: ['june', 'jun', 'junio'],
+    july: ['july', 'jul', 'julio'],
+    august: ['august', 'aug', 'agosto', 'agos'],
+    september: ['september', 'sept', 'sep', 'septiembre', 'septyembre'],
+    october: ['october', 'oct', 'octubre', 'oktubre'],
+    november: ['november', 'nov', 'noviembre', 'nobyembre'],
+    december: ['december', 'dec', 'diciembre', 'disyembre']
+  };
+
+  // Normalize month name to standard format (recognizes English and Filipino variants)
+  const normalizeMonthName = (text) => {
+    const textLower = text.toLowerCase().trim();
+    
+    for (const [standardMonth, variations] of Object.entries(MONTH_NAMES)) {
+      for (const variant of variations) {
+        if (textLower === variant || textLower.includes(variant)) {
+          return standardMonth;
+        }
+      }
+    }
+    return null;
+  };
+
+  // Extract dates with month names from text (handles multiple formats)
+  const extractDatesWithMonthNames = (text) => {
+    const dates = [];
+    
+    // Pattern: Day Month Year (e.g., "15 January 1990", "15 JAN 1990")
+    const pattern1 = /(\d{1,2})\s+(january|jan|enero|ene|february|feb|febrero|pebrero|march|mar|marzo|april|apr|abril|abr|may|mayo|june|jun|junio|july|jul|julio|august|aug|agosto|agos|september|sept|sep|septiembre|septyembre|october|oct|octubre|oktubre|november|nov|noviembre|nobyembre|december|dec|diciembre|disyembre)\s+(\d{2,4})/gi;
+    
+    // Pattern: Month Day, Year (e.g., "January 15, 1990")
+    const pattern2 = /(january|jan|enero|ene|february|feb|febrero|pebrero|march|mar|marzo|april|apr|abril|abr|may|mayo|june|jun|junio|july|jul|julio|august|aug|agosto|agos|september|sept|sep|septiembre|septyembre|october|oct|octubre|oktubre|november|nov|noviembre|nobyembre|december|dec|diciembre|disyembre)\s+(\d{1,2}),?\s+(\d{2,4})/gi;
+    
+    let match;
+    while ((match = pattern1.exec(text)) !== null) {
+      const monthName = normalizeMonthName(match[2]);
+      if (monthName) {
+        dates.push({
+          raw: match[0],
+          month: monthName,
+          day: match[1],
+          year: match[3]
+        });
+      }
+    }
+    
+    while ((match = pattern2.exec(text)) !== null) {
+      const monthName = normalizeMonthName(match[1]);
+      if (monthName) {
+        dates.push({
+          raw: match[0],
+          month: monthName,
+          day: match[2],
+          year: match[3]
+        });
+      }
+    }
+    
+    return dates;
+  };
+
+  const fuzzyMatchOld = (str1, str2, threshold = 0.5) => {
+    const s1 = normalizeText(str1);
+    const s2 = normalizeText(str2);
+    
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    
+    if (longer.length === 0) return 0.0;
+    
+    let matches = 0;
+    for (let i = 0; i < shorter.length; i++) {
+      if (longer.includes(shorter[i])) matches++;
+    }
+    
+    const similarity = matches / longer.length;
+    return similarity >= threshold ? similarity : 0;
+  };
+
   const DOCUMENT_PATTERNS = {
     barangay_clearance: [
       "barangay clearance", "brgy clearance", "barangay certification",

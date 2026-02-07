@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Upload } from "lucide-react";
+import Swal from "sweetalert2";
 
 const COLORS = {
   primary: '#4A90E2', // Blue for title
@@ -15,7 +16,6 @@ export default function ProfessionalRegistration() {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [errors, setErrors] = useState({});
 
   const professions = {
@@ -150,11 +150,36 @@ export default function ProfessionalRegistration() {
     }
   };
 
-  const handleFinalStep = (e) => {
+  const handleFinalStep = async (e) => {
     e.preventDefault();
     const ok = validateStep(currentStep);
     if (ok) {
-      setShowConfirm(true);
+      const result = await Swal.fire({
+        title: 'Confirm Registration',
+        html: `
+          <div style="font-family: ${COLORS.font}; text-align: left;">
+            <p class="mb-3">Are you sure you want to submit your professional registration?</p>
+            <div class="bg-gray-50 p-3 rounded text-sm">
+              <p><strong>Name:</strong> ${formData.first_name} ${formData.last_name}</p>
+              <p><strong>Profession:</strong> ${formData.profession}</p>
+              <p><strong>PRC License:</strong> ${formData.prc_license}</p>
+            </div>
+          </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Submit',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: COLORS.accent,
+        cancelButtonColor: '#9CA3AF',
+        customClass: {
+          popup: 'swal-wide'
+        }
+      });
+      
+      if (result.isConfirmed) {
+        handleSubmit(e);
+      }
     }
   };
 
@@ -174,7 +199,7 @@ export default function ProfessionalRegistration() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     
     // Validate all steps
@@ -184,22 +209,51 @@ export default function ProfessionalRegistration() {
     
     if (!(step1Ok && step2Ok && step3Ok)) {
       setIsSubmitting(false);
+      Swal.fire({
+        icon: 'error',
+        title: 'Validation Error',
+        text: 'Please complete all required fields in all steps.',
+        confirmButtonColor: COLORS.primary
+      });
       if (!step1Ok) setCurrentStep(1);
       else if (!step2Ok) setCurrentStep(2);
       else setCurrentStep(3);
       return;
     }
 
+    // Show loading
+    Swal.fire({
+      title: 'Submitting Registration...',
+      html: 'Please wait while we process your professional registration.',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
     // Simulate API call
     setTimeout(() => {
-      setSubmitStatus({ type: "success", message: "Registration submitted successfully!" });
       setIsSubmitting(false);
-      setShowConfirm(false);
       
-      // Redirect after success
-      setTimeout(() => {
+      Swal.fire({
+        icon: 'success',
+        title: 'Registration Submitted!',
+        html: `
+          <div style="font-family: ${COLORS.font};">
+            <p class="mb-2">Your professional registration has been submitted successfully.</p>
+            <p class="text-sm text-gray-600">You will receive a confirmation email shortly.</p>
+            <div class="mt-3 p-3 bg-green-50 rounded text-sm">
+              <p><strong>Registration ID:</strong> PR-${Date.now().toString().slice(-6)}</p>
+              <p><strong>Status:</strong> Pending Review</p>
+            </div>
+          </div>
+        `,
+        confirmButtonColor: COLORS.success,
+        confirmButtonText: 'Back to Dashboard'
+      }).then(() => {
         navigate('/user/dashboard');
-      }, 2000);
+      });
     }, 1500);
   };
 
@@ -536,31 +590,6 @@ export default function ProfessionalRegistration() {
         </div>
       </form>
 
-      {showConfirm && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-          <div className="p-8 rounded-lg shadow-lg w-full max-w-md" style={{ background: COLORS.background, fontFamily: COLORS.font }}>
-            <h2 className="text-xl font-bold mb-4" style={{ color: COLORS.primary }}>Confirm Registration</h2>
-            <p className="mb-6" style={{ color: COLORS.secondary }}>Are you sure you want to submit your professional registration?</p>
-            <div className="flex justify-end gap-4">
-              <button
-                className="px-6 py-2 rounded-lg font-semibold transition-colors"
-                style={{ background: '#9CA3AF', color: '#fff' }}
-                onClick={() => setShowConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-6 py-2 rounded-lg font-semibold transition-colors"
-                style={{ background: COLORS.accent, color: '#fff' }}
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Submitting...' : 'Confirm'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

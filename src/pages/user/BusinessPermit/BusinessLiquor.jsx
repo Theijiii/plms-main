@@ -2635,7 +2635,7 @@ export default function LiquorPermitApplication() {
                 Liquor Permit Application
               </h1>
               <p className="mt-1 text-lg font-semibold text-blue-700">
-                Quezon City Business Permit and Licensing Office
+                Caloocan City Business Permit and Licensing Office
               </p>
             </div>
           </div>

@@ -89,6 +89,7 @@ export default function BrgyPermitApplication() {
   const [sortOption, setSortOption] = useState('latest');
   const [searchQuery, setSearchQuery] = useState('');
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [actionHistory, setActionHistory] = useState({});
   const [zoomLevel, setZoomLevel] = useState(100);
   const imageRef = useRef(null);
   const isDraggingRef = useRef(false);
@@ -334,21 +335,25 @@ export default function BrgyPermitApplication() {
 
   const getUIStatus = (dbStatus) => {
     if (!dbStatus) return 'Compliance';
-    switch (dbStatus.toLowerCase()) {
-      case 'approved': return 'Approved';
-      case 'rejected': return 'Rejected';
-      case 'pending': return 'Compliance';
-      default: return 'Compliance';
-    }
+    const statusMap = {
+      'pending': 'Compliance',
+      'approved': 'Approved',
+      'rejected': 'Rejected',
+      'under_review': 'Under Review',
+      'document_verification': 'Document Verification',
+      'payment_verification': 'Payment Verification',
+      'for_manager_approval': 'For Manager Approval',
+      'ready_for_release': 'Ready for Release'
+    };
+    return statusMap[dbStatus.toLowerCase()] || dbStatus;
   };
 
   const getDBStatus = (uiStatus) => {
-    switch (uiStatus) {
-      case 'Approved': return 'approved';
-      case 'Rejected': return 'rejected';
-      case 'Compliance': return 'pending';
-      default: return 'pending';
-    }
+    if (!uiStatus) return 'pending';
+    // 'Compliance' maps to 'pending' for backward compat
+    if (uiStatus === 'Compliance') return 'pending';
+    // Convert UI status to snake_case DB value
+    return uiStatus.toLowerCase().replace(/\s+/g, '_');
   };
 
 const parseAttachments = (attachmentsData) => {
@@ -429,6 +434,11 @@ const parseAttachments = (attachmentsData) => {
       case "Approved": return "text-[#4CAF50] bg-[#4CAF50]/10";
       case "Rejected": return "text-[#E53935] bg-[#E53935]/10";
       case "Compliance": return "text-[#FDA811] bg-[#FDA811]/10";
+      case "Under Review": return "text-[#3B82F6] bg-[#3B82F6]/10";
+      case "Document Verification": return "text-[#8B5CF6] bg-[#8B5CF6]/10";
+      case "Payment Verification": return "text-[#F59E0B] bg-[#F59E0B]/10";
+      case "For Manager Approval": return "text-[#6366F1] bg-[#6366F1]/10";
+      case "Ready for Release": return "text-[#10B981] bg-[#10B981]/10";
       default: return "text-gray-600 bg-gray-100";
     }
   };
@@ -537,25 +547,35 @@ const parseAttachments = (attachmentsData) => {
         throw new Error(result.message || 'Failed to update permit status');
       }
 
-      // If there's a comment, update it immediately in the modal
-      if (comments.trim() && selectedPermit) {
-        const updatedComments = selectedPermit.comments 
-          ? selectedPermit.comments + commentWithTimestamp
-          : commentWithTimestamp;
+      // Record action in history
+      const historyEntry = {
+        action: status,
+        timestamp: new Date().toLocaleString('en-US', {
+          year: 'numeric', month: 'short', day: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+        }),
+        notes: comments || '',
+        by: 'Admin'
+      };
+      setActionHistory(prev => ({
+        ...prev,
+        [permitId]: [...(prev[permitId] || []), historyEntry]
+      }));
 
-        // Update the selected permit in state immediately
+      // Use actual DB response to update local state
+      const updatedDbStatus = result.data?.status || dbStatus;
+      const updatedUiStatus = getUIStatus(updatedDbStatus);
+      const updatedComments = result.data?.comments || 
+        (comments.trim() && selectedPermit
+          ? (selectedPermit.comments ? selectedPermit.comments + commentWithTimestamp : commentWithTimestamp)
+          : selectedPermit?.comments);
+
+      if (selectedPermit) {
         setSelectedPermit(prev => ({
           ...prev,
-          comments: updatedComments,
-          status: dbStatus,
-          uiStatus: status
-        }));
-      } else if (selectedPermit) {
-        // Just update the status if no comment
-        setSelectedPermit(prev => ({
-          ...prev,
-          status: dbStatus,
-          uiStatus: status
+          comments: updatedComments || prev.comments,
+          status: updatedDbStatus,
+          uiStatus: updatedUiStatus
         }));
       }
 
@@ -629,10 +649,11 @@ const parseAttachments = (attachmentsData) => {
         throw new Error(result.message || 'Failed to save comment');
       }
 
-      // Update the selected permit in state immediately
-      const updatedComments = selectedPermit.comments 
-        ? newCommentBlock + selectedPermit.comments  // NEW comments at TOP
-        : newCommentBlock;
+      // Use actual DB response to update local state
+      const updatedComments = result.data?.comments || 
+        (selectedPermit.comments 
+          ? newCommentBlock + selectedPermit.comments
+          : newCommentBlock);
 
       setSelectedPermit({
         ...selectedPermit,
@@ -839,6 +860,46 @@ const parseAttachments = (attachmentsData) => {
       const notes = result.value || actionComment;
       await updatePermitStatus(selectedPermit.permit_id, 'Compliance', notes);
       setActionComment('');
+    }
+  };
+
+  // Generic status update handler for processing steps
+  const handleStatusUpdate = async (status, title, message, color = '#4CAF50') => {
+    if (!selectedPermit) return;
+
+    const result = await Swal.fire({
+      title: title,
+      html: `
+        <div class="text-left">
+          <p class="mb-2">${message}</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Permit ID:</strong> BP-${String(selectedPermit.permit_id).padStart(4, '0')}</p>
+            <p class="text-sm"><strong>Applicant:</strong> ${selectedPermit.first_name} ${selectedPermit.last_name}</p>
+            <p class="text-sm"><strong>Purpose:</strong> ${selectedPermit.purpose || 'N/A'}</p>
+          </div>
+          <p class="text-sm text-gray-600">Add notes about this status update (optional).</p>
+        </div>
+      `,
+      icon: 'question',
+      input: 'textarea',
+      inputLabel: 'Status update notes',
+      inputPlaceholder: 'Enter any relevant notes...',
+      inputValue: actionComment,
+      showCancelButton: true,
+      confirmButtonText: 'Update Status',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: color,
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+      },
+      preConfirm: (notes) => {
+        return notes;
+      }
+    });
+
+    if (result.isConfirmed) {
+      await updatePermitStatus(selectedPermit.permit_id, status, result.value || '');
     }
   };
 
@@ -1190,87 +1251,46 @@ const viewFile = (file) => {
         </div>
       </div>
 
-      {/* Enhanced Transport-Themed Modal */}
+      {/* Modal with White Background and Blur */}
       {showModal && selectedPermit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 overflow-auto animate-fadeIn">
-          <div className="w-full max-w-7xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl transform transition-all">
-            {/* Redesigned Transport Permit Header */}
-            <div className="relative p-6 bg-gradient-to-r from-gray-50 via-white to-gray-50 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 border-b-4 border-green-400">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="bg-gradient-to-br from-green-400 to-green-500 p-3 rounded-2xl shadow-xl">
-                    <FileText className="w-10 h-10 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Barangay Permit</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Clearance Application Details</p>
-                  </div>
-                </div>
-                
-                <button 
-                  onClick={closeModal}
-                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              {/* Info Cards Row */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Permit ID Card */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500">
-                  <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Permit ID</p>
-                  <p className="text-lg font-bold text-gray-800 dark:text-white font-mono">
-                    BP-{String(selectedPermit.permit_id).padStart(4, '0')}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-sm p-4 overflow-auto">
+          <div className="w-full max-w-6xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5 rounded-t-xl">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Barangay Permit Details</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Permit ID: BP-{String(selectedPermit.permit_id).padStart(4, '0')}
                   </p>
-                </div>
-
-                {/* Date Card */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-purple-500">
-                  <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide">Date Applied</p>
-                  <p className="text-lg font-bold text-gray-800 dark:text-white">
-                    {selectedPermit.application_date ? new Date(selectedPermit.application_date).toLocaleDateString() : 'N/A'}
-                  </p>
-                </div>
-
-                {/* Status Card */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500">
-                  <p className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wide">Status</p>
-                  <span className={`inline-block px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedPermit.status)}`}>
+                  <span className={`mt-2 px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(selectedPermit.status)}`}>
                     {selectedPermit.uiStatus || getUIStatus(selectedPermit.status)}
                   </span>
                 </div>
-
-                {/* Purpose Card */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-orange-500">
-                  <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wide">Purpose</p>
-                  <p className="text-sm font-bold text-gray-800 dark:text-white truncate" title={selectedPermit.purpose || 'N/A'}>
-                    {selectedPermit.purpose || 'N/A'}
-                  </p>
-                </div>
+                <button 
+                  onClick={closeModal}
+                  className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors"
+                >
+                  <span className="text-xl">×</span>
+                </button>
               </div>
             </div>
 
-            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto bg-gradient-to-b from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
+            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
               {/* Personal Information Section */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-blue-100 dark:border-slate-700">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-2xl shadow-lg">
-                    <User className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Personal Information</h3>
-                </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-700 dark:to-slate-600 p-4 rounded-xl">
-                    <label className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Full Name</label>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white mt-2">
-                      {selectedPermit.first_name} {selectedPermit.middle_name} {selectedPermit.last_name} {selectedPermit.suffix}
-                    </p>
-                  </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Applicant ID</label>
                     <p className="text-lg font-mono font-bold text-[#4CAF50] mt-1">
                       {selectedPermit.applicant_id || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Full Name</label>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
+                      {selectedPermit.first_name} {selectedPermit.middle_name} {selectedPermit.last_name} {selectedPermit.suffix}
                     </p>
                   </div>
                   <div>
@@ -1313,16 +1333,8 @@ const viewFile = (file) => {
               </div>
 
               {/* Address Information */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-green-100 dark:border-slate-700">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-3 rounded-2xl shadow-lg">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Address Information</h3>
-                </div>
+              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Address Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">House No.</label>
@@ -1364,13 +1376,8 @@ const viewFile = (file) => {
               </div>
 
               {/* Permit Details */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-orange-100 dark:border-slate-700">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-2xl shadow-lg">
-                    <FileText className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Permit Details</h3>
-                </div>
+              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Permit Details</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Purpose</label>
@@ -1406,66 +1413,50 @@ const viewFile = (file) => {
               </div>
 
               {/* Payment Information */}
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-700 rounded-2xl shadow-lg p-6 border-2 border-green-200 dark:border-slate-600">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-3 rounded-2xl shadow-lg">
-                    <Receipt className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Payment Information</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500 relative">
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Clearance Fee</label>
-                    <p className="text-3xl font-black text-green-600 mt-2">
+              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Payment Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Clearance Fee</label>
+                    <p className="text-xl font-bold text-[#4CAF50] mt-1">
                       ₱{selectedPermit.clearance_fee || '0.00'}
                     </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">PAID</span>
-                    </div>
                   </div>
-                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500">
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Receipt Number</label>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white mt-2">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Receipt Number</label>
+                    <p className="text-gray-900 dark:text-white mt-1">
                       {selectedPermit.receipt_number || 'N/A'}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Submitted Attachments - UPDATED TO SHOW ALL FILES */}
-              {parseAttachments(selectedPermit.attachments).length > 0 ? (
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-indigo-100 dark:border-slate-700">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-3 rounded-2xl shadow-lg">
-                      <FileText className="w-6 h-6 text-white" />
-                    </div>
-                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
-                    <span className="ml-auto bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold">
-                      {parseAttachments(selectedPermit.attachments).length} files
-                    </span>
-                  </div>
+              {/* Submitted Attachments */}
+              {parseAttachments(selectedPermit.attachments).length > 0 && (
+                <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Submitted Files</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {parseAttachments(selectedPermit.attachments).map((file) => (
                       <div key={file.id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-slate-600 rounded-lg">
                         <div className="flex items-center gap-2">
                           {file.type.includes('image') ? (
                             <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                              <ImageIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                              <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
                             </div>
                           ) : (
                             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
                             </div>
                           )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
-                              {file.name}
-                            </p>
-                          </div>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{file.name}</span>
                         </div>
                         <button 
                           onClick={() => viewFile(file)}
-                          className="px-3 py-1 text-xs bg-[#4CAF50] text-white rounded hover:bg-[#FDA811] transition-colors whitespace-nowrap"
+                          className="px-3 py-1 text-xs bg-[#4CAF50] text-white rounded hover:bg-[#FDA811] transition-colors"
                         >
                           View
                         </button>
@@ -1473,38 +1464,18 @@ const viewFile = (file) => {
                     ))}
                   </div>
                 </div>
-              ) : (
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-gray-200 dark:border-slate-700">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-gradient-to-br from-gray-400 to-gray-500 p-3 rounded-2xl shadow-lg">
-                      <FileText className="w-6 h-6 text-white" />
-                    </div>
-                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
-                  </div>
-                  <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-xl">
-                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                      No files uploaded for this application.
-                    </p>
-                  </div>
-                </div>
               )}
 
               {/* Review Comments Section */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-yellow-100 dark:border-slate-700">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 p-3 rounded-2xl shadow-lg">
-                    <User className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Review Comments</h3>
-                    {selectedPermit.comments && (
-                      <span className="text-sm font-normal text-gray-500">
-                        ({formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''})
-                      </span>
-                    )}
-                  </div>
-                </div>
+              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Review Comments
+                  {selectedPermit.comments && (
+                    <span className="text-sm font-normal text-gray-500 ml-2">
+                      ({formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''})
+                    </span>
+                  )}
+                </h3>
                 
                 {/* Display all comments in one box */}
                 <div className="space-y-4 mb-6">
@@ -1515,11 +1486,15 @@ const viewFile = (file) => {
                           <div key={index} className={`mb-4 ${index !== 0 ? 'pt-4 border-t border-gray-200 dark:border-slate-600' : ''}`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                                <User className="w-4 h-4 mr-2" />
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
                                 Admin Comment
                               </div>
                               <div className="flex items-center text-xs text-gray-400">
-                                <Clock className="w-3 h-3 mr-1" />
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
                                 {comment.timestamp}
                               </div>
                             </div>
@@ -1538,9 +1513,11 @@ const viewFile = (file) => {
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-xl">
-                      <FileText className="w-16 h-16 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
+                      <svg className="w-12 h-12 text-gray-300 dark:text-gray-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      </svg>
+                      <p className="text-gray-500 dark:text-gray-400">
                         No comments yet. Add your first comment below.
                       </p>
                     </div>
@@ -1567,7 +1544,9 @@ const viewFile = (file) => {
                         onClick={saveCommentOnly}
                         className="px-6 py-2 bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors font-medium flex items-center shadow-sm hover:shadow"
                       >
-                        <CheckCircle className="w-5 h-5 mr-2" />
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
                         Save Comment
                       </button>
                     </div>
@@ -1575,10 +1554,58 @@ const viewFile = (file) => {
                 </div>
               </div>
 
+              {/* Action History Section */}
+              {(() => {
+                const history = actionHistory[selectedPermit.permit_id] || [];
+                return history.length > 0 ? (
+                  <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Action History</h3>
+                        <p className="text-sm text-gray-500">{history.length} action{history.length !== 1 ? 's' : ''} taken this session</p>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <div className="absolute left-[17px] top-0 bottom-0 w-0.5 bg-blue-200 dark:bg-slate-600"></div>
+                      <div className="space-y-4 max-h-64 overflow-y-auto">
+                        {[...history].reverse().map((entry, idx) => (
+                          <div key={idx} className="relative pl-10">
+                            <div className={`absolute left-[10px] top-1.5 w-4 h-4 rounded-full border-2 border-white dark:border-slate-800 shadow ${
+                              entry.action === 'Approved' ? 'bg-green-500' :
+                              entry.action === 'Rejected' ? 'bg-red-500' :
+                              entry.action === 'Compliance' ? 'bg-yellow-500' :
+                              'bg-blue-500'
+                            }`}></div>
+                            <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border border-gray-200 dark:border-slate-600">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`text-sm font-semibold px-2 py-0.5 rounded-full ${
+                                  entry.action === 'Approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                  entry.action === 'Rejected' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                  entry.action === 'Compliance' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                  'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                }`}>{entry.action}</span>
+                                <span className="text-xs text-gray-400 dark:text-gray-500">{entry.timestamp}</span>
+                              </div>
+                              {entry.notes && (
+                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 pl-1">{entry.notes}</p>
+                              )}
+                              <p className="text-xs text-gray-400 mt-1 pl-1">by {entry.by}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
               {/* Action Buttons */}
               <div className="flex gap-4 justify-between pt-8 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl p-6 border-t-4 border-gray-300 dark:border-slate-600">
-                {/* Actions Dropdown - Show for pending/compliance status */}
-                {(selectedPermit.status === "pending" || !selectedPermit.status) && (
+                {/* Actions Dropdown - Show for all statuses except rejected */}
+                {selectedPermit.status !== "rejected" && (
                   <div className="relative">
                     <button
                       onClick={() => setShowActionsDropdown(!showActionsDropdown)}
@@ -1593,7 +1620,67 @@ const viewFile = (file) => {
                     {/* Dropdown Menu */}
                     {showActionsDropdown && (
                       <div className="absolute left-0 bottom-full mb-2 w-72 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden z-50 max-h-96 overflow-y-auto">
-                        {/* Actions Header */}
+                        {/* Processing Status Updates */}
+                        <div className="px-3 py-2 bg-gray-100 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
+                          <p className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">Processing Steps</p>
+                        </div>
+                        
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Under Review', 'Mark as Under Review', 'Application is now being reviewed by the team.', '#3B82F6');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <Search className="w-5 h-5 text-blue-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Under Review</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Document Verification', 'Document Verification', 'Documents are being verified for completeness and authenticity.', '#8B5CF6');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-purple-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <FileText className="w-5 h-5 text-purple-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Document Verification</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Payment Verification', 'Verify Payment', 'Payment is being verified.', '#F59E0B');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-amber-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <Receipt className="w-5 h-5 text-amber-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Payment Verification</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('For Manager Approval', 'Send for Manager Approval', 'Application is being sent to manager for approval.', '#6366F1');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <User className="w-5 h-5 text-indigo-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">For Manager Approval</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleStatusUpdate('Ready for Release', 'Mark Ready for Release', 'Permit is ready for release to applicant.', '#10B981');
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-emerald-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <CheckCircle className="w-5 h-5 text-emerald-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Ready for Release</span>
+                        </button>
+
+                        {/* Main Actions */}
                         <div className="px-3 py-2 bg-gray-100 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
                           <p className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">Actions</p>
                         </div>
@@ -1649,7 +1736,7 @@ const viewFile = (file) => {
         </div>
       )}
 
-      {/* File Preview Modal */}
+      {/* File Preview Modal - UPDATED VERSION */}
       {showFilePreview && selectedFile && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-0">
           <div className="relative w-full h-full flex flex-col">
@@ -1657,11 +1744,9 @@ const viewFile = (file) => {
             <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
               <div className="flex items-center gap-3 text-white">
                 <div className="flex items-center gap-2">
-                  {isImageFile(selectedFile.file_type, selectedFile.name) ? (
-                    <ImageIcon className="w-5 h-5" />
-                  ) : (
-                    <FileText className="w-5 h-5" />
-                  )}
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
                   <span className="text-sm font-medium truncate max-w-xs">
                     {selectedFile.name}
                   </span>
@@ -1669,6 +1754,41 @@ const viewFile = (file) => {
                     {getFileTypeName(selectedFile.file_type, selectedFile.name)}
                   </span>
                 </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {/* Zoom Controls */}
+                {isImageFile(selectedFile.file_type, selectedFile.name) && (
+                  <div className="flex items-center gap-1 mr-4 bg-black/40 rounded-lg p-1">
+                    <button 
+                      onClick={handleZoomOut}
+                      className="p-2 text-white hover:bg-white/10 rounded transition-colors"
+                      title="Zoom Out"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+                      </svg>
+                    </button>
+                    
+                    <button 
+                      onClick={handleResetZoom}
+                      className="px-3 py-2 text-xs text-white hover:bg-white/10 rounded transition-colors"
+                      title="Reset Zoom"
+                    >
+                      {zoomLevel}%
+                    </button>
+                    
+                    <button 
+                      onClick={handleZoomIn}
+                      className="p-2 text-white hover:bg-white/10 rounded transition-colors"
+                      title="Zoom In"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
                 
                 <a 
                   href={selectedFile.url}
@@ -1677,7 +1797,9 @@ const viewFile = (file) => {
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors"
                   download
                 >
-                  <Download className="w-4 h-4 mr-2" />
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
                   Download
                 </a>
                 <button 
@@ -1685,7 +1807,9 @@ const viewFile = (file) => {
                   className="ml-2 p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
                   title="Close preview"
                 >
-                  <X className="w-6 h-6" />
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
             </div>
@@ -1698,20 +1822,20 @@ const viewFile = (file) => {
                 onMouseDown={handleMouseDown}
               >
                 <div className="relative w-full h-full flex items-center justify-center">
-                  <img 
-                    ref={imageRef}
-                    id="preview-image"
-                    src={selectedFile.url} 
-                    alt={selectedFile.name}
-                    className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl transition-transform duration-200 ease-out"
-                    style={{ transform: 'scale(1)', position: 'relative', left: '0px', top: '0px', cursor: 'default' }}
-                    onError={(e) => {
-                      console.error('Failed to load image:', selectedFile.url);
-                      e.target.onerror = null;
-                      e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image not found</text><text x="200" y="170" text-anchor="middle" font-family="Arial" font-size="12" fill="%23999999">URL: ' + selectedFile.url + '</text></svg>';
-                      e.target.className = 'max-w-md mx-auto bg-gray-800 rounded-lg p-8';
-                    }}
-                  />
+<img 
+  ref={imageRef}
+  id="preview-image"
+  src={selectedFile.url} 
+  alt={selectedFile.name}
+  className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl transition-transform duration-200 ease-out"
+  style={{ transform: 'scale(1)', position: 'relative', left: '0px', top: '0px', cursor: 'default' }}
+  onError={(e) => {
+    console.error('Failed to load image:', selectedFile.url);
+    e.target.onerror = null;
+    e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image not found</text><text x="200" y="170" text-anchor="middle" font-family="Arial" font-size="12" fill="%23999999">URL: ' + selectedFile.url + '</text></svg>';
+    e.target.className = 'max-w-md mx-auto bg-gray-800 rounded-lg p-8';
+  }}
+/>
                 </div>
               </div>
             ) : (
@@ -1723,7 +1847,9 @@ const viewFile = (file) => {
                     ) : selectedFile.file_type?.includes('image/') ? (
                       <ImageIcon className="w-24 h-24 mx-auto" />
                     ) : (
-                      <FileText className="w-24 h-24 mx-auto" />
+                      <svg className="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
                     )}
                   </div>
                   <h3 className="text-xl font-medium text-white mb-3">
@@ -1740,7 +1866,9 @@ const viewFile = (file) => {
                       className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                       download
                     >
-                      <Download className="w-5 h-5 mr-2" />
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
                       Download
                     </a>
                     <button 

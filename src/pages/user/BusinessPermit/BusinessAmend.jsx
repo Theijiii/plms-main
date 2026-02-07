@@ -47,7 +47,7 @@ export default function BusPermitType() {
   const generalRequirements = [
     {
       title: "Previous Mayor's Permit (Original)",
-      description: "The current/active business permit issued by Quezon City",
+      description: "The current/active business permit issued by Caloocan City",
       name: "previous_permit_file",
       required: true
     },
@@ -1124,7 +1124,7 @@ const handleSubmit = async () => {
                     <li>I am the registered owner/authorized representative of the business described in this amendment application;</li>
                     <li>The proposed amendment is necessary and justified as described in the application;</li>
                     <li>I have attached all required supporting documents for this amendment;</li>
-                    <li>I shall continue to abide by all business regulations, rules, and ordinances of Quezon City;</li>
+                    <li>I shall continue to abide by all business regulations, rules, and ordinances of Caloocan City;</li>
                     <li>I understand that any false statement or misrepresentation shall be grounds for:</li>
                     <ul className="list-disc ml-8 mt-2 space-y-1">
                       <li>Immediate cancellation of the amendment application</li>

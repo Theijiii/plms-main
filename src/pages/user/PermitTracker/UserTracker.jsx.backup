@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, Eye, Download, Calendar, FileText, X, CheckCircle, Clock, Upload, 
-  Check, Loader2, Building, Home, Briefcase, Building2, RefreshCw
+  Check, Loader2, Filter, Building, Home, Briefcase, Building2, AlertCircle,
+  FileCheck, TrendingUp, XCircle, RefreshCw, ChevronDown, ChevronUp, MapPin,
+  User, Phone, Mail, DollarSign, Info
 } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import Swal from "sweetalert2";
@@ -12,19 +14,18 @@ export default function PermitTracker() {
   const [search, setSearch] = useState("");
   const [selectedPermit, setSelectedPermit] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [uploadFiles, setUploadFiles] = useState({});
-  const [showDownloadSuccess, setShowDownloadSuccess] = useState(false);
-  const [showUploadSuccess, setShowUploadSuccess] = useState(false);
-  const [downloadedPermitId, setDownloadedPermitId] = useState("");
-  const [uploadedPermitId, setUploadedPermitId] = useState("");
   const [isConfirmBackOpen, setIsConfirmBackOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
   const [uploading, setUploading] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchApplications();
@@ -70,371 +71,73 @@ export default function PermitTracker() {
     }
   };
 
-  // Statistics
-  const statistics = {
-    total: tracking.length,
-    approved: tracking.filter(t => t.status === 'Approved').length,
-    pending: tracking.filter(t => t.status === 'Pending').length,
-    forCompliance: tracking.filter(t => t.status === 'For Compliance').length,
-    rejected: tracking.filter(t => t.status === 'Rejected').length,
-  };
-
-  // Permit type icons
-  const getPermitIcon = (permitType) => {
-    const type = permitType?.toLowerCase() || '';
-    if (type.includes('business')) return <Building className="w-5 h-5" />;
-    if (type.includes('barangay')) return <Home className="w-5 h-5" />;
-    if (type.includes('franchise')) return <Briefcase className="w-5 h-5" />;
-    if (type.includes('building')) return <Building2 className="w-5 h-5" />;
-    return <FileText className="w-5 h-5" />;
-  };
-
-  // Filtered tracking with type and status filters
-  const filteredTracking = tracking.filter((t) => {
-    const searchMatch = `${t.permitType} ${t.status} ${t.application_type} ${t.applicantName} ${t.businessName} ${t.id}`
+  const filteredTracking = tracking.filter((t) =>
+    `${t.permitType} ${t.status} ${t.application_type} ${t.applicantName} ${t.businessName} ${t.id}`
       .toLowerCase()
-      .includes(search.toLowerCase());
-    
-    const typeMatch = filterType === 'all' || t.permitType?.toLowerCase().includes(filterType.toLowerCase());
-    const statusMatch = filterStatus === 'all' || t.status === filterStatus;
-    
-    return searchMatch && typeMatch && statusMatch;
-  });
+      .includes(search.toLowerCase())
+  );
 
   const viewDetails = (permit) => {
     setSelectedPermit(permit);
     setShowModal(true);
   };
 
-  const downloadPermit = async (permit) => {
+  const downloadPermit = (permit) => {
     if (permit.status !== "Approved") {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Cannot Download',
-        text: 'Permit can only be downloaded when approved and claimed.',
-        confirmButtonColor: '#4A90E2'
-      });
+      alert("Permit can only be downloaded when approved.");
       return;
     }
 
-    try {
-      // Generate realistic HTML permit document
-      const permitHTML = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Official Permit - ${permit.id}</title>
-  <style>
-    @page { margin: 0; }
-    body {
-      font-family: 'Times New Roman', serif;
-      margin: 0;
-      padding: 40px;
-      background: white;
-    }
-    .permit-container {
-      max-width: 800px;
-      margin: 0 auto;
-      border: 3px double #000;
-      padding: 30px;
-      position: relative;
-    }
-    .header {
-      text-align: center;
-      border-bottom: 2px solid #000;
-      padding-bottom: 20px;
-      margin-bottom: 30px;
-    }
-    .seal {
-      width: 100px;
-      height: 100px;
-      border: 3px solid #000;
-      border-radius: 50%;
-      margin: 0 auto 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 12px;
-    }
-    .title {
-      font-size: 28px;
-      font-weight: bold;
-      margin: 10px 0;
-      text-transform: uppercase;
-    }
-    .subtitle {
-      font-size: 16px;
-      color: #333;
-    }
-    .permit-number {
-      text-align: center;
-      font-size: 20px;
-      font-weight: bold;
-      margin: 20px 0;
-      color: #c00;
-    }
-    .section {
-      margin: 20px 0;
-    }
-    .section-title {
-      font-weight: bold;
-      font-size: 14px;
-      border-bottom: 1px solid #000;
-      padding-bottom: 5px;
-      margin-bottom: 10px;
-      text-transform: uppercase;
-    }
-    .info-row {
-      display: flex;
-      margin: 8px 0;
-      font-size: 13px;
-    }
-    .info-label {
-      font-weight: bold;
-      width: 200px;
-      flex-shrink: 0;
-    }
-    .info-value {
-      flex: 1;
-    }
-    .footer {
-      margin-top: 40px;
-      border-top: 2px solid #000;
-      padding-top: 20px;
-      display: flex;
-      justify-content: space-between;
-    }
-    .signature-box {
-      text-align: center;
-      width: 200px;
-    }
-    .signature-line {
-      border-top: 1px solid #000;
-      margin-top: 60px;
-      padding-top: 5px;
-      font-size: 11px;
-    }
-    .watermark {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-45deg);
-      font-size: 80px;
-      color: rgba(0, 128, 0, 0.1);
-      font-weight: bold;
-      z-index: -1;
-      pointer-events: none;
-    }
-    .notice {
-      margin-top: 20px;
-      padding: 15px;
-      background: #f9f9f9;
-      border-left: 4px solid #000;
-      font-size: 11px;
-    }
-  </style>
-</head>
-<body>
-  <div class="permit-container">
-    <div class="watermark">OFFICIAL</div>
-    
-    <div class="header">
-      <div class="seal">CALOOCAN CITY<br/>SEAL</div>
-      <div class="title">Republic of the Philippines</div>
-      <div class="subtitle">City of Caloocan</div>
-      <div class="subtitle" style="margin-top: 10px; font-size: 18px; font-weight: bold;">OFFICE OF THE MAYOR</div>
-    </div>
+    const permitContent = `
+      OFFICIAL PERMIT DOCUMENT
+      ========================
+      
+      Permit ID: ${permit.id}
+      Permit Type: ${permit.permitType}
+      Application Type: ${permit.application_type}
+      Status: ${permit.status}
+      
+      Applicant: ${permit.applicantName}
+      Business: ${permit.businessName}
+      Address: ${permit.address}
+      
+      Submitted: ${permit.submittedDate}
+      Approved: ${permit.approvedDate}
+      Expires: ${permit.expirationDate}
+      
+      Fees Paid: ${permit.fees}
+      
+      This document serves as official proof of permit approval.
+      
+      Generated on: ${new Date().toLocaleDateString()}
+    `;
 
-    <div class="permit-number">PERMIT NO. ${permit.id}</div>
+    const blob = new Blob([permitContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `permit-${permit.id}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 
-    <div style="text-align: center; font-size: 18px; font-weight: bold; margin: 20px 0;">
-      ${permit.permitType?.toUpperCase() || 'PERMIT'}
-    </div>
-
-    <div class="section">
-      <div class="section-title">Permit Details</div>
-      <div class="info-row">
-        <div class="info-label">Application Type:</div>
-        <div class="info-value">${permit.application_type || 'N/A'}</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Date Issued:</div>
-        <div class="info-value">${formatDate(permit.approvedDate)}</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Valid Until:</div>
-        <div class="info-value">${formatDate(permit.expirationDate)}</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Status:</div>
-        <div class="info-value" style="color: green; font-weight: bold;">${permit.status}</div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Permitee Information</div>
-      <div class="info-row">
-        <div class="info-label">Name:</div>
-        <div class="info-value">${permit.applicantName || 'N/A'}</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Business/Establishment:</div>
-        <div class="info-value">${permit.businessName || 'N/A'}</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Address:</div>
-        <div class="info-value">${permit.address || 'N/A'}</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Contact Number:</div>
-        <div class="info-value">${permit.contactNumber || 'N/A'}</div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Financial Details</div>
-      <div class="info-row">
-        <div class="info-label">Fees Paid:</div>
-        <div class="info-value">${permit.fees || 'PHP 0.00'}</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Receipt Number:</div>
-        <div class="info-value">${permit.receiptNumber || 'N/A'}</div>
-      </div>
-    </div>
-
-    <div class="footer">
-      <div class="signature-box">
-        <div class="signature-line">Approved By</div>
-      </div>
-      <div class="signature-box">
-        <div class="signature-line">City Mayor</div>
-      </div>
-    </div>
-
-    <div class="notice">
-      <strong>IMPORTANT NOTICE:</strong><br/>
-      This permit is not transferable and must be displayed in a conspicuous place. 
-      Any violation of the terms and conditions may result in revocation of this permit.
-      For verification, please visit our office or check online at e-plms.caloocan.gov.ph
-      <br/><br/>
-      <strong>Document Generated:</strong> ${new Date().toLocaleString()}<br/>
-      <strong>Document ID:</strong> ${permit.id}-${Date.now()}
-    </div>
-  </div>
-</body>
-</html>
-      `;
-
-      // Create blob and download
-      const blob = new Blob([permitHTML], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Official-Permit-${permit.id}-${permit.permitType?.replace(/\s+/g, '-')}.html`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      // Show success notification
-      Swal.fire({
-        icon: 'success',
-        title: 'Download Complete!',
-        html: `
-          <p>Your official permit <strong>${permit.id}</strong> has been downloaded.</p>
-          <p class="text-sm text-gray-600 mt-2">Open the HTML file in your browser to view and print your permit.</p>
-        `,
-        confirmButtonColor: '#4CAF50'
-      });
-    } catch (error) {
-      console.error('Download error:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Download Failed',
-        text: error.message || 'Unable to download permit. Please try again.',
-        confirmButtonColor: '#E53935'
-      });
-    }
+    // Show success modal
+    setDownloadedPermitId(permit.id);
+    setShowDownloadSuccess(true);
   };
 
-  const handleFileUpload = async (permit, event) => {
+  const handleFileUpload = (permitId, event) => {
     const files = event.target.files;
-    if (files.length === 0) return;
-
-    const result = await Swal.fire({
-      title: 'Upload Compliance Documents',
-      html: `
-        <div class="text-left">
-          <p class="mb-2">You are uploading <strong>${files.length}</strong> file(s) for:</p>
-          <p class="text-sm bg-gray-100 p-2 rounded mb-2"><strong>Permit ID:</strong> ${permit.id}</p>
-          <p class="text-sm bg-gray-100 p-2 rounded mb-3"><strong>Type:</strong> ${permit.permitType}</p>
-          <div class="text-xs text-gray-600">
-            <p><strong>Files to upload:</strong></p>
-            <ul class="list-disc pl-4 mt-1">
-              ${Array.from(files).map(f => `<li>${f.name} (${(f.size / 1024).toFixed(1)} KB)</li>`).join('')}
-            </ul>
-          </div>
-        </div>
-      `,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Upload Files',
-      cancelButtonText: 'Cancel',
-      confirmButtonColor: '#4CAF50',
-      cancelButtonColor: '#9CA3AF'
-    });
-
-    if (!result.isConfirmed) return;
-
-    try {
-      setUploading(true);
-      const formData = new FormData();
-      formData.append('permit_id', permit.id);
-      formData.append('permit_type', permit.permitType);
-      formData.append('user_id', localStorage.getItem('user_id') || '');
+    if (files.length > 0) {
+      setUploadFiles(prev => ({
+        ...prev,
+        [permitId]: Array.from(files)
+      }));
       
-      Array.from(files).forEach((file, index) => {
-        formData.append(`compliance_file_${index}`, file);
-      });
-
-      const response = await fetch('/backend/api/upload_compliance.php', {
-        method: 'POST',
-        body: formData
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Upload Successful!',
-          html: `
-            <p>Your compliance documents have been uploaded successfully.</p>
-            <p class="text-sm text-gray-600 mt-2">Permit ID: <strong>${permit.id}</strong></p>
-            <p class="text-sm text-gray-600">The admin team will review your documents shortly.</p>
-          `,
-          confirmButtonColor: '#4CAF50'
-        });
-        
-        // Refresh applications
-        fetchApplications();
-      } else {
-        throw new Error(data.message || 'Upload failed');
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Upload Failed',
-        text: error.message || 'Failed to upload compliance documents. Please try again.',
-        confirmButtonColor: '#E53935'
-      });
-    } finally {
-      setUploading(false);
-      if (event.target) event.target.value = '';
+      // Show upload success modal
+      setUploadedPermitId(permitId);
+      setShowUploadSuccess(true);
     }
   };
 
@@ -586,9 +289,8 @@ export default function PermitTracker() {
                             <input
                               type="file"
                               multiple
-                              onChange={(e) => handleFileUpload(t, e)}
+                              onChange={(e) => handleFileUpload(t.id, e)}
                               className="hidden"
-                              disabled={uploading}
                             />
                           </label>
                         )}
@@ -705,9 +407,8 @@ export default function PermitTracker() {
                       <input
                         type="file"
                         multiple
-                        onChange={(e) => handleFileUpload(selectedPermit, e)}
+                        onChange={(e) => handleFileUpload(selectedPermit.id, e)}
                         className="hidden"
-                        disabled={uploading}
                       />
                     </label>
                   </div>

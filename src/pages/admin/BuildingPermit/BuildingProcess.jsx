@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 export default function BuildingProcess() {
-  const API_BASE = "backend/api"; // PHP backend folder
+  const API_BASE = "/backend/api"; // PHP backend folder
 
   const [applications, setApplications] = useState([]);
   const [selectedApp, setSelectedApp] = useState(null);

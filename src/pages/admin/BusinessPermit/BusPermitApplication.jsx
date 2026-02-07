@@ -1,9 +1,10 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Swal from "sweetalert2";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import { logTx } from '../../../lib/txLogger';
 import {
   Search,
-  Download,
   RefreshCw,
   FileText,
   Image as ImageIcon,
@@ -17,7 +18,7 @@ import {
   Building2
 } from "lucide-react";
 
-const API_BUSINESS = "/backend/business_permit/";
+const API_BUSINESS = "/backend/business_permit";
 
 export default function BusPermitApplication() {
   const [selectedPermit, setSelectedPermit] = useState(null);
@@ -26,11 +27,7 @@ export default function BusPermitApplication() {
   const [actionComment, setActionComment] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [showFilePreview, setShowFilePreview] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
   const [sortOption, setSortOption] = useState('latest');
   const [searchQuery, setSearchQuery] = useState('');
   const [counts, setCounts] = useState({
@@ -40,11 +37,53 @@ export default function BusPermitApplication() {
     rejected: 0
   });
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(100);
-  const imageRef = useRef(null);
-  const isDraggingRef = useRef(false);
-  const dragStartRef = useRef({ x: 0, y: 0 });
-  const imagePositionRef = useRef({ x: 0, y: 0 });
+  const [actionHistory, setActionHistory] = useState({});
+  const [exporting, setExporting] = useState(false);
+  const [exportType, setExportType] = useState('');
+
+  // Dashboard stats computed from permits
+  const dashboardStats = useMemo(() => {
+    const total = permits.length;
+    const approved = permits.filter(p => p.status === 'APPROVED').length;
+    const pending = permits.filter(p => p.status === 'PENDING' || !p.status).length;
+    const rejected = permits.filter(p => p.status === 'REJECTED').length;
+    const compliance = permits.filter(p => p.status === 'COMPLIANCE').length;
+    const approvalRate = total > 0 ? ((approved / total) * 100).toFixed(1) : '0.0';
+
+    // Top barangay
+    const barangayCounts = {};
+    permits.forEach(p => {
+      const brgy = p.barangay || 'Unknown';
+      barangayCounts[brgy] = (barangayCounts[brgy] || 0) + 1;
+    });
+    const topBarangay = Object.entries(barangayCounts).sort((a, b) => b[1] - a[1])[0] || ['N/A', 0];
+
+    // Top business nature
+    const natureCounts = {};
+    permits.forEach(p => {
+      const nature = p.business_nature || 'Unknown';
+      natureCounts[nature] = (natureCounts[nature] || 0) + 1;
+    });
+    const topNature = Object.entries(natureCounts).sort((a, b) => b[1] - a[1])[0] || ['N/A', 0];
+
+    return {
+      total, approved, pending, rejected, compliance, approvalRate,
+      topBarangay: { name: topBarangay[0], count: topBarangay[1] },
+      topNature: { name: topNature[0], count: topNature[1] }
+    };
+  }, [permits]);
+
+  // Format date helper
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
 
   // Sort function for business permits
   const sortPermits = (permitsToSort, sortBy) => {
@@ -142,86 +181,6 @@ export default function BusPermitApplication() {
     return filtered;
   };
 
-  // Zoom and pan handlers for image preview
-  const handleWheel = useCallback((e) => {
-    if (!imageRef.current || !isImageFile(selectedFile?.file_type, selectedFile?.name)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.deltaY !== 0) {
-      const currentTransform = imageRef.current.style.transform || 'scale(1)';
-      const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      const newScale = Math.max(0.5, Math.min(currentScale + delta, 5));
-      imageRef.current.style.transform = `scale(${newScale})`;
-      imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
-      setZoomLevel(Math.round(newScale * 100));
-    }
-  }, [selectedFile]);
-
-  const handleMouseDown = useCallback((e) => {
-    if (!imageRef.current || !isImageFile(selectedFile?.file_type, selectedFile?.name)) return;
-    const currentTransform = imageRef.current.style.transform || 'scale(1)';
-    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
-    if (currentScale > 1) {
-      e.preventDefault();
-      isDraggingRef.current = true;
-      dragStartRef.current = { x: e.clientX, y: e.clientY };
-      imageRef.current.style.cursor = 'grabbing';
-      const handleMouseMove = (moveEvent) => {
-        if (!isDraggingRef.current || !imageRef.current) return;
-        const deltaX = moveEvent.clientX - dragStartRef.current.x;
-        const deltaY = moveEvent.clientY - dragStartRef.current.y;
-        const newX = imagePositionRef.current.x + deltaX;
-        const newY = imagePositionRef.current.y + deltaY;
-        imageRef.current.style.left = `${newX}px`;
-        imageRef.current.style.top = `${newY}px`;
-      };
-      const handleMouseUp = () => {
-        if (!imageRef.current) return;
-        isDraggingRef.current = false;
-        imageRef.current.style.cursor = 'grab';
-        if (imageRef.current.style.left && imageRef.current.style.top) {
-          imagePositionRef.current.x = parseFloat(imageRef.current.style.left);
-          imagePositionRef.current.y = parseFloat(imageRef.current.style.top);
-        }
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
-  }, [selectedFile]);
-
-  const handleZoomIn = useCallback(() => {
-    if (!imageRef.current) return;
-    const currentTransform = imageRef.current.style.transform || 'scale(1)';
-    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
-    const newScale = Math.min(currentScale + 0.25, 5);
-    imageRef.current.style.transform = `scale(${newScale})`;
-    imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
-    setZoomLevel(Math.round(newScale * 100));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    if (!imageRef.current) return;
-    const currentTransform = imageRef.current.style.transform || 'scale(1)';
-    const currentScale = parseFloat(currentTransform.match(/scale\(([^)]+)\)/)?.[1] || 1);
-    const newScale = Math.max(currentScale - 0.25, 0.5);
-    imageRef.current.style.transform = `scale(${newScale})`;
-    imageRef.current.style.cursor = newScale > 1 ? 'grab' : 'default';
-    setZoomLevel(Math.round(newScale * 100));
-  }, []);
-
-  const handleResetZoom = useCallback(() => {
-    if (!imageRef.current) return;
-    imageRef.current.style.transform = 'scale(1)';
-    imageRef.current.style.left = '0px';
-    imageRef.current.style.top = '0px';
-    imageRef.current.style.cursor = 'default';
-    setZoomLevel(100);
-    imagePositionRef.current = { x: 0, y: 0 };
-  }, []);
-
   // Helper function for sort labels
   const getSortLabel = (option) => {
     switch (option) {
@@ -237,23 +196,24 @@ export default function BusPermitApplication() {
 
   const getUIStatus = (dbStatus) => {
     if (!dbStatus) return 'Pending';
-    switch (dbStatus.toUpperCase()) {
-      case 'APPROVED': return 'Approved';
-      case 'REJECTED': return 'Rejected';
-      case 'COMPLIANCE': return 'Compliance';
-      case 'PENDING': return 'Pending';
-      default: return 'Pending';
-    }
+    const statusMap = {
+      'PENDING': 'Pending',
+      'APPROVED': 'Approved',
+      'REJECTED': 'Rejected',
+      'COMPLIANCE': 'Compliance',
+      'UNDER_REVIEW': 'Under Review',
+      'DOCUMENT_VERIFICATION': 'Document Verification',
+      'PAYMENT_VERIFICATION': 'Payment Verification',
+      'FOR_MANAGER_APPROVAL': 'For Manager Approval',
+      'READY_FOR_RELEASE': 'Ready for Release'
+    };
+    return statusMap[dbStatus.toUpperCase()] || dbStatus;
   };
 
   const getDBStatus = (uiStatus) => {
-    switch (uiStatus) {
-      case 'Approved': return 'APPROVED';
-      case 'Rejected': return 'REJECTED';
-      case 'Compliance': return 'COMPLIANCE';
-      case 'Pending': return 'PENDING';
-      default: return 'PENDING';
-    }
+    if (!uiStatus) return 'PENDING';
+    // Convert UI status to UPPER_SNAKE_CASE DB value
+    return uiStatus.toUpperCase().replace(/\s+/g, '_');
   };
 
   const getStatusColor = (status) => {
@@ -263,6 +223,11 @@ export default function BusPermitApplication() {
       case "Rejected": return "text-[#E53935] bg-[#E53935]/10";
       case "Compliance": return "text-[#FDA811] bg-[#FDA811]/10";
       case "Pending": return "text-[#4A90E2] bg-[#4A90E2]/10";
+      case "Under Review": return "text-[#3B82F6] bg-[#3B82F6]/10";
+      case "Document Verification": return "text-[#8B5CF6] bg-[#8B5CF6]/10";
+      case "Payment Verification": return "text-[#F59E0B] bg-[#F59E0B]/10";
+      case "For Manager Approval": return "text-[#6366F1] bg-[#6366F1]/10";
+      case "Ready for Release": return "text-[#10B981] bg-[#10B981]/10";
       default: return "text-gray-600 bg-gray-100";
     }
   };
@@ -497,16 +462,19 @@ const fetchSinglePermit = async (permitId) => {
     try {
       const dbStatus = getDBStatus(status);
       
+      const requestBody = {
+        permit_id: permitId,
+        status: dbStatus,
+        comments: comments
+      };
+      console.log('updatePermitStatus sending:', JSON.stringify(requestBody));
+      
       const response = await fetch(`${API_BUSINESS}/update_status.php`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          permit_id: permitId,
-          status: dbStatus,
-          comments: comments
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -520,12 +488,30 @@ const fetchSinglePermit = async (permitId) => {
         throw new Error(result.message || 'Failed to update permit status');
       }
 
-      // Update the selected permit in state
+      // Record action in history
+      const historyEntry = {
+        action: status,
+        timestamp: new Date().toLocaleString('en-US', {
+          year: 'numeric', month: 'short', day: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+        }),
+        notes: comments || '',
+        by: 'Admin'
+      };
+      setActionHistory(prev => ({
+        ...prev,
+        [permitId]: [...(prev[permitId] || []), historyEntry]
+      }));
+
+      // Use actual DB response to update local state
+      const updatedDbStatus = result.data?.status || dbStatus;
+      const updatedUiStatus = getUIStatus(updatedDbStatus);
+
       if (selectedPermit) {
         setSelectedPermit(prev => ({
           ...prev,
-          status: dbStatus,
-          uiStatus: status,
+          status: updatedDbStatus,
+          uiStatus: updatedUiStatus,
           comments: result.data?.comments || prev.comments
         }));
       }
@@ -537,8 +523,14 @@ const fetchSinglePermit = async (permitId) => {
       setActionComment('');
 
       // Show success message
-      setSuccessMessage(`Permit ${status.toLowerCase()} successfully!`);
-      setShowSuccessModal(true);
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: `Permit ${status.toLowerCase()} successfully!`,
+        confirmButtonColor: '#4CAF50',
+        timer: 2000,
+        showConfirmButton: true
+      });
 
       // Log transaction
       try { 
@@ -556,7 +548,12 @@ const fetchSinglePermit = async (permitId) => {
     } catch (err) {
       console.error('Error updating permit status:', err);
       setError(err.message || 'Failed to update permit status');
-      alert('Error updating status: ' + err.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Error updating status: ' + err.message,
+        confirmButtonColor: '#E53935'
+      });
     }
   };
 
@@ -605,9 +602,15 @@ const fetchSinglePermit = async (permitId) => {
       // Clear the comment input
       setActionComment('');
 
-      // Show success modal
-      setSuccessMessage('Comment saved successfully!');
-      setShowSuccessModal(true);
+      // Show success message
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: 'Comment saved successfully!',
+        confirmButtonColor: '#4CAF50',
+        timer: 2000,
+        showConfirmButton: true
+      });
 
       // Log transaction
       try { 
@@ -624,7 +627,12 @@ const fetchSinglePermit = async (permitId) => {
     } catch (err) {
       console.error('Error saving comment:', err);
       setError(err.message || 'Failed to save comment');
-      alert('Error saving comment: ' + err.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Error saving comment: ' + err.message,
+        confirmButtonColor: '#E53935'
+      });
     }
   };
 
@@ -667,8 +675,6 @@ const fetchSinglePermit = async (permitId) => {
   const closeModal = () => {
     setSelectedPermit(null);
     setActionComment('');
-    setSelectedFile(null);
-    setShowFilePreview(false);
     setShowModal(false);
   };
 
@@ -756,12 +762,76 @@ const fetchSinglePermit = async (permitId) => {
 
   const handleCompliance = async () => {
     if (!selectedPermit) return;
-    await updatePermitStatus(selectedPermit.permit_id, 'Compliance', actionComment);
+
+    const result = await Swal.fire({
+      title: 'Mark for Compliance?',
+      html: `
+        <div class="text-left">
+          <p class="mb-2">You are about to mark this application for compliance:</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Permit ID:</strong> ${selectedPermit.permit_id}</p>
+            <p class="text-sm"><strong>Business:</strong> ${selectedPermit.business_name}</p>
+            <p class="text-sm"><strong>Owner:</strong> ${selectedPermit.owner_first_name} ${selectedPermit.owner_last_name}</p>
+          </div>
+        </div>
+      `,
+      icon: 'question',
+      input: 'textarea',
+      inputLabel: 'Add compliance notes (optional)',
+      inputPlaceholder: 'Enter any additional notes...',
+      inputValue: actionComment,
+      showCancelButton: true,
+      confirmButtonText: 'Mark for Compliance',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#FDA811',
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+        htmlContainer: 'text-left'
+      }
+    });
+
+    if (result.isConfirmed) {
+      await updatePermitStatus(selectedPermit.permit_id, 'Compliance', result.value || '');
+      setActionComment('');
+    }
   };
 
   const handlePending = async () => {
     if (!selectedPermit) return;
-    await updatePermitStatus(selectedPermit.permit_id, 'Pending', actionComment);
+
+    const result = await Swal.fire({
+      title: 'Set Back to Pending?',
+      html: `
+        <div class="text-left">
+          <p class="mb-2">You are about to set this application back to pending:</p>
+          <div class="bg-gray-50 p-3 rounded-lg mb-3">
+            <p class="text-sm"><strong>Permit ID:</strong> ${selectedPermit.permit_id}</p>
+            <p class="text-sm"><strong>Business:</strong> ${selectedPermit.business_name}</p>
+            <p class="text-sm"><strong>Owner:</strong> ${selectedPermit.owner_first_name} ${selectedPermit.owner_last_name}</p>
+          </div>
+        </div>
+      `,
+      icon: 'question',
+      input: 'textarea',
+      inputLabel: 'Add notes (optional)',
+      inputPlaceholder: 'Enter any additional notes...',
+      inputValue: actionComment,
+      showCancelButton: true,
+      confirmButtonText: 'Set to Pending',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#4A90E2',
+      cancelButtonColor: '#6b7280',
+      customClass: {
+        popup: 'text-left',
+        htmlContainer: 'text-left'
+      }
+    });
+
+    if (result.isConfirmed) {
+      await updatePermitStatus(selectedPermit.permit_id, 'Pending', result.value || '');
+      setActionComment('');
+    }
   };
 
   const handleStatusUpdate = async (status, title, message, color) => {
@@ -803,34 +873,71 @@ const fetchSinglePermit = async (permitId) => {
 const viewFile = async (file) => {
   try {
     if (!file || !file.file_path) {
-      alert('File path not available');
+      Swal.fire({ icon: 'warning', title: 'File Unavailable', text: 'File path not available', confirmButtonColor: '#FDA811' });
       return;
     }
     
     // Extract filename
     const filename = file.file_path.split('/').pop();
-    
-    // Call API endpoint instead of direct file access
     const fullUrl = `${API_BUSINESS}/uploads/${encodeURIComponent(filename)}`;
+    const displayName = file.document_name || file.document_type || 'Document';
+    const fileIsImage = isImageFile(file.file_type, file.document_name || filename);
     
-    // For API, we can skip the HEAD check and just try to open/download
-    setSelectedFile({
-      ...file,
-      url: fullUrl,
-      name: file.document_name || file.document_type || 'Document'
-    });
-    setShowFilePreview(true);
+    if (fileIsImage) {
+      Swal.fire({
+        title: displayName,
+        text: getFileTypeName(file.file_type, filename),
+        imageUrl: fullUrl,
+        imageAlt: displayName,
+        showCloseButton: true,
+        showConfirmButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'Download',
+        denyButtonText: 'Close',
+        confirmButtonColor: '#4A90E2',
+        denyButtonColor: '#6B7280',
+        width: '80%',
+        customClass: {
+          image: 'max-h-[70vh] object-contain rounded-lg'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.open(fullUrl, '_blank');
+        }
+      });
+    } else {
+      // For PDFs, try iframe; for other files, show download
+      const isPdf = (file.file_type || '').toLowerCase().includes('pdf') || filename.toLowerCase().endsWith('.pdf');
+      
+      Swal.fire({
+        title: displayName,
+        html: isPdf 
+          ? `<iframe src="${fullUrl}" style="width:100%;height:70vh;border:none;border-radius:8px;" title="${displayName}"></iframe>`
+          : `<div style="text-align:center;padding:40px 0;">
+              <div style="font-size:64px;margin-bottom:16px;">📄</div>
+              <p style="color:#6b7280;margin-bottom:8px;">${getFileTypeName(file.file_type, filename)}</p>
+              <p style="color:#9ca3af;font-size:14px;">${filename}</p>
+            </div>`,
+        showCloseButton: true,
+        showConfirmButton: true,
+        showDenyButton: true,
+        confirmButtonText: isPdf ? 'Open in New Tab' : 'Download',
+        denyButtonText: 'Close',
+        confirmButtonColor: '#4A90E2',
+        denyButtonColor: '#6B7280',
+        width: isPdf ? '90%' : '500px',
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.open(fullUrl, '_blank');
+        }
+      });
+    }
     
   } catch (err) {
     console.error('Error accessing file:', err);
-    alert('Unable to access the file');
+    Swal.fire({ icon: 'error', title: 'Error', text: 'Unable to access the file', confirmButtonColor: '#E53935' });
   }
 };
-
-  const closeFilePreview = () => {
-    setSelectedFile(null);
-    setShowFilePreview(false);
-  };
 
   // Format comments with timestamps
   const formatComments = (commentsText) => {
@@ -1024,13 +1131,13 @@ const viewFile = async (file) => {
             <strong>Approval Rate:</strong> ${dashboardStats.approvalRate}%
           </div>
           <div>
-            <strong>Top TODA:</strong> ${dashboardStats.topTODA.name} (${dashboardStats.topTODA.count} applications)
+            <strong>Top Barangay:</strong> ${dashboardStats.topBarangay.name} (${dashboardStats.topBarangay.count} applications)
           </div>
           <div>
-            <strong>MTOP Applications:</strong> ${dashboardStats.mtop}
+            <strong>Top Business Nature:</strong> ${dashboardStats.topNature.name} (${dashboardStats.topNature.count})
           </div>
           <div>
-            <strong>Franchise Applications:</strong> ${dashboardStats.franchise}
+            <strong>Pending Review:</strong> ${dashboardStats.pending}
           </div>
         </div>
       `;
@@ -1835,10 +1942,58 @@ const viewFile = async (file) => {
                 </div>
               </div>
 
+              {/* Action History Section */}
+              {(() => {
+                const history = actionHistory[selectedPermit.permit_id] || [];
+                return history.length > 0 ? (
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-blue-100 dark:border-slate-700">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
+                        <Clock className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Action History</h3>
+                        <p className="text-sm text-gray-500">{history.length} action{history.length !== 1 ? 's' : ''} taken this session</p>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <div className="absolute left-[17px] top-0 bottom-0 w-0.5 bg-blue-200 dark:bg-slate-600"></div>
+                      <div className="space-y-4 max-h-64 overflow-y-auto">
+                        {[...history].reverse().map((entry, idx) => (
+                          <div key={idx} className="relative pl-10">
+                            <div className={`absolute left-[10px] top-1.5 w-4 h-4 rounded-full border-2 border-white dark:border-slate-800 shadow ${
+                              entry.action === 'Approved' ? 'bg-green-500' :
+                              entry.action === 'Rejected' ? 'bg-red-500' :
+                              entry.action === 'Compliance' || entry.action === 'Pending' ? 'bg-yellow-500' :
+                              'bg-blue-500'
+                            }`}></div>
+                            <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border border-gray-200 dark:border-slate-600">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`text-sm font-semibold px-2 py-0.5 rounded-full ${
+                                  entry.action === 'Approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                  entry.action === 'Rejected' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                  entry.action === 'Compliance' || entry.action === 'Pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                  'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                }`}>{entry.action}</span>
+                                <span className="text-xs text-gray-400 dark:text-gray-500">{entry.timestamp}</span>
+                              </div>
+                              {entry.notes && (
+                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 pl-1">{entry.notes}</p>
+                              )}
+                              <p className="text-xs text-gray-400 mt-1 pl-1">by {entry.by}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
               {/* Action Buttons */}
               <div className="flex gap-4 justify-between pt-8 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl p-6 border-t-4 border-gray-300 dark:border-slate-600">
-                {/* Actions Dropdown - Show for pending/compliance status */}
-                {(selectedPermit.status === "COMPLIANCE" || selectedPermit.status === "PENDING" || !selectedPermit.status) && (
+                {/* Actions Dropdown - Show for all statuses except Rejected */}
+                {selectedPermit.status !== "REJECTED" && (
                   <div className="relative">
                     <button
                       onClick={() => setShowActionsDropdown(!showActionsDropdown)}
@@ -1969,213 +2124,6 @@ const viewFile = async (file) => {
         </div>
       )}
 
-{showFilePreview && selectedFile && (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-0">
-    <div className="relative w-full h-full flex flex-col">
-      {/* Header */}
-      <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
-        <div className="flex items-center gap-3 text-white">
-          <div className="flex items-center gap-2">
-            {isImageFile(selectedFile.file_type, selectedFile.name) ? (
-              <ImageIcon className="w-5 h-5" />
-            ) : (
-              <FileText className="w-5 h-5" />
-            )}
-            <span className="text-sm font-medium truncate max-w-xs">
-              {selectedFile.name}
-            </span>
-            <span className="text-xs text-gray-300">
-              {getFileTypeName(selectedFile.file_type, selectedFile.name)}
-            </span>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {/* Zoom Controls */}
-          {isImageFile(selectedFile.file_type, selectedFile.name) && (
-            <div className="flex items-center gap-1 mr-4 bg-black/40 rounded-lg p-1">
-              <button 
-                onClick={handleZoomOut}
-                className="p-2 text-white hover:bg-white/10 rounded transition-colors"
-                title="Zoom Out"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
-                </svg>
-              </button>
-              
-              <button 
-                onClick={handleResetZoom}
-                className="px-3 py-2 text-xs text-white hover:bg-white/10 rounded transition-colors"
-                title="Reset Zoom"
-              >
-                {zoomLevel}%
-              </button>
-              
-              <button 
-                onClick={handleZoomIn}
-                className="p-2 text-white hover:bg-white/10 rounded transition-colors"
-                title="Zoom In"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                </svg>
-              </button>
-            </div>
-          )}
-          
-          <a 
-            href={selectedFile.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors"
-            download
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Download
-          </a>
-          <button 
-            onClick={closeFilePreview}
-            className="ml-2 p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
-            title="Close preview"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Image Content with Zoom */}
-      {isImageFile(selectedFile.file_type, selectedFile.name) ? (
-        <div 
-          className="flex-1 flex items-center justify-center p-4 overflow-hidden cursor-move"
-          onWheel={handleWheel}
-          onMouseDown={handleMouseDown}
-        >
-          <div className="relative w-full h-full flex items-center justify-center">
-            <img 
-              ref={imageRef}
-              id="preview-image"
-              src={selectedFile.url} 
-              alt={selectedFile.name}
-              className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl transition-transform duration-200 ease-out"
-              style={{ transform: 'scale(1)', position: 'relative', left: '0px', top: '0px', cursor: 'default' }}
-              onError={(e) => {
-                console.error('Failed to load image:', selectedFile.url);
-                e.target.onerror = null;
-                e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image not found</text><text x="200" y="170" text-anchor="middle" font-family="Arial" font-size="12" fill="%23999999">URL: ' + selectedFile.url + '</text></svg>';
-                e.target.className = 'max-w-md mx-auto bg-gray-800 rounded-lg p-8';
-              }}
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="text-center max-w-md bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
-            <div className="text-gray-300 mb-6">
-              {selectedFile.file_type?.includes('pdf') || selectedFile.name?.endsWith('.pdf') ? (
-                <FileText className="w-24 h-24 mx-auto" />
-              ) : selectedFile.file_type?.includes('image/') ? (
-                <ImageIcon className="w-24 h-24 mx-auto" />
-              ) : (
-                <FileText className="w-24 h-24 mx-auto" />
-              )}
-            </div>
-            <h3 className="text-xl font-medium text-white mb-3">
-              {getFileTypeName(selectedFile.file_type, selectedFile.name)}
-            </h3>
-            <p className="text-gray-300 mb-6">
-              This file cannot be previewed in browser.
-            </p>
-            <div className="flex gap-3 justify-center">
-              <a 
-                href={selectedFile.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                download
-              >
-                <Download className="w-5 h-5 mr-2" />
-                Download
-              </a>
-              <button 
-                onClick={closeFilePreview}
-                className="inline-flex items-center justify-center px-5 py-2.5 border border-white/30 text-white hover:bg-white/10 rounded-lg transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Footer Info with Zoom Level */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 p-4 flex justify-between items-center text-white/60 text-sm">
-        <div className="flex items-center gap-2">
-          {isImageFile(selectedFile.file_type, selectedFile.name) && (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-              </svg>
-              <span>{zoomLevel}%</span>
-              <span className="text-xs ml-4">Drag to pan when zoomed</span>
-            </>
-          )}
-        </div>
-        <div>
-          <span className="hidden sm:inline">Press </span>
-          <kbd className="px-2 py-1 bg-black/40 rounded text-xs mx-1">ESC</kbd>
-          <span className="hidden sm:inline"> to close</span>
-        </div>
-      </div>
-
-      {/* Close on background click */}
-      <div 
-        className="absolute inset-0 -z-10 cursor-pointer"
-        onClick={closeFilePreview}
-      />
-    </div>
-  </div>
-)}
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6 transform transition-all">
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-                <svg className="h-10 w-10 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Success!
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                {successMessage}
-              </p>
-              
-              <div className="flex justify-center space-x-3">
-                <button
-                  onClick={() => {
-                    setShowSuccessModal(false);
-                    setSuccessMessage('');
-                  }}
-                  className="px-6 py-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-colors font-medium flex items-center"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Continue
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
