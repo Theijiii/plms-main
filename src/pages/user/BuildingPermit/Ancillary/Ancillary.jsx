@@ -5,7 +5,7 @@ import { ArrowRight, ArrowLeft, Droplets, Fence, Hammer, HardHat, Home, Radio, S
 
 const COLORS = { primary: '#4A90E2', secondary: '#000000', accent: '#FDA811', success: '#4CAF50', danger: '#E53935', background: '#FBFBFB', font: 'Montserrat, Arial, sans-serif' };
 const API_BASE = "/backend/building_permit/ancillary_permit.php";
-const BARANGAY_API = "https://e-plms.goserveph.com/backend/barangay_permit/admin_fetch.php";
+const BARANGAY_API = "backend/barangay_permit/admin_fetch.php";
 const PROFESSIONAL_API = "/backend/building_permit/professional_registration.php";
 const labelStyle = { color: '#000000', fontFamily: 'Montserrat, Arial, sans-serif' };
 const inputCls = "p-3 border border-black rounded-lg w-full";
