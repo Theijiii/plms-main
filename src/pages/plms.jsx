@@ -9,13 +9,20 @@ import {
   Clock,
   CheckCircle,
   ArrowRight,
-  UserPlus
+  UserPlus,
+  TrendingUp,
+  Award,
+  Zap,
+  Lock,
+  Globe,
+  Users
 } from "lucide-react";
 import Footer from '../components/user/Footer';
 
 export default function LandingPage() {
   const [time, setTime] = useState(new Date());
   const [isVisible, setIsVisible] = useState(true);
+  const [activeCard, setActiveCard] = useState(null);
   const navigate = useNavigate();
 
   // Update current time
@@ -54,77 +61,98 @@ export default function LandingPage() {
       id: 1,
       title: "Business Permit Application",
       description: "Apply, renew, and manage your business permits online with streamlined processing.",
-      icon: <FileText className="w-8 h-8 text-[#4A90E2]" />,
-      color: "bg-white border-blue-200 hover:bg-blue-100",
-      textColor: "text-[#4A90E2]",
+      icon: <FileText className="w-8 h-8" />,
+      gradient: "from-blue-500 to-blue-600",
+      bgColor: "bg-gradient-to-br from-blue-50 to-blue-100",
+      borderColor: "border-blue-300",
+      iconBg: "bg-blue-500",
+      textColor: "text-blue-600",
       features: ["New Business", "Renewal", "Amendments", "Payment"],
       stats: "Processed in 3-5 days",
-      height: "h-80"
+      statsIcon: <TrendingUp className="w-4 h-4" />
     },
     {
       id: 2,
       title: "Transport & Franchise Permit",
       description: "Secure transport permits, vehicle registration, and franchise applications digitally.",
-      icon: <Car className="w-8 h-8 text-[#4CAF50]" />,
-      color: "bg-white border-green-200 hover:bg-green-100",
-      textColor: "text-[#4CAF50]",
+      icon: <Car className="w-8 h-8" />,
+      gradient: "from-green-500 to-green-600",
+      bgColor: "bg-gradient-to-br from-green-50 to-green-100",
+      borderColor: "border-green-300",
+      iconBg: "bg-green-500",
+      textColor: "text-green-600",
       features: ["Registration", "Franchise", "Renewal"],
       stats: "24/7 Online Application",
-      height: "h-64"
+      statsIcon: <Globe className="w-4 h-4" />
     },
     {
       id: 3,
       title: "Building & Construction Permit",
       description: "Submit building plans, get construction permits, and schedule inspections online.",
-      icon: <Building className="w-8 h-8 text-[#FDA811]" />,
-      color: "bg-white border-orange-200 hover:bg-orange-100",
-      textColor: "text-[#FDA811]",
+      icon: <Building className="w-8 h-8" />,
+      gradient: "from-orange-500 to-orange-600",
+      bgColor: "bg-gradient-to-br from-orange-50 to-orange-100",
+      borderColor: "border-orange-300",
+      iconBg: "bg-orange-500",
+      textColor: "text-orange-600",
       features: ["Building Plans", "Permits", "Clearances"],
       stats: "Digital Plan Submission",
-      height: "h-72"
+      statsIcon: <Zap className="w-4 h-4" />
     },
     {
       id: 4,
       title: "Barangay Permit & Clearance",
       description: "Obtain barangay clearance, community permits, and local certifications quickly.",
-      icon: <Home className="w-8 h-8 text-[#E53935]" />,
-      color: "bg-white border-red-200 hover:bg-red-100",
-      textColor: "text-[#E53935]",
+      icon: <Home className="w-8 h-8" />,
+      gradient: "from-red-500 to-red-600",
+      bgColor: "bg-gradient-to-br from-red-50 to-red-100",
+      borderColor: "border-red-300",
+      iconBg: "bg-red-500",
+      textColor: "text-red-600",
       features: ["Clearance", "Certifications", "Community", "Local"],
       stats: "Issued in 24 hours",
-      height: "h-60"
+      statsIcon: <Clock className="w-4 h-4" />
     }
   ];
 
   const features = [
     {
-      icon: <Shield className="w-6 h-6" />,
+      icon: <Lock className="w-6 h-6" />,
       title: "Secure & Encrypted",
-      description: "Bank-level security for all your transactions",
-      iconColor: "text-[#FDA811]"
+      description: "Bank-level security protection",
+      gradient: "from-yellow-400 to-orange-500",
+      iconBg: "bg-gradient-to-br from-yellow-400 to-orange-500"
     },
     {
-      icon: <Clock className="w-6 h-6" />,
+      icon: <Globe className="w-6 h-6" />,
       title: "24/7 Access",
-      description: "Access services anytime, anywhere",
-      iconColor: "text-[#4A90E2]"
+      description: "Apply anytime, anywhere",
+      gradient: "from-blue-400 to-blue-600",
+      iconBg: "bg-gradient-to-br from-blue-400 to-blue-600"
     },
     {
-      icon: <CheckCircle className="w-6 h-6" />,
-      title: "Real-time Tracking",
-      description: "Monitor your application status live",
-      iconColor: "text-[#4CAF50]"
+      icon: <Zap className="w-6 h-6" />,
+      title: "Fast Processing",
+      description: "Quick turnaround times",
+      gradient: "from-green-400 to-green-600",
+      iconBg: "bg-gradient-to-br from-green-400 to-green-600"
     }
   ];
 
   const stats = [
-    { value: "50K+", label: "Active Users" },
-    { value: "100K+", label: "Applications" },
-    { value: "99%", label: "Satisfaction" }
+    { value: "50K+", label: "Active Users", icon: <Users className="w-5 h-5" /> },
+    { value: "100K+", label: "Applications", icon: <FileText className="w-5 h-5" /> },
+    { value: "99%", label: "Satisfaction", icon: <Award className="w-5 h-5" /> }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-[#4CAF50] to-[#4A90E2] relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-[#4CAF50] via-[#45a89a] to-[#4A90E2] relative overflow-hidden">
+      {/* Animated Background Shapes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
+        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-green-400/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
+      </div>
       {/* Header - WHITE (unchanged) */}
       <header
         className={`sticky top-0 z-50 bg-white shadow-sm border-b-4 border-[#FDA811] transition-transform duration-300 ${
@@ -171,59 +199,74 @@ export default function LandingPage() {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10 px-[50px] py-8 md:py-10 lg:py-12">
-        <div className="grid lg:grid-cols-2 gap-8 lg:gap-10 items-start">
-          {/* Left Section - Hero Content - CENTERED */}
-          <div className="text-center space-y-6 mt-8">
-            <div className="space-y-4">
-              {/* Permit & Licensing Management System Title */}
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold leading-tight text-white">
-                Welcome to Permit & Licensing Management System
+      <main className="relative z-10 px-6 md:px-12 lg:px-[50px] py-8 md:py-10 lg:py-12">
+        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start">
+          {/* Left Section - Hero Content */}
+          <div className="text-center lg:text-left space-y-8 mt-8">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full border border-white/30">
+              <Award className="w-4 h-4 text-yellow-300" />
+              <span className="text-sm font-medium text-white">Trusted Government Service Platform</span>
+            </div>
+
+            <div className="space-y-6">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight text-white drop-shadow-lg">
+                Permit & Licensing Made
+                <span className="block mt-2 bg-gradient-to-r from-yellow-300 to-orange-400 bg-clip-text text-transparent">
+                  Simple & Fast
+                </span>
               </h1>
-              <p className="text-lg text-white leading-relaxed font-medium max-w-2xl mx-auto">
-We’re here to make your permit and license applications easier. With our secure digital platform, government services are faster, simpler, and right at your fingertips.
+              <p className="text-lg md:text-xl text-white/95 leading-relaxed font-medium max-w-2xl">
+                Transform your permit applications with our secure digital platform. Government services are now faster, simpler, and accessible at your fingertips.
               </p>
             </div>
 
-            {/* Features Grid - CENTERED with colored icons */}
-            <div className="grid grid-cols-3 gap-3 py-4 max-w-md mx-auto">
+            {/* Features Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {features.map((feature, index) => (
-                <div key={index} className="text-center space-y-2">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center mx-auto hover:shadow-md transition-shadow border border-white/50">
-                    <div className={feature.iconColor}>
+                <div 
+                  key={index} 
+                  className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-xl group"
+                >
+                  <div className={`w-12 h-12 ${feature.iconBg} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                    <div className="text-white">
                       {feature.icon}
                     </div>
                   </div>
-                  <h3 className="font-bold text-white text-xs">
+                  <h3 className="font-bold text-white text-sm mb-1">
                     {feature.title}
                   </h3>
-                  <p className="text-xs text-white/90">
+                  <p className="text-xs text-white/80">
                     {feature.description}
                   </p>
                 </div>
               ))}
             </div>
 
-            {/* CTA Button - CENTERED with FDA811 color */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-4 justify-center">
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button
                 onClick={handleLoginClick}
-                className="px-6 py-3 bg-[#FDA811] text-white rounded-xl font-semibold hover:bg-[#e69500] transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 mx-auto sm:mx-0"
+                className="group px-8 py-4 bg-gradient-to-r from-[#FDA811] to-[#ff8c00] text-white rounded-2xl font-bold hover:shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3 relative overflow-hidden"
               >
-                <UserPlus className="w-4 h-4" />
-                Sign In
-                <ArrowRight className="w-4 h-4" />
+                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                <UserPlus className="w-5 h-5 relative z-10" />
+                <span className="relative z-10">Get Started Now</span>
+                <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
 
-            {/* Stats - CENTERED with WHITE numbers */}
-            <div className="grid grid-cols-3 gap-4 pt-8 border-t border-white/30 max-w-md mx-auto">
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-6 pt-8 border-t border-white/20">
               {stats.map((stat, index) => (
-                <div key={index} className="text-center">
-                  <div className="text-xl md:text-2xl font-bold text-white">
+                <div key={index} className="text-center space-y-2">
+                  <div className="flex items-center justify-center text-white/80">
+                    {stat.icon}
+                  </div>
+                  <div className="text-2xl md:text-3xl font-bold text-white drop-shadow-lg">
                     {stat.value}
                   </div>
-                  <div className="text-xs text-white/90">
+                  <div className="text-xs md:text-sm text-white/90 font-medium">
                     {stat.label}
                   </div>
                 </div>
@@ -231,53 +274,59 @@ We’re here to make your permit and license applications easier. With our secur
             </div>
           </div>
 
-          {/* Right Section - Masonry Grid Services Cards */}
-          <div className="space-y-4">
-            <div className="text-center lg:text-left mb-4">
-              <h2 className="text-xl md:text-2xl font-bold text-white mb-2">
-                Available Permit & Licensing Services
+          {/* Right Section - Service Cards */}
+          <div className="space-y-6">
+            <div className="text-center lg:text-left">
+              <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-white" />
+                </div>
+                Our Services
               </h2>
-              <p className="text-white/90 text-sm">
-                Streamline your government compliance with our comprehensive digital services
+              <p className="text-white/90 text-sm md:text-base">
+                Comprehensive digital solutions for all your permit needs
               </p>
             </div>
 
-            {/* Masonry Grid Container - Uses masonry columns */}
-            <div className="columns-1 md:columns-2 gap-4">
+            {/* Service Cards Grid */}
+            <div className="grid grid-cols-1 gap-5">
               {services.map((service) => (
                 <div
                   key={service.id}
-                  className={`${service.color} ${service.height} border border-gray-300 rounded-xl p-5 shadow-lg hover:shadow-2xl transition-all duration-300 hover:translate-y-[-2px] mb-4 break-inside-avoid`}
+                  onMouseEnter={() => setActiveCard(service.id)}
+                  onMouseLeave={() => setActiveCard(null)}
+                  className={`${service.bgColor} backdrop-blur-sm border-2 ${service.borderColor} rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1 cursor-pointer group`}
                 >
-                  <div className="flex items-start gap-3 mb-4">
-                    <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-sm flex-shrink-0 border border-gray-200">
-                      {service.icon}
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className={`w-16 h-16 ${service.iconBg} rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform flex-shrink-0`}>
+                      <div className="text-white">
+                        {service.icon}
+                      </div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className={`font-bold text-lg mb-2 ${service.textColor}`}>
+                      <h3 className={`font-bold text-xl mb-2 ${service.textColor} group-hover:underline`}>
                         {service.title}
                       </h3>
-                      <p className="text-sm text-gray-700 mb-3">
+                      <p className="text-sm text-gray-700 leading-relaxed">
                         {service.description}
                       </p>
-                      <div className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        {service.stats}
-                      </div>
                     </div>
                   </div>
 
-                  <div className="mb-4 flex-1">
-                    <div className="flex flex-wrap gap-2">
-                      {service.features.map((feature, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1.5 bg-white rounded-md text-sm font-medium text-gray-700 border border-gray-200"
-                        >
-                          {feature}
-                        </span>
-                      ))}
-                    </div>
+                  <div className={`flex items-center gap-2 text-sm font-semibold ${service.textColor} mb-4 px-3 py-2 bg-white/50 rounded-lg border ${service.borderColor} w-fit`}>
+                    {service.statsIcon}
+                    <span>{service.stats}</span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {service.features.map((feature, index) => (
+                      <span
+                        key={index}
+                        className="px-3 py-2 bg-white/80 backdrop-blur-sm rounded-lg text-sm font-medium text-gray-800 border border-gray-200 hover:bg-white transition-colors shadow-sm"
+                      >
+                        {feature}
+                      </span>
+                    ))}
                   </div>
                 </div>
               ))}
