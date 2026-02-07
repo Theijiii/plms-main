@@ -63,10 +63,10 @@ export default function LandingPage() {
       description: "Apply, renew, and manage your business permits online with streamlined processing.",
       icon: <FileText className="w-8 h-8" />,
       gradient: "from-blue-500 to-blue-600",
-      bgColor: "bg-gradient-to-br from-blue-50 to-blue-100",
-      borderColor: "border-blue-300",
-      iconBg: "bg-blue-500",
-      textColor: "text-blue-600",
+      bgColor: "bg-gradient-to-br from-blue-50 to-indigo-100",
+      borderColor: "border-blue-400",
+      iconBg: "bg-gradient-to-br from-blue-500 to-indigo-600",
+      textColor: "text-blue-700",
       features: ["New Business", "Renewal", "Amendments", "Payment"],
       stats: "Processed in 3-5 days",
       statsIcon: <TrendingUp className="w-4 h-4" />
@@ -77,10 +77,10 @@ export default function LandingPage() {
       description: "Secure transport permits, vehicle registration, and franchise applications digitally.",
       icon: <Car className="w-8 h-8" />,
       gradient: "from-green-500 to-green-600",
-      bgColor: "bg-gradient-to-br from-green-50 to-green-100",
-      borderColor: "border-green-300",
-      iconBg: "bg-green-500",
-      textColor: "text-green-600",
+      bgColor: "bg-gradient-to-br from-emerald-50 to-teal-100",
+      borderColor: "border-emerald-400",
+      iconBg: "bg-gradient-to-br from-emerald-500 to-teal-600",
+      textColor: "text-emerald-700",
       features: ["Registration", "Franchise", "Renewal"],
       stats: "24/7 Online Application",
       statsIcon: <Globe className="w-4 h-4" />
@@ -91,10 +91,10 @@ export default function LandingPage() {
       description: "Submit building plans, get construction permits, and schedule inspections online.",
       icon: <Building className="w-8 h-8" />,
       gradient: "from-orange-500 to-orange-600",
-      bgColor: "bg-gradient-to-br from-orange-50 to-orange-100",
-      borderColor: "border-orange-300",
-      iconBg: "bg-orange-500",
-      textColor: "text-orange-600",
+      bgColor: "bg-gradient-to-br from-amber-50 to-orange-100",
+      borderColor: "border-amber-400",
+      iconBg: "bg-gradient-to-br from-amber-500 to-orange-600",
+      textColor: "text-amber-700",
       features: ["Building Plans", "Permits", "Clearances"],
       stats: "Digital Plan Submission",
       statsIcon: <Zap className="w-4 h-4" />
@@ -105,10 +105,10 @@ export default function LandingPage() {
       description: "Obtain barangay clearance, community permits, and local certifications quickly.",
       icon: <Home className="w-8 h-8" />,
       gradient: "from-red-500 to-red-600",
-      bgColor: "bg-gradient-to-br from-red-50 to-red-100",
-      borderColor: "border-red-300",
-      iconBg: "bg-red-500",
-      textColor: "text-red-600",
+      bgColor: "bg-gradient-to-br from-rose-50 to-pink-100",
+      borderColor: "border-rose-400",
+      iconBg: "bg-gradient-to-br from-rose-500 to-pink-600",
+      textColor: "text-rose-700",
       features: ["Clearance", "Certifications", "Community", "Local"],
       stats: "Issued in 24 hours",
       statsIcon: <Clock className="w-4 h-4" />
@@ -146,12 +146,13 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#4CAF50] via-[#45a89a] to-[#4A90E2] relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-800 to-blue-900 relative overflow-hidden">
       {/* Animated Background Shapes */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
-        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-green-400/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
+        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-400/20 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
+        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-indigo-400/15 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
+        <div className="absolute top-40 right-1/4 w-48 h-48 bg-pink-400/10 rounded-full blur-2xl animate-pulse" style={{animationDelay: '0.5s'}}></div>
       </div>
       {/* Header - WHITE (unchanged) */}
       <header
@@ -204,15 +205,15 @@ export default function LandingPage() {
           {/* Left Section - Hero Content */}
           <div className="text-center lg:text-left space-y-8 mt-8">
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full border border-white/30">
-              <Award className="w-4 h-4 text-yellow-300" />
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/30 shadow-lg">
+              <Award className="w-4 h-4 text-yellow-400" />
               <span className="text-sm font-medium text-white">Trusted Government Service Platform</span>
             </div>
 
             <div className="space-y-6">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight text-white drop-shadow-lg">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight text-white drop-shadow-2xl">
                 Permit & Licensing Made
-                <span className="block mt-2 bg-gradient-to-r from-yellow-300 to-orange-400 bg-clip-text text-transparent">
+                <span className="block mt-2 bg-gradient-to-r from-cyan-300 via-blue-400 to-purple-400 bg-clip-text text-transparent animate-pulse">
                   Simple & Fast
                 </span>
               </h1>
@@ -226,7 +227,7 @@ export default function LandingPage() {
               {features.map((feature, index) => (
                 <div 
                   key={index} 
-                  className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-xl group"
+                  className="bg-white/10 backdrop-blur-lg border border-white/30 rounded-2xl p-4 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-2xl group"
                 >
                   <div className={`w-12 h-12 ${feature.iconBg} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
                     <div className="text-white">
@@ -247,7 +248,7 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button
                 onClick={handleLoginClick}
-                className="group px-8 py-4 bg-gradient-to-r from-[#FDA811] to-[#ff8c00] text-white rounded-2xl font-bold hover:shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3 relative overflow-hidden"
+                className="group px-8 py-4 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-600 text-white rounded-2xl font-bold hover:shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3 relative overflow-hidden shadow-xl"
               >
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                 <UserPlus className="w-5 h-5 relative z-10" />
@@ -257,7 +258,7 @@ export default function LandingPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-6 pt-8 border-t border-white/20">
+            <div className="grid grid-cols-3 gap-6 pt-8 border-t border-white/30">
               {stats.map((stat, index) => (
                 <div key={index} className="text-center space-y-2">
                   <div className="flex items-center justify-center text-white/80">
@@ -278,7 +279,7 @@ export default function LandingPage() {
           <div className="space-y-6">
             <div className="text-center lg:text-left">
               <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg">
                   <FileText className="w-6 h-6 text-white" />
                 </div>
                 Our Services
@@ -322,7 +323,7 @@ export default function LandingPage() {
                     {service.features.map((feature, index) => (
                       <span
                         key={index}
-                        className="px-3 py-2 bg-white/80 backdrop-blur-sm rounded-lg text-sm font-medium text-gray-800 border border-gray-200 hover:bg-white transition-colors shadow-sm"
+                        className="px-3 py-2 bg-white/90 backdrop-blur-sm rounded-lg text-sm font-medium text-gray-800 border border-gray-300 hover:bg-white hover:shadow-md transition-all duration-200"
                       >
                         {feature}
                       </span>

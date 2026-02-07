@@ -135,7 +135,7 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     try {
       // Initialize Google OAuth
-      const clientId = '1060676146447-8nfq15t7lcsgaj2jgb47k00gakb6i5i3.apps.googleusercontent.com';
+      const clientId = '888986438781-nrfbgrlpdd4an80gpsk5sdtrc5f14bmn.apps.googleusercontent.com';
       
       // Create Google OAuth URL
       const redirectUri = window.location.origin + '/auth/google/callback';
