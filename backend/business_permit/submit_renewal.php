@@ -93,40 +93,7 @@ try {
     $applicant_id = generateApplicantID($conn, $owner_first_name, $owner_last_name);
     error_log("Generated applicant ID: " . $applicant_id);
     
-    // ==================== PERMIT ID GENERATION ====================
-    function generatePermitID($conn) {
-        // Generate format: RBUS-YEAR-XXXXXX
-        $year = date('Y'); // Get current year (e.g., 2024)
-        
-        // Generate 6-digit random number
-        $random_number = str_pad(mt_rand(1, 999999), 6, '0', STR_PAD_LEFT);
-        
-        $permit_id = "RBUS-{$year}-{$random_number}";
-        
-        // Check if this permit_id already exists in the database
-        $check_sql = "SELECT COUNT(*) as count FROM business_permit_applications WHERE permit_id = ?";
-        $check_stmt = $conn->prepare($check_sql);
-        if ($check_stmt) {
-            $check_stmt->bind_param('s', $permit_id);
-            $check_stmt->execute();
-            $check_result = $check_stmt->get_result();
-            $check_row = $check_result->fetch_assoc();
-            $check_stmt->close();
-            
-            // If exists, generate a new one
-            if ($check_row['count'] > 0) {
-                // Generate new random number
-                $random_number = str_pad(mt_rand(1, 999999), 6, '0', STR_PAD_LEFT);
-                $permit_id = "RBUS-{$year}-{$random_number}";
-            }
-        }
-        
-        return $permit_id;
-    }
-    
-    // Generate permit ID (custom ID, not auto-increment)
-    $custom_permit_id = generatePermitID($conn);
-    error_log("Generated permit ID: " . $custom_permit_id);
+    // Note: permit_id is AUTO_INCREMENT in the database, so we don't generate it manually
     
     // Validate required fields
     $required_fields = [
@@ -203,9 +170,9 @@ try {
     // Owner type declaration
     $owner_type_declaration = isset($_POST['owner_type_declaration']) ? $conn->real_escape_string(trim($_POST['owner_type_declaration'])) : 'Business Owner';
     
-    // Insert into business_permit_applications table - NOTE: using custom permit_id
+    // Insert into business_permit_applications table - permit_id will be auto-generated
     $sql = "INSERT INTO business_permit_applications (
-        permit_id, applicant_id, application_date, permit_type, status,
+        applicant_id, application_date, permit_type, status,
         submission_date, last_updated, 
         owner_last_name, owner_first_name, owner_middle_name, owner_type, 
         citizenship, contact_number, email_address, home_address,
@@ -219,7 +186,7 @@ try {
         date_submitted, has_barangay_clearance, has_owner_valid_id,
         has_official_receipt, has_fsic, owner_type_declaration
     ) VALUES (
-        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?,
         NOW(), NOW(),
         ?, ?, ?, ?,
         ?, ?, ?, ?,
@@ -240,10 +207,9 @@ try {
         throw new Exception('Database prepare failed: ' . $conn->error);
     }
     
-    // Bind parameters - ADDED permit_id as first parameter
+    // Bind parameters - permit_id is AUTO_INCREMENT, not included in INSERT
     $stmt->bind_param(
         'ssssssssssssssssssssdsssssssddiiisssiiii',
-        $custom_permit_id,  // Custom generated permit ID
         $applicant_id,
         $application_date,
         $permit_type,
@@ -289,11 +255,11 @@ try {
         throw new Exception('Database execute failed: ' . $stmt->error);
     }
     
-    // Get the auto-generated ID (record_id)
-    $new_record_id = $stmt->insert_id;
+    // Get the auto-generated permit_id
+    $new_permit_id = $stmt->insert_id;
     $stmt->close();
     
-    error_log("New permit created with ID: " . $custom_permit_id . " (Record ID: " . $new_record_id . ")");
+    error_log("New permit created with permit_id: " . $new_permit_id);
     
     // Handle file uploads
     if (!empty($_FILES)) {
@@ -338,13 +304,13 @@ try {
                 
                 // Generate safe filename
                 $safe_filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $original_name);
-                $new_filename = 'REN_' . $custom_permit_id . '_' . $fieldName . '_' . time() . '.' . $file_ext;
+                $new_filename = 'REN_' . $new_permit_id . '_' . $fieldName . '_' . time() . '.' . $file_ext;
                 $target_path = $upload_dir . $new_filename;
                 
                 if (move_uploaded_file($fileData['tmp_name'], $target_path)) {
                     error_log("File uploaded successfully: " . $target_path);
                     
-                    // Save to application_documents table - using record_id as permit_id
+                    // Save to application_documents table
                     $doc_sql = "INSERT INTO application_documents (
                         permit_id, document_type, document_name, 
                         file_path, file_type, file_size, upload_date
@@ -354,7 +320,7 @@ try {
                     if ($doc_stmt) {
                         $doc_stmt->bind_param(
                             'issssi',
-                            $new_record_id,  // Use the record_id as permit_id for foreign key
+                            $new_permit_id,  // Use the auto-generated permit_id
                             $document_type,
                             $original_name,
                             $target_path,
@@ -390,7 +356,7 @@ try {
                 mkdir($upload_dir, 0777, true);
             }
             
-            $new_filename = 'SIG_' . $custom_permit_id . '_' . time() . '.' . $file_ext;
+            $new_filename = 'SIG_' . $new_permit_id . '_' . time() . '.' . $file_ext;
             $target_path = $upload_dir . $new_filename;
             
             if (move_uploaded_file($signatureData['tmp_name'], $target_path)) {
@@ -404,7 +370,7 @@ try {
                 if ($sig_stmt) {
                     $sig_stmt->bind_param(
                         'isssi',
-                        $new_record_id,  // Use the record_id as permit_id for foreign key
+                        $new_permit_id,  // Use the auto-generated permit_id
                         $original_name,
                         $target_path,
                         $signatureData['type'],
@@ -422,9 +388,9 @@ try {
     
     $response['success'] = true;
     $response['message'] = 'Business permit renewal submitted successfully!';
-    $response['permit_id'] = $custom_permit_id;  // Return the custom permit ID
+    $response['permit_id'] = $new_permit_id;  // Return the auto-generated permit_id
     $response['applicant_id'] = $applicant_id;
-    $response['record_id'] = $new_record_id;  // Return the auto-generated record ID
+    $response['record_id'] = $new_permit_id;  // Return the auto-generated record ID
     
 } catch (Exception $e) {
     // Rollback on error

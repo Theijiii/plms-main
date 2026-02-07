@@ -325,7 +325,7 @@ export default function LandingPage() {
                 </h2>
               </div>
               <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                Comprehensive digital solutions for all your permit needs with streamlined processing and real-time tracking
+               Wide ranging digital solutions for all your permit needs with streamlined processing and real-time tracking
               </p>
             </div>
 

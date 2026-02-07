@@ -978,20 +978,18 @@ export default function BusinessRenewal() {
 
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>
-                  Current Permit Expiry Date <span className="text-red-500">*</span>
+                  Permit Expiry Date <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    name="permit_expiry"
-                    value={formData.permit_expiry}
-                    onChange={handleChange}
-                    className="p-3 border border-black rounded-lg w-full pl-10"
-                    style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
-                    required
-                  />
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                </div>
+                <input
+                  type="date"
+                  name="permit_expiry"
+                  value={formData.permit_expiry}
+                  onChange={handleChange}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="p-3 border border-black rounded-lg w-full"
+                  style={{ color: COLORS.secondary, fontFamily: COLORS.font }}
+                  required
+                />
               </div>
 
               <div>
