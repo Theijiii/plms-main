@@ -7,6 +7,7 @@ import UserDashboard from "./pages/user/UserDashboard"
 import Plms from "./pages/plms";
 import Login from "./pages/user/Login"
 import Register from "./pages/user/Register"
+import GoogleCallback from "./pages/user/GoogleCallback"
 
 import BusPermitType from "./pages/user/BusinessPermit/BusPermitType"
 import BusinessNew from "./pages/user/BusinessPermit/BusinessNew"
@@ -61,6 +62,7 @@ function App() {
         <Route path="/home" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/auth/google/callback" element={<GoogleCallback />} />
 
 
         {/* Protected User routes */}

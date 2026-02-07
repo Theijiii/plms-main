@@ -122,8 +122,15 @@ export default function BuildingNew() {
         const value = formData[key];
         if (value instanceof File || value instanceof FileList) return;
         if (Array.isArray(value)) return;
-        submitData.append(key, value);
+        if (value !== null && value !== undefined && value !== '') {
+          submitData.append(key, value);
+        }
       });
+
+      // Map prc_no to prc_license for backend compatibility
+      if (formData.prc_no) {
+        submitData.append('prc_license', formData.prc_no);
+      }
 
       if (formData.signature) submitData.append("signature", formData.signature);
       if (formData.attachments && formData.attachments.length > 0) {
@@ -508,78 +515,81 @@ export default function BuildingNew() {
           <h1 className="text-2xl md:text-4xl font-bold" style={{ color: COLORS.primary, fontFamily: COLORS.font }}>Building Permit Application</h1>
           <p className="mt-2" style={{ color: COLORS.secondary, fontFamily: COLORS.font }}>Apply for a building permit. Fill out the required details below.</p>
         </div>
-        <div className="flex justify-end">
-          <button
-            onClick={() => navigate('/user/building/type')}
-            className="px-4 py-2 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300"
-            style={{ background: COLORS.success, fontFamily: COLORS.font }}
-            onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-            onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-          >
-            Change Type
-          </button>
-        </div>
+        <button
+          onClick={() => navigate('/user/building/type')}
+          className="px-4 py-2 rounded-lg font-semibold text-white transition-all duration-300 hover:shadow-lg"
+          style={{ background: COLORS.success, fontFamily: COLORS.font }}
+          onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+          onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+        >
+          Change Type
+        </button>
       </div>
 
-      <div className="mb-8">
+      <div className="mb-8 bg-white p-6 rounded-xl shadow-sm">
         <div className="flex items-center justify-between">
           {steps.map((step, index) => (
             <div key={step.id} className="flex items-center">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full border-2" style={{
-                background: currentStep >= step.id ? COLORS.success : 'transparent',
-                borderColor: currentStep >= step.id ? COLORS.success : '#9CA3AF',
+              <div className="flex items-center justify-center w-12 h-12 rounded-full border-2 font-bold transition-all duration-300" style={{
+                background: currentStep >= step.id ? COLORS.primary : '#fff',
+                borderColor: currentStep >= step.id ? COLORS.primary : '#E5E7EB',
                 color: currentStep >= step.id ? '#fff' : '#9CA3AF',
-                fontFamily: COLORS.font
+                fontFamily: COLORS.font,
+                boxShadow: currentStep === step.id ? '0 4px 12px rgba(74, 144, 226, 0.3)' : 'none'
               }}>{step.id}</div>
               <div className="ml-3 hidden md:block">
-                <p className="text-sm font-medium" style={{ color: currentStep >= step.id ? COLORS.success : COLORS.secondary, fontFamily: COLORS.font }}>{step.title}</p>
-                <p className="text-xs text-gray-500">{step.description}</p>
+                <p className="text-sm font-semibold" style={{ color: currentStep >= step.id ? COLORS.primary : '#6B7280', fontFamily: COLORS.font }}>{step.title}</p>
+                <p className="text-xs text-gray-500" style={{ fontFamily: COLORS.font }}>{step.description}</p>
               </div>
-              {index < steps.length - 1 && <div className="hidden md:block w-16 h-0.5 mx-4" style={{ background: currentStep > step.id ? COLORS.success : '#9CA3AF' }} />}
+              {index < steps.length - 1 && <div className="hidden md:block w-16 h-0.5 mx-4 transition-all duration-300" style={{ background: currentStep > step.id ? COLORS.primary : '#E5E7EB' }} />}
             </div>
           ))}
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {renderStepContent()}
+        <div className="bg-white p-6 rounded-xl shadow-sm">
+          {renderStepContent()}
+        </div>
 
-        <div className="flex justify-between pt-6">
+        <div className="flex justify-between pt-6 bg-white p-6 rounded-xl shadow-sm">
           {currentStep > 1 && (
             <button
               type="button"
               onClick={prevStep}
-              className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300"
-              style={{ background: COLORS.success, fontFamily: COLORS.font }}
-              onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-              onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
+              className="px-8 py-3 rounded-lg font-semibold text-white transition-all duration-300 hover:shadow-lg flex items-center gap-2"
+              style={{ background: '#6B7280', fontFamily: COLORS.font }}
+              onMouseEnter={e => e.currentTarget.style.background = '#4B5563'}
+              onMouseLeave={e => e.currentTarget.style.background = '#6B7280'}
             >
-              Previous
+              ← Previous
             </button>
           )}
-          {currentStep < steps.length ? (
-            <button
-              type="button"
-              onClick={nextStep}
-              className="px-6 py-3 rounded-lg font-semibold text-white hover:bg-[#FDA811] transition-colors duration-300"
-              style={{ background: COLORS.success, fontFamily: COLORS.font }}
-              onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
-              onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
-            >
-              Next
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`px-6 py-3 rounded-lg font-semibold text-white ${isSubmitting ? 'cursor-not-allowed' : 'hover:bg-[#FDA811] transition-colors duration-300'}`}
-              style={{ background: isSubmitting ? '#9CA3AF' : COLORS.success, fontFamily: COLORS.font }}
-              onMouseEnter={e => { if (!isSubmitting) e.currentTarget.style.background = COLORS.accent; }}
-              onMouseLeave={e => { if (!isSubmitting) e.currentTarget.style.background = COLORS.success; }}
-            >
-              {isSubmitting ? 'Submitting...' : 'Submit Application'}
-            </button>
-          )}
+          <div className={currentStep === 1 ? 'ml-auto' : ''}>
+            {currentStep < steps.length ? (
+              <button
+                type="button"
+                onClick={nextStep}
+                className="px-8 py-3 rounded-lg font-semibold text-white transition-all duration-300 hover:shadow-lg flex items-center gap-2"
+                style={{ background: COLORS.primary, fontFamily: COLORS.font }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
+                onMouseLeave={e => e.currentTarget.style.background = COLORS.primary}
+              >
+                Next →
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`px-8 py-3 rounded-lg font-semibold text-white transition-all duration-300 ${!isSubmitting && 'hover:shadow-lg'} ${isSubmitting ? 'cursor-not-allowed opacity-60' : ''}`}
+                style={{ background: isSubmitting ? '#9CA3AF' : COLORS.success, fontFamily: COLORS.font }}
+                onMouseEnter={e => { if (!isSubmitting) e.currentTarget.style.background = COLORS.accent; }}
+                onMouseLeave={e => { if (!isSubmitting) e.currentTarget.style.background = COLORS.success; }}
+              >
+                {isSubmitting ? '⏳ Submitting...' : '✓ Submit Application'}
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </div>

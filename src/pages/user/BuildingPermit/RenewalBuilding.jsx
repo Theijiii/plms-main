@@ -1,8 +1,21 @@
 import React, { useState } from 'react';
 import { useNavigate } from "react-router-dom";
+import { Upload } from "lucide-react";
+import Swal from "sweetalert2";
+
+const COLORS = {
+  primary: '#4A90E2',
+  secondary: '#000000',
+  accent: '#FDA811',
+  success: '#4CAF50',
+  danger: '#E53935',
+  background: '#FBFBFB',
+  font: 'Montserrat, Arial, sans-serif'
+};
 
 export default function RenewalBuilding() {
     const navigate = useNavigate();
+    const API_BASE = "/backend/building_permit";
   
   const steps = [
     { id: 1, title: 'Previous Permit Details', description: 'Your existing permit information' },
@@ -13,31 +26,59 @@ export default function RenewalBuilding() {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
+    // Previous Permit Details
     previous_permit_number: '',
     previous_permit_expiry: '',
-  first_name: '',
-  middle_initial: '',
-  last_name: '',
-  suffix: '',
-    contact_number: '',
+    // Applicant Information
+    first_name: '',
+    middle_initial: '',
+    last_name: '',
+    suffix: '',
+    contact_no: '',
     email: '',
-    birth_date: '',
-    gender: '',
-    civil_status: '',
-    nationality: '',
+    citizenship: '',
     tin: '',
-    sss_no: '',
-    philhealth_no: '',
-    building_name: '',
-    trade_name: '',
-    building_structure: '',
-    ownership_status: '',
-    registration_number: '',
-    building_activity: '',
-    building_description: '',
-    capital_investment: '',
-    number_of_employees: '',
-    attachments: []
+    home_address: '',
+    form_of_ownership: '',
+    // Updated Building Information
+    permit_group: '',
+    use_of_permit: '',
+    proposed_date_of_construction: '',
+    expected_date_of_completion: '',
+    total_estimated_cost: '',
+    // Project Site
+    lot_no: '',
+    blk_no: '',
+    tct_no: '',
+    tax_dec_no: '',
+    street: '',
+    barangay: '',
+    city_municipality: '',
+    province: '',
+    // Occupancy & Cost
+    number_of_units: '',
+    number_of_storeys: '',
+    total_floor_area: '',
+    lot_area: '',
+    building_cost: '',
+    electrical_cost: '',
+    mechanical_cost: '',
+    electronics_cost: '',
+    plumbing_cost: '',
+    other_cost: '',
+    equipment_cost: '',
+    proposed_start: '',
+    expected_completion: '',
+    // Professional Info
+    professional_title: '',
+    professional_name: '',
+    prc_no: '',
+    ptr_no: '',
+    gov_id_no: '',
+    date_issued: '',
+    place_issued: '',
+    remarks: '',
+    signature: null
   });
   const [errors, setErrors] = useState({});
   const [submitStatus, setSubmitStatus] = useState(null);
@@ -45,44 +86,130 @@ export default function RenewalBuilding() {
 
   const handleChange = (e) => {
     const { name, value, type, files } = e.target;
-    if (type === 'file') {
-      setFormData((prev) => ({ ...prev, attachments: files }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "file" ? (files && files[0] ? files[0] : null) : value,
+    }));
   };
 
   const nextStep = () => {
-    if (currentStep === 2) {
-      const e = {};
-      if (!formData.first_name || formData.first_name.trim() === '') e.first_name = 'First name is required';
-      if (!formData.last_name || formData.last_name.trim() === '') e.last_name = 'Last name is required';
-      if (!formData.contact_number || formData.contact_number.trim() === '') e.contact_number = 'Contact number is required';
-      if (!formData.birth_date) e.birth_date = 'Birth date is required';
-      if (!formData.gender) e.gender = 'Gender is required';
-      if (!formData.civil_status) e.civil_status = 'Civil status is required';
-      if (!formData.nationality || formData.nationality.trim() === '') e.nationality = 'Nationality is required';
-      if (Object.keys(e).length > 0) {
-        setErrors(e);
-        return;
-      }
-      setErrors({});
+    const result = validateStep(currentStep);
+    if (!result.ok) {
+      Swal.fire({ icon: 'warning', title: 'Missing Fields', text: result.message, confirmButtonColor: COLORS.primary });
+      return;
     }
-
     if (currentStep < steps.length) setCurrentStep(currentStep + 1);
   };
   const prevStep = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
+  const validateStep = (step) => {
+    const isEmpty = (value) => value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
+    const stepFields = {
+      1: ['previous_permit_number', 'previous_permit_expiry'],
+      2: ['first_name', 'last_name', 'contact_no', 'email', 'citizenship', 'tin', 'home_address', 'form_of_ownership'],
+      3: ['permit_group', 'use_of_permit', 'lot_no', 'blk_no', 'street', 'barangay', 'city_municipality', 'province'],
+      4: ['signature']
+    };
+    const missing = [];
+    if (stepFields[step]) {
+      stepFields[step].forEach(field => {
+        if (isEmpty(formData[field])) missing.push(field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+      });
+    }
+    if (missing.length) return { ok: false, message: "Missing: " + missing.join(", ") };
+    return { ok: true };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const result = validateStep(currentStep);
+    if (!result.ok) {
+      Swal.fire({ icon: 'warning', title: 'Missing Fields', text: result.message, confirmButtonColor: COLORS.primary });
+      return;
+    }
+
+    const confirm = await Swal.fire({
+      title: 'Submit Renewal?',
+      text: 'Are you sure you want to submit this building permit renewal application?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: COLORS.success,
+      cancelButtonColor: '#9aa5b1',
+      confirmButtonText: 'Yes, Submit',
+      cancelButtonText: 'Cancel',
+      reverseButtons: true
+    });
+
+    if (!confirm.isConfirmed) return;
+
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-      setSubmitStatus({ type: 'success', message: 'Renewal submitted successfully!' });
+
+    Swal.fire({
+      title: 'Submitting...',
+      html: 'Please wait while we process your renewal application.',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      didOpen: () => { Swal.showLoading(); }
+    });
+
+    try {
+      const submitData = new FormData();
+
+      Object.keys(formData).forEach(key => {
+        const value = formData[key];
+        if (value instanceof File || value instanceof FileList) return;
+        if (Array.isArray(value)) return;
+        if (value !== null && value !== undefined && value !== '') {
+          submitData.append(key, value);
+        }
+      });
+
+      if (formData.prc_no) {
+        submitData.append('prc_license', formData.prc_no);
+      }
+
+      if (formData.signature) submitData.append("signature", formData.signature);
+
+      const response = await fetch(`${API_BASE}/building_permit.php`, {
+        method: "POST",
+        body: submitData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        Swal.fire({
+          icon: 'success',
+          title: 'Renewal Submitted!',
+          html: `<p>Your building permit renewal application has been submitted successfully.</p>
+                 <p style="margin-top:8px;"><strong>Application ID:</strong> ${data.data?.application_id || 'N/A'}</p>`,
+          confirmButtonColor: COLORS.success,
+          confirmButtonText: 'OK'
+        }).then(() => {
+          navigate('/user/building/type');
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Submission Failed',
+          text: data.message || 'Failed to submit renewal application. Please try again.',
+          confirmButtonColor: COLORS.danger
+        });
+      }
+    } catch (err) {
+      console.error('Submit error:', err);
+      Swal.fire({
+        icon: 'error',
+        title: 'Network Error',
+        text: 'Could not connect to the server. Please check your connection and try again.',
+        confirmButtonColor: COLORS.danger
+      });
+    } finally {
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
 
   const renderStepContent = () => {
