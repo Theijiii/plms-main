@@ -134,8 +134,8 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
-      // Initialize Google OAuth
-      const clientId = '888986438781-nrfbgrlpdd4an80gpsk5sdtrc5f14bmn.apps.googleusercontent.com';
+      // Initialize Google OAuth - use environment variable or fallback
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '888986438781-nrfbgrlpdd4an80gpsk5sdtrc5f14bmn.apps.googleusercontent.com';
       
       // Create Google OAuth URL
       const redirectUri = window.location.origin + '/auth/google/callback';

@@ -38,7 +38,8 @@ export default function GoogleCallback() {
 
       try {
         // Send the authorization code to backend
-        const response = await fetch('http://localhost/backend/login/google-callback.php', {
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || '/backend';
+        const response = await fetch(`${apiUrl}/login/google-callback.php`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -50,19 +51,36 @@ export default function GoogleCallback() {
         const data = await response.json();
 
         if (data.success) {
-          // Store authentication data
-          localStorage.setItem('authToken', data.token);
-          localStorage.setItem('userId', data.user_id);
-          localStorage.setItem('userEmail', data.email);
+          // Store authentication data using consistent keys
+          localStorage.setItem('auth_token', data.token);
+          localStorage.setItem('goserveph_user_id', data.user_id);
+          localStorage.setItem('goserveph_email', data.email);
+          localStorage.setItem('email', data.email);
+          localStorage.setItem('goserveph_role', 'user');
+          
+          // Store user profile data
+          if (data.first_name) {
+            localStorage.setItem('first_name', data.first_name);
+          }
+          if (data.last_name) {
+            localStorage.setItem('last_name', data.last_name);
+          }
+          const fullName = `${data.first_name || ''} ${data.last_name || ''}`.trim();
+          if (fullName) {
+            localStorage.setItem('full_name', fullName);
+            localStorage.setItem('display_name', fullName);
+          }
           
           // Update auth context
-          await login({
-            token: data.token,
-            user_id: data.user_id,
-            email: data.email,
-            first_name: data.first_name,
-            last_name: data.last_name
-          });
+          if (login) {
+            await login({
+              token: data.token,
+              user_id: data.user_id,
+              email: data.email,
+              first_name: data.first_name,
+              last_name: data.last_name
+            });
+          }
 
           // Show success message
           await Swal.fire({

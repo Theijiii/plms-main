@@ -145,129 +145,152 @@ export default function LandingPage() {
     { value: "99%", label: "Satisfaction", icon: <Award className="w-5 h-5" /> }
   ];
 
+  const COLORS = {
+    primary: '#4CAF50',
+    secondary: '#4A90E2',
+    accent: '#FDA811',
+    background: '#FBFBFB',
+    textmain: '#4D4A4A',
+    border: '#E9E7E7'
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#4CAF50] via-[#4A90E2] to-[#45a89a] relative overflow-hidden">
-      {/* Animated Background Shapes */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#4A90E2]/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
-        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-[#4CAF50]/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
-        <div className="absolute top-40 right-1/4 w-48 h-48 bg-[#FDA811]/10 rounded-full blur-2xl animate-pulse" style={{animationDelay: '0.5s'}}></div>
+    <div className="min-h-screen relative overflow-hidden" style={{ background: COLORS.background }}>
+      {/* Subtle Background Pattern */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-5">
+        <div className="absolute top-0 left-0 w-full h-full" style={{
+          backgroundImage: `radial-gradient(circle at 2px 2px, ${COLORS.border} 1px, transparent 0)`,
+          backgroundSize: '40px 40px'
+        }}></div>
       </div>
-      {/* Header - WHITE (unchanged) */}
+      {/* Accent Shapes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 -right-20 w-80 h-80 rounded-full blur-3xl opacity-10" style={{ background: COLORS.primary }}></div>
+        <div className="absolute bottom-40 -left-20 w-96 h-96 rounded-full blur-3xl opacity-10" style={{ background: COLORS.secondary }}></div>
+        <div className="absolute top-1/2 right-1/3 w-64 h-64 rounded-full blur-3xl opacity-10" style={{ background: COLORS.accent }}></div>
+      </div>
+      {/* Header */}
       <header
-        className={`sticky top-0 z-50 bg-white shadow-sm border-b-4 border-[#FDA811] transition-transform duration-300 ${
+        className={`sticky top-0 z-50 bg-white shadow-md transition-transform duration-300 ${
           isVisible ? "translate-y-0" : "-translate-y-full"
         }`}
+        style={{ borderBottom: `4px solid ${COLORS.accent}` }}
       >
-        <div className="px-[50px] py-3 flex justify-between items-center">
+        <div className="px-6 md:px-12 lg:px-[50px] py-4 flex justify-between items-center">
           {/* LEFT: Logo + Title + Tagline */}
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-200">
+            <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-lg" style={{ border: `2px solid ${COLORS.border}` }}>
               <img
                 src="/GSM_logo.png"
                 alt="GoServePH Logo"
-                className="w-10 h-10 object-contain"
+                className="w-11 h-11 object-contain"
               />
             </div>
             <div className="flex flex-col leading-tight">
-              <span className="text-xl font-bold">
-                <span className="text-blue-700">Go</span>
-                <span className="text-green-600">Serve</span>
-                <span className="text-blue-700">PH</span>
+              <span className="text-2xl font-bold">
+                <span style={{ color: COLORS.secondary }}>Go</span>
+                <span style={{ color: COLORS.primary }}>Serve</span>
+                <span style={{ color: COLORS.secondary }}>PH</span>
               </span>
-              <span className="text-sm text-gray-600">
+              <span className="text-xs font-medium" style={{ color: COLORS.textmain }}>
                 Serbisyong Publiko, Abot-Kamay Mo.
               </span>
             </div>
           </div>
 
-          {/* RIGHT: Auth Buttons */}
-          <div className="flex items-center gap-3">
-            <div className="hidden md:block text-right text-sm text-gray-800 mr-3">
-              <div className="font-semibold">{time.toLocaleTimeString()}</div>
-              <div>
+          {/* RIGHT: Time & Login */}
+          <div className="flex items-center gap-4">
+            <div className="hidden md:block text-right text-sm mr-3" style={{ color: COLORS.textmain }}>
+              <div className="font-bold text-base">{time.toLocaleTimeString()}</div>
+              <div className="text-xs opacity-80">
                 {time.toLocaleDateString(undefined, {
                   weekday: "long",
-                  year: "numeric",
-                  month: "long",
+                  month: "short",
                   day: "numeric",
                 })}
               </div>
             </div>
+            <button
+              onClick={handleLoginClick}
+              className="px-6 py-2.5 rounded-lg font-semibold text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              style={{ background: COLORS.primary }}
+            >
+              Sign In
+            </button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10 px-6 md:px-12 lg:px-[50px] py-8 md:py-10 lg:py-12">
-        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start">
-          {/* Left Section - Hero Content */}
-          <div className="text-center lg:text-left space-y-8 mt-8">
+      <main className="relative z-10 px-6 md:px-12 lg:px-[50px] py-12 md:py-16">
+        <div className="max-w-7xl mx-auto">
+          {/* Hero Section */}
+          <div className="text-center space-y-8 mb-16">
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/30 shadow-lg">
-              <Award className="w-4 h-4 text-yellow-400" />
-              <span className="text-sm font-medium text-white">Trusted Government Service Platform</span>
+            <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-white rounded-full shadow-md" style={{ border: `2px solid ${COLORS.accent}` }}>
+              <Award className="w-5 h-5" style={{ color: COLORS.accent }} />
+              <span className="text-sm font-bold" style={{ color: COLORS.textmain }}>Trusted Government Service Platform</span>
             </div>
 
-            <div className="space-y-6">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight text-white drop-shadow-2xl">
-                Permit & Licensing Made
-                <span className="block mt-2 bg-gradient-to-r from-[#FDA811] to-yellow-300 bg-clip-text text-transparent">
+            <div className="space-y-6 max-w-4xl mx-auto">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight" style={{ color: COLORS.textmain }}>
+                Permit & Licensing Made{" "}
+                <span className="block mt-2" style={{ color: COLORS.primary }}>
                   Simple & Fast
                 </span>
               </h1>
-              <p className="text-lg md:text-xl text-white/95 leading-relaxed font-medium max-w-2xl">
+              <p className="text-lg md:text-xl leading-relaxed font-medium max-w-3xl mx-auto" style={{ color: COLORS.textmain, opacity: 0.8 }}>
                 Transform your permit applications with our secure digital platform. Government services are now faster, simpler, and accessible at your fingertips.
               </p>
             </div>
 
             {/* Features Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
               {features.map((feature, index) => (
                 <div 
                   key={index} 
-                  className="bg-white/10 backdrop-blur-lg border border-white/30 rounded-2xl p-4 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-2xl group"
+                  className="bg-white rounded-2xl p-6 hover:shadow-2xl transition-all duration-300 hover:scale-105 group"
+                  style={{ border: `2px solid ${COLORS.border}` }}
                 >
-                  <div className={`w-12 h-12 ${feature.iconBg} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                  <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" style={{ background: index === 0 ? COLORS.accent : index === 1 ? COLORS.secondary : COLORS.primary }}>
                     <div className="text-white">
                       {feature.icon}
                     </div>
                   </div>
-                  <h3 className="font-bold text-white text-sm mb-1">
+                  <h3 className="font-bold text-lg mb-2" style={{ color: COLORS.textmain }}>
                     {feature.title}
                   </h3>
-                  <p className="text-xs text-white/80">
+                  <p className="text-sm" style={{ color: COLORS.textmain, opacity: 0.7 }}>
                     {feature.description}
                   </p>
                 </div>
               ))}
             </div>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
+            {/* CTA Button */}
+            <div className="flex justify-center pt-4">
               <button
                 onClick={handleLoginClick}
-                className="group px-8 py-4 bg-gradient-to-r from-[#FDA811] to-[#ff8c00] text-white rounded-2xl font-bold hover:shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3 relative overflow-hidden shadow-xl"
+                className="group px-10 py-4 text-white rounded-xl font-bold hover:shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3 shadow-lg"
+                style={{ background: COLORS.primary }}
               >
-                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                <UserPlus className="w-5 h-5 relative z-10" />
-                <span className="relative z-10">Get Started Now</span>
-                <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
+                <UserPlus className="w-6 h-6" />
+                <span className="text-lg">Get Started Now</span>
+                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-6 pt-8 border-t border-white/30">
+            <div className="grid grid-cols-3 gap-8 pt-12 max-w-4xl mx-auto" style={{ borderTop: `2px solid ${COLORS.border}` }}>
               {stats.map((stat, index) => (
-                <div key={index} className="text-center space-y-2">
-                  <div className="flex items-center justify-center text-white/80">
+                <div key={index} className="text-center space-y-3">
+                  <div className="flex items-center justify-center" style={{ color: COLORS.primary }}>
                     {stat.icon}
                   </div>
-                  <div className="text-2xl md:text-3xl font-bold text-white drop-shadow-lg">
+                  <div className="text-3xl md:text-4xl font-bold" style={{ color: COLORS.primary }}>
                     {stat.value}
                   </div>
-                  <div className="text-xs md:text-sm text-white/90 font-medium">
+                  <div className="text-sm font-semibold" style={{ color: COLORS.textmain, opacity: 0.7 }}>
                     {stat.label}
                   </div>
                 </div>
@@ -275,62 +298,69 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Right Section - Service Cards */}
-          <div className="space-y-6">
-            <div className="text-center lg:text-left">
-              <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-[#4CAF50] to-[#4A90E2] backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg">
+          {/* Services Section */}
+          <div className="space-y-8 mt-16">
+            <div className="text-center">
+              <div className="inline-flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg" style={{ background: COLORS.secondary }}>
                   <FileText className="w-6 h-6 text-white" />
                 </div>
-                Our Services
-              </h2>
-              <p className="text-white/90 text-sm md:text-base">
+                <h2 className="text-3xl md:text-4xl font-bold" style={{ color: COLORS.textmain }}>
+                  Our Services
+                </h2>
+              </div>
+              <p className="text-lg" style={{ color: COLORS.textmain, opacity: 0.7 }}>
                 Comprehensive digital solutions for all your permit needs
               </p>
             </div>
 
             {/* Service Cards Grid */}
-            <div className="grid grid-cols-1 gap-5">
-              {services.map((service) => (
-                <div
-                  key={service.id}
-                  onMouseEnter={() => setActiveCard(service.id)}
-                  onMouseLeave={() => setActiveCard(null)}
-                  className={`${service.bgColor} backdrop-blur-sm border-2 ${service.borderColor} rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1 cursor-pointer group`}
-                >
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className={`w-16 h-16 ${service.iconBg} rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform flex-shrink-0`}>
-                      <div className="text-white">
-                        {service.icon}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {services.map((service, idx) => {
+                const bgColor = idx === 0 ? COLORS.secondary : idx === 1 ? COLORS.primary : idx === 2 ? COLORS.accent : '#E53935';
+                return (
+                  <div
+                    key={service.id}
+                    onMouseEnter={() => setActiveCard(service.id)}
+                    onMouseLeave={() => setActiveCard(null)}
+                    className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02] cursor-pointer group"
+                    style={{ border: `2px solid ${COLORS.border}` }}
+                  >
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="w-16 h-16 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform flex-shrink-0" style={{ background: bgColor }}>
+                        <div className="text-white">
+                          {service.icon}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-xl mb-2 group-hover:underline" style={{ color: COLORS.textmain }}>
+                          {service.title}
+                        </h3>
+                        <p className="text-sm leading-relaxed" style={{ color: COLORS.textmain, opacity: 0.7 }}>
+                          {service.description}
+                        </p>
                       </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className={`font-bold text-xl mb-2 ${service.textColor} group-hover:underline`}>
-                        {service.title}
-                      </h3>
-                      <p className="text-sm text-gray-700 leading-relaxed">
-                        {service.description}
-                      </p>
+
+                    <div className="flex items-center gap-2 text-sm font-semibold mb-4 px-3 py-2 rounded-lg w-fit" style={{ background: `${bgColor}15`, color: bgColor, border: `1px solid ${bgColor}40` }}>
+                      {service.statsIcon}
+                      <span>{service.stats}</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {service.features.map((feature, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium hover:shadow-md transition-all duration-200"
+                          style={{ background: COLORS.background, color: COLORS.textmain, border: `1px solid ${COLORS.border}` }}
+                        >
+                          {feature}
+                        </span>
+                      ))}
                     </div>
                   </div>
-
-                  <div className={`flex items-center gap-2 text-sm font-semibold ${service.textColor} mb-4 px-3 py-2 bg-white/50 rounded-lg border ${service.borderColor} w-fit`}>
-                    {service.statsIcon}
-                    <span>{service.stats}</span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {service.features.map((feature, index) => (
-                      <span
-                        key={index}
-                        className="px-3 py-2 bg-white/90 backdrop-blur-sm rounded-lg text-sm font-medium text-gray-800 border border-gray-300 hover:bg-white hover:shadow-md transition-all duration-200"
-                      >
-                        {feature}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
