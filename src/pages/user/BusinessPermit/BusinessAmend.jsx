@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft, Building, FileText, MapPin, User, CheckCircle, AlertCircle, FileCheck, Upload, Check, X, Eye, XCircle, Info, FileSignature, Calendar, Clock } from "lucide-react";
+import Swal from 'sweetalert2';
 
 const COLORS = {
   primary: '#4A90E2',

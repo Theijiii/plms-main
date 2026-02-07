@@ -26,7 +26,7 @@ export default function BusPermitType({ business_permit_id }) {
 
   const verifyBarangayClearance = async (permitId) => {
     try {
-      const response = await fetch('https://e-plms.goserveph.com/backend/barangay_permit/admin_fetch.php');
+      const response = await fetch('/backend/barangay_permit/admin_fetch.php');
       const data = await response.json();
       
       if (data.success && Array.isArray(data.data)) {
@@ -44,25 +44,13 @@ export default function BusPermitType({ business_permit_id }) {
 
   const verifyApplicantId = async (applicantId) => {
     try {
-      const response = await fetch(`https://e-plms.goserveph.com/backend/business_permit/admin_fetch.php?search=${encodeURIComponent(applicantId)}`);
+      const response = await fetch('/backend/business_permit/admin_fetch.php');
       const data = await response.json();
       
-      console.log('API Response:', data);
-      console.log('Searching for Applicant ID:', applicantId);
-      
       if (data.success && Array.isArray(data.data)) {
-        console.log('Received applications:', data.data.length);
-        console.log('Applications:', data.data.map(app => ({
-          applicant_id: app.applicant_id,
-          status: app.status
-        })));
-        
         const application = data.data.find(app => 
-          String(app.applicant_id).trim().toLowerCase() === String(applicantId).trim().toLowerCase()
+          String(app.applicant_id).trim() === String(applicantId).trim()
         );
-        
-        console.log('Found application:', application);
-        
         return application ? { exists: true, applicant_id: application.applicant_id, application } : { exists: false };
       }
       return { exists: false };
@@ -243,7 +231,7 @@ export default function BusPermitType({ business_permit_id }) {
               </div>
             `,
             input: 'text',
-            inputPlaceholder: 'e.g., BUS2026568',
+            inputPlaceholder: 'e.g., BUS-2026-1234',
             showCancelButton: true,
             confirmButtonColor: COLORS.success,
             cancelButtonColor: '#9CA3AF',

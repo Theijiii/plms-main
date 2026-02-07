@@ -38,7 +38,7 @@ export default function PermitTracker() {
       const userId = localStorage.getItem('user_id') || 0;
 
       const response = await fetch(
-        `http://localhost/plms-main/backend/api/tracker.php?email=${encodeURIComponent(userEmail)}&user_id=${userId}`,
+        `/backend/api/tracker.php?email=${encodeURIComponent(userEmail)}&user_id=${userId}`,
         {
           method: 'GET',
           credentials: 'include',

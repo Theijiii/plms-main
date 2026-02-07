@@ -76,23 +76,26 @@ const getFileTypeName = (fileType, fileName) => {
 
 // Status mapping functions
 const mapStatusToFrontend = (status) => {
-  if (!status) return 'Compliance';
+  if (!status) return 'Pending';
   const statusMap = {
-    'pending': 'Compliance',
-    'under_review': 'Compliance',
+    'pending': 'Pending',
     'approved': 'Approved',
-    'rejected': 'Rejected'
+    'rejected': 'Rejected',
+    'under_review': 'Under Review',
+    'document_verification': 'Document Verification',
+    'field_inspection_scheduled': 'Field Inspection Scheduled',
+    'payment_verification': 'Payment Verification',
+    'for_manager_approval': 'For Manager Approval',
+    'printing_processing': 'Printing Processing',
+    'ready_for_release': 'Ready for Release'
   };
-  return statusMap[status.toLowerCase()] || 'Compliance';
+  return statusMap[status.toLowerCase()] || status;
 };
 
 const mapStatusToBackend = (status) => {
-  const statusMap = {
-    'Compliance': 'pending',
-    'Approved': 'approved',
-    'Rejected': 'rejected'
-  };
-  return statusMap[status] || 'pending';
+  if (!status) return 'pending';
+  // Convert UI status to snake_case DB value
+  return status.toLowerCase().replace(/\s+/g, '_');
 };
 
 export default function FranchisePermitApplication() {
@@ -116,6 +119,7 @@ export default function FranchisePermitApplication() {
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [actionHistory, setActionHistory] = useState({});
   const imageRef = useRef(null);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -495,7 +499,7 @@ export default function FranchisePermitApplication() {
         });
       
       case 'status_priority':
-        const statusOrder = { 'Compliance': 1, 'Approved': 2, 'Rejected': 3 };
+        const statusOrder = { 'Pending': 1, 'Approved': 2, 'Rejected': 3 };
         return sortedFranchises.sort((a, b) => 
           (statusOrder[a.status] || 4) - (statusOrder[b.status] || 4)
         );
@@ -517,7 +521,7 @@ export default function FranchisePermitApplication() {
     const total = franchises.length;
     const approved = franchises.filter(f => f.status === "Approved").length;
     const rejected = franchises.filter(f => f.status === "Rejected").length;
-    const compliance = franchises.filter(f => f.status === "Compliance").length;
+    const pending = franchises.filter(f => f.status === "Pending").length;
     const mtop = franchises.filter(f => f.permit_subtype === "MTOP").length;
     const franchise = franchises.filter(f => f.permit_subtype === "FRANCHISE").length;
     
@@ -537,7 +541,7 @@ export default function FranchisePermitApplication() {
       total,
       approved,
       rejected,
-      compliance,
+      pending,
       mtop,
       franchise,
       approvalRate,
@@ -552,8 +556,22 @@ export default function FranchisePermitApplication() {
         return "text-[#4CAF50] bg-[#4CAF50]/10";
       case "Rejected":
         return "text-[#E53935] bg-[#E53935]/10";
-      case "Compliance":
+      case "Pending":
         return "text-[#FDA811] bg-[#FDA811]/10";
+      case "Under Review":
+        return "text-[#3B82F6] bg-[#3B82F6]/10";
+      case "Document Verification":
+        return "text-[#8B5CF6] bg-[#8B5CF6]/10";
+      case "Field Inspection Scheduled":
+        return "text-[#0EA5E9] bg-[#0EA5E9]/10";
+      case "Payment Verification":
+        return "text-[#F59E0B] bg-[#F59E0B]/10";
+      case "For Manager Approval":
+        return "text-[#6366F1] bg-[#6366F1]/10";
+      case "Printing Processing":
+        return "text-[#14B8A6] bg-[#14B8A6]/10";
+      case "Ready for Release":
+        return "text-[#10B981] bg-[#10B981]/10";
       default:
         return "text-gray-600 bg-gray-100";
     }
@@ -647,6 +665,22 @@ export default function FranchisePermitApplication() {
       const data = await response.json();
       
       if (data.success) {
+        // Record action in history
+        const permitId = selectedFranchise.application_id || selectedFranchise.id;
+        const historyEntry = {
+          action: status,
+          timestamp: new Date().toLocaleString('en-US', {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+          }),
+          notes: comments || '',
+          by: 'Admin'
+        };
+        setActionHistory(prev => ({
+          ...prev,
+          [permitId]: [...(prev[permitId] || []), historyEntry]
+        }));
+
         Swal.fire({
           icon: 'success',
           title: 'Success!',
@@ -658,9 +692,14 @@ export default function FranchisePermitApplication() {
         
         await fetchFranchises();
         
+        // Use actual DB response to update local state
+        const updatedStatus = data.data?.status 
+          ? mapStatusToFrontend(data.data.status) 
+          : status;
+        
         setSelectedFranchise(prev => ({
           ...prev,
-          status: status,
+          status: updatedStatus,
           remarks: data.data?.remarks || prev.remarks
         }));
       } else {
@@ -918,7 +957,7 @@ export default function FranchisePermitApplication() {
             Approved: ${dashboardStats.approved}
           </span>
           <span style="background: #FDA811; color: white; padding: 3px 10px; border-radius: 15px; font-size: 11px;">
-            Compliance: ${dashboardStats.compliance}
+            Pending: ${dashboardStats.pending}
           </span>
           <span style="background: #E53935; color: white; padding: 3px 10px; border-radius: 15px; font-size: 11px;">
             Rejected: ${dashboardStats.rejected}
@@ -971,7 +1010,7 @@ export default function FranchisePermitApplication() {
           <tbody>
             ${getFilteredAndSortedFranchises().slice(0, 20).map(franchise => {
               const statusColor = franchise.status === "Approved" ? "#4CAF50" : 
-                                franchise.status === "Compliance" ? "#FDA811" : "#E53935";
+                                franchise.status === "Pending" ? "#FDA811" : "#E53935";
               return `
                 <tr style="border-bottom: 1px solid #e5e7eb;">
                   <td style="padding: 8px; border: 1px solid #e5e7eb;">FP-${String(franchise.application_id).padStart(4, '0')}</td>
@@ -1009,8 +1048,8 @@ export default function FranchisePermitApplication() {
             <div style="color: #6b7280;">Approved</div>
           </div>
           <div style="text-align: center;">
-            <div style="font-size: 20px; font-weight: bold; color: #FDA811;">${dashboardStats.compliance}</div>
-            <div style="color: #6b7280;">Compliance</div>
+            <div style="font-size: 20px; font-weight: bold; color: #FDA811;">${dashboardStats.pending}</div>
+            <div style="color: #6b7280;">Pending</div>
           </div>
           <div style="text-align: center;">
             <div style="font-size: 20px; font-weight: bold; color: #E53935;">${dashboardStats.rejected}</div>
@@ -1213,25 +1252,25 @@ export default function FranchisePermitApplication() {
     if (!selectedFranchise) return;
 
     const result = await Swal.fire({
-      title: 'Mark for Compliance?',
+      title: 'Mark as Pending?',
       html: `
         <div class="text-left">
-          <p class="mb-2">Mark this application for compliance review:</p>
+          <p class="mb-2">Mark this application as pending:</p>
           <div class="bg-gray-50 p-3 rounded-lg mb-3">
             <p class="text-sm"><strong>Application ID:</strong> ${selectedFranchise.application_id}</p>
             <p class="text-sm"><strong>Applicant:</strong> ${selectedFranchise.full_name}</p>
             <p class="text-sm"><strong>Type:</strong> ${selectedFranchise.permit_type} - ${selectedFranchise.permit_subtype}</p>
           </div>
-          <p class="text-sm text-gray-600">Please specify what compliance items are needed.</p>
+          <p class="text-sm text-gray-600">Please add any notes if needed.</p>
         </div>
       `,
       icon: 'info',
       input: 'textarea',
-      inputLabel: 'Compliance notes (optional)',
-      inputPlaceholder: 'List required compliance items...',
+      inputLabel: 'Notes (optional)',
+      inputPlaceholder: 'Add notes...',
       inputValue: actionComment,
       showCancelButton: true,
-      confirmButtonText: 'Mark for Compliance',
+      confirmButtonText: 'Mark as Pending',
       cancelButtonText: 'Cancel',
       confirmButtonColor: '#FDA811',
       cancelButtonColor: '#6b7280',
@@ -1243,7 +1282,7 @@ export default function FranchisePermitApplication() {
 
     if (result.isConfirmed) {
       const notes = result.value || actionComment;
-      await updatePermitStatus('Compliance', notes);
+      await updatePermitStatus('Pending', notes);
       setActionComment('');
     }
   };
@@ -1298,8 +1337,8 @@ export default function FranchisePermitApplication() {
           </p>
         </div>
         <div className="bg-[#FDA811]/10 p-4 rounded-lg border border-[#FDA811]/20">
-          <p className="text-[#FDA811] text-sm font-medium">Compliance</p>
-          <p className="text-[#FDA811] text-2xl font-bold">{dashboardStats.compliance}</p>
+          <p className="text-[#FDA811] text-sm font-medium">Pending</p>
+          <p className="text-[#FDA811] text-2xl font-bold">{dashboardStats.pending}</p>
           <p className="text-[#FDA811] text-xs mt-1">
             Requires review
           </p>
@@ -2081,10 +2120,59 @@ export default function FranchisePermitApplication() {
                 </div>
               </div>
 
+              {/* Action History Section */}
+              {(() => {
+                const permitId = selectedFranchise.application_id || selectedFranchise.id;
+                const history = actionHistory[permitId] || [];
+                return history.length > 0 ? (
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-blue-100 dark:border-slate-700">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
+                        <Clock className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Action History</h3>
+                        <p className="text-sm text-gray-500">{history.length} action{history.length !== 1 ? 's' : ''} taken this session</p>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <div className="absolute left-[17px] top-0 bottom-0 w-0.5 bg-blue-200 dark:bg-slate-600"></div>
+                      <div className="space-y-4 max-h-64 overflow-y-auto">
+                        {[...history].reverse().map((entry, idx) => (
+                          <div key={idx} className="relative pl-10">
+                            <div className={`absolute left-[10px] top-1.5 w-4 h-4 rounded-full border-2 border-white dark:border-slate-800 shadow ${
+                              entry.action === 'Approved' ? 'bg-green-500' :
+                              entry.action === 'Rejected' ? 'bg-red-500' :
+                              entry.action === 'Pending' ? 'bg-yellow-500' :
+                              'bg-blue-500'
+                            }`}></div>
+                            <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-3 border border-gray-200 dark:border-slate-600">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`text-sm font-semibold px-2 py-0.5 rounded-full ${
+                                  entry.action === 'Approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                  entry.action === 'Rejected' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                  entry.action === 'Pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                  'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                }`}>{entry.action}</span>
+                                <span className="text-xs text-gray-400 dark:text-gray-500">{entry.timestamp}</span>
+                              </div>
+                              {entry.notes && (
+                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 pl-1">{entry.notes}</p>
+                              )}
+                              <p className="text-xs text-gray-400 mt-1 pl-1">by {entry.by}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
               {/* Action Buttons */}
               <div className="flex gap-4 justify-between pt-8 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl p-6 border-t-4 border-gray-300 dark:border-slate-600">
-                {/* Actions Dropdown - Show for pending/compliance status */}
-                {(selectedFranchise.status === "Compliance" || selectedFranchise.status === "Pending" || !selectedFranchise.status) && (
+                {/* Actions Dropdown - Show for all statuses except Rejected */}
+                {selectedFranchise.status !== "Rejected" && (
                   <div className="relative">
                     <button
                       onClick={() => setShowActionsDropdown(!showActionsDropdown)}
@@ -2181,7 +2269,7 @@ export default function FranchisePermitApplication() {
                           <span className="font-medium text-gray-700 dark:text-gray-200">Ready for Release</span>
                         </button>
 
-                        {/* Compliance & Actions */}
+                        {/* Pending & Actions */}
                         <div className="px-3 py-2 bg-gray-100 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
                           <p className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">Actions</p>
                         </div>
@@ -2194,7 +2282,7 @@ export default function FranchisePermitApplication() {
                           className="w-full px-4 py-3 text-left hover:bg-yellow-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
                         >
                           <AlertCircle className="w-5 h-5 text-yellow-600" />
-                          <span className="font-medium text-gray-700 dark:text-gray-200">Mark for Compliance</span>
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Mark as Pending</span>
                         </button>
                         
                         <button

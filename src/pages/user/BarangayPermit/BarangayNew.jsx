@@ -770,7 +770,7 @@ export default function BarangayNew() {
 
       console.log("Submitting barangay permit application...");
 
-      const response = await fetch("/backend/barangay_permit/barangay_permit.php", {
+      const response = await fetch("http://localhost/plms-main/backend/barangay_permit/barangay_permit.php", {
         method: "POST",
         body: formDataToSend,
       });
@@ -1740,21 +1740,7 @@ export default function BarangayNew() {
           </p>
         </div>
         <button
-          onClick={async () => {
-            const result = await Swal.fire({
-              title: 'Leave Application?',
-              text: 'Are you sure you want to go back to the dashboard? Any unsaved progress will be lost.',
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonColor: COLORS.danger,
-              cancelButtonColor: COLORS.primary,
-              confirmButtonText: 'Yes, leave',
-              cancelButtonText: 'Stay here'
-            });
-            if (result.isConfirmed) {
-              navigate('/user/dashboard');
-            }
-          }}
+          onClick={() => navigate('/user/dashboard')}
           onMouseEnter={e => e.currentTarget.style.background = COLORS.accent}
           onMouseLeave={e => e.currentTarget.style.background = COLORS.success}
           style={{ background: COLORS.success }}

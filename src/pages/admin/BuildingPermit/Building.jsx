@@ -1,776 +1,745 @@
-import { useEffect, useState } from "react";
-import { logTx } from "../../../lib/txLogger";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import Swal from "sweetalert2";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
+import {
+  Search,
+  Download,
+  Calendar,
+  TrendingUp,
+  FileText,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  RefreshCw,
+  Eye,
+  Printer,
+  DownloadCloud,
+  TrendingDown,
+  User,
+  Phone,
+  Mail,
+  Home,
+  MapPin,
+  Building,
+  Image as ImageIcon,
+  File,
+  ChevronRight,
+  ChevronDown,
+  X,
+  MessageSquare,
+  MoreVertical,
+  Filter,
+  ArrowUpDown,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw
+} from "lucide-react";
 
-export default function BusinessPermit() {
-  // Inline mock data (only inside this file) — used as initial state and fallback
-  const mockBusinessData = [
-    {
-      id: "BP-BLD-1001",
-      business_name: "Sunrise Construction",
-      applicant: { full_name: "Juan Dela Cruz", contact_number: "09171234567", email_address: "juan@example.com" },
-      business_address: { street: "123 M.L. Quezon St.", barangay: "San Isidro", city_municipality: "Metro City" },
-      permit_number: "BLD-001",
-      permit_type: "New",
-      business_type: "construction",
-      submitted_at: "2025-09-28",
-      status: "approve",
-      assigned_officer: "Eng. Ramos",
-      total_amount: 50000,
-      attachments: [{ name: "Plans.pdf", url: "https://example.com/sample-build-1.pdf" }],
-      previous_permit_number: null,
-      review_status: "Approved",
-      review_comments: "All good",
-      last_updated: "2025-09-29T10:00:00Z"
-    },
-    {
-      id: "BP-BLD-1002",
-      business_name: "Ace Electricals",
-      applicant: { full_name: "Maria Santos", contact_number: "09181234567", email_address: "maria@example.com" },
-      business_address: { street: "45 Rizal Ave.", barangay: "Bagong Bayan", city_municipality: "Metro City" },
-      permit_number: "ELC-002",
-      permit_type: "Electrical",
-      business_type: "electrical",
-      submitted_at: "2025-10-01",
-      status: "for compliance only",
-      assigned_officer: "Eng. Cruz",
-      total_amount: 15000,
-      attachments: [{ name: "Electrical Plan.pdf", url: "https://example.com/sample-build-2.pdf" }],
-      previous_permit_number: null,
-      review_status: "For Compliance",
-      review_comments: "Provide updated load calculations",
-      last_updated: "2025-10-02T08:30:00Z"
-    },
-    {
-      id: "BP-BLD-1003",
-      business_name: "Blue Harbor Demolition",
-      applicant: { full_name: "Pedro Reyes", contact_number: "09201234567", email_address: "pedro@example.com" },
-      business_address: { street: "7 Marina Blvd.", barangay: "Port Area", city_municipality: "Bay City" },
-      permit_number: "DEM-003",
-      permit_type: "Demolition",
-      business_type: "demolition",
-      submitted_at: "2025-10-02",
-      status: "reject",
-      assigned_officer: null,
-      total_amount: 30000,
-      attachments: [{ name: "Site Eval.pdf", url: "https://example.com/sample-build-3.pdf" }],
-      previous_permit_number: null,
-      review_status: "Rejected",
-      review_comments: "Insufficient shoring plan",
-      last_updated: "2025-10-04T09:00:00Z"
-    },
-    {
-      id: "BP-BLD-1004",
-      business_name: "Lotus Plumbing",
-      applicant: { full_name: "Liza Cruz", contact_number: "09191234567", email_address: "liza@example.com" },
-      business_address: { street: "12 Wellness St.", barangay: "Green Park", city_municipality: "Metro City" },
-      permit_number: "PLB-004",
-      permit_type: "Plumbing",
-      business_type: "plumbing",
-      submitted_at: "2025-10-04",
-      status: "approve",
-      assigned_officer: "Eng. Morales",
-      total_amount: 8000,
-      attachments: [{ name: "Plumbing Plan.pdf", url: "https://example.com/sample-build-4.pdf" }],
-      previous_permit_number: null,
-      review_status: "Approved",
-      review_comments: "Cleared inspection",
-      last_updated: "2025-10-05T11:20:00Z"
-    },
-    {
-      id: "BP-BLD-1005",
-      business_name: "Metro Excavation",
-      applicant: { full_name: "Mark Lim", contact_number: "09211234567", email_address: "mark@example.com" },
-      business_address: { street: "200 Health Ave.", barangay: "Central", city_municipality: "Metro City" },
-      permit_number: "EXC-005",
-      permit_type: "Excavation",
-      business_type: "excavation",
-      submitted_at: "2025-10-05",
-      status: "for compliance only",
-      assigned_officer: null,
-      total_amount: 22000,
-      attachments: [{ name: "Excavation Plan.pdf", url: "https://example.com/sample-build-5.pdf" }],
-      previous_permit_number: null,
-      review_status: "For Compliance",
-      review_comments: "Provide erosion control plan",
-      last_updated: "2025-10-06T14:45:00Z"
-    }
-  ];
-
-  // start with inline mock data so the page always shows something (no other files changed)
-  const [business, setBusiness] = useState(mockBusinessData);
+export default function BuildingPermitApplication() {
+  const [permits, setPermits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("all");
   const [selectedPermit, setSelectedPermit] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [assignedOfficerInput, setAssignedOfficerInput] = useState("");
   const [actionComment, setActionComment] = useState("");
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortField, setSortField] = useState("application_id");
+  const [sortDirection, setSortDirection] = useState("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showSubmittedDocs, setShowSubmittedDocs] = useState(false);
+  const [showFilePreview, setShowFilePreview] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [exporting, setExporting] = useState(false);
+  const [exportType, setExportType] = useState("");
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const actionsRef = useRef(null);
 
-  // Check screen size on mount and resize
-  useEffect(() => {
-    const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    checkScreenSize();
-    window.addEventListener('resize', checkScreenSize);
-    
-    return () => window.removeEventListener('resize', checkScreenSize);
-  }, []);
+  const ITEMS_PER_PAGE = 10;
+  const API_BASE = "/backend/building_permit";
 
-  useEffect(() => {
-    fetch("http://e-plms.goserveph.com/front-end/src/pages/admin/BusinessPermit/businessAdminMock.php")
-      .then((res) => {
-        if (!res.ok) throw new Error("Network response was not ok");
-        return res.json();
-      })
-      .then((data) => {
-        // accept remote data shape if valid array, otherwise keep inline mock
-        if (Array.isArray(data) && data.length) {
-          setBusiness(data);
-        } else {
-          setBusiness(mockBusinessData);
-        }
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.warn("Business Permit Service fetch failed — using inline mock:", err);
-        // fallback to inline mock so no other pages or files required
-        setBusiness(mockBusinessData);
-        setError(null);
-        setLoading(false);
-      });
-  }, []);
-
-  // 🔍 Enhanced Filtering logic for all categories
-  const filteredBusiness = business.filter((permit) => {
-    const type = permit.permit_type?.toLowerCase() || permit.application_type?.toLowerCase() || "";
-    const businessType = permit.business_type?.toLowerCase() || "";
-    
-    switch (activeTab) {
-      case "new":
-        return type.includes("new") || !permit.previous_permit_number;
-      case "renewal":
-        return type.includes("renewal") || permit.previous_permit_number;
-      case "electrical":
-        return type.includes("electrical") || businessType.includes("electrical");
-      case "mechanical":
-        return type.includes("mechanical") || businessType.includes("mechanical");
-      case "plumbing":
-        return type.includes("plumbing") || businessType.includes("plumbing");
-      case "fencing":
-        return type.includes("fencing") || businessType.includes("fencing");
-      case "demolition":
-        return type.includes("demolition") || businessType.includes("demolition");
-      case "excavation":
-        return type.includes("excavation") || type.includes("grading") || businessType.includes("excavation");
-      case "occupancy":
-        return type.includes("occupancy") || businessType.includes("occupancy");
-      case "electronics":
-        return type.includes("electronics") || businessType.includes("electronics");
-      case "signage":
-        return type.includes("signage") || businessType.includes("signage");
-      case "professional":
-        return type.includes("professional") || businessType.includes("professional");
-      case "all":
-      default:
-        return true;
+  const isImageFile = (fileType, fileName) => {
+    if (fileType) return fileType.startsWith('image/');
+    if (fileName) {
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+      return imageExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
     }
-  });
-
-  // KPI Counters with updated status values
-  const total = business.length;
-  const approved = business.filter((p) => p.status === "approve").length;
-  const rejected = business.filter((p) => p.status === "reject").length;
-  const forCompliance = business.filter((p) => p.status === "for compliance only").length;
-
-  // Tab-specific counts
-  const countByType = {
-    all: total,
-    new: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("new") || !p.previous_permit_number
-    ).length,
-    renewal: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("renewal") || p.previous_permit_number
-    ).length,
-    electrical: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("electrical") || 
-      p.business_type?.toLowerCase().includes("electrical")
-    ).length,
-    mechanical: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("mechanical") || 
-      p.business_type?.toLowerCase().includes("mechanical")
-    ).length,
-    plumbing: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("plumbing") || 
-      p.business_type?.toLowerCase().includes("plumbing")
-    ).length,
-    fencing: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("fencing") || 
-      p.business_type?.toLowerCase().includes("fencing")
-    ).length,
-    demolition: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("demolition") || 
-      p.business_type?.toLowerCase().includes("demolition")
-    ).length,
-    excavation: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("excavation") || 
-      p.permit_type?.toLowerCase().includes("grading") || 
-      p.business_type?.toLowerCase().includes("excavation")
-    ).length,
-    occupancy: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("occupancy") || 
-      p.business_type?.toLowerCase().includes("occupancy")
-    ).length,
-    electronics: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("electronics") || 
-      p.business_type?.toLowerCase().includes("electronics")
-    ).length,
-    signage: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("signage") || 
-      p.business_type?.toLowerCase().includes("signage")
-    ).length,
-    professional: business.filter((p) => 
-      p.permit_type?.toLowerCase().includes("professional") || 
-      p.business_type?.toLowerCase().includes("professional")
-    ).length,
+    return false;
   };
 
-  // Status color mapping with updated status values
+  const getFileTypeName = (fileType, fileName) => {
+    if (fileType) {
+      if (fileType === 'application/pdf') return 'PDF Document';
+      if (fileType.startsWith('image/')) return `${fileType.split('/')[1].toUpperCase()} Image`;
+    }
+    if (fileName) {
+      const ext = fileName.split('.').pop().toLowerCase();
+      const map = { pdf: 'PDF Document', jpg: 'JPEG Image', jpeg: 'JPEG Image', png: 'PNG Image', gif: 'GIF Image' };
+      return map[ext] || 'File';
+    }
+    return 'File';
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try { return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
+    catch (e) { return 'N/A'; }
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount) return '₱0.00';
+    return '₱' + parseFloat(amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const fetchPermits = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const url = `${API_BASE}/building_permit.php`;
+      const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+      const data = await response.json();
+      if (data.success) {
+        const transformedData = data.data.map((p) => {
+          const fullName = `${p.first_name || ''} ${p.middle_initial ? p.middle_initial + '.' : ''} ${p.last_name || ''}`.trim();
+          const permitGroup = p.permit_group || 'Unknown';
+          const groupShort = permitGroup.includes('GROUP') ? permitGroup.split(':')[0].trim() : permitGroup;
+          return {
+            id: `BP-${String(p.application_id).padStart(4, '0')}`,
+            application_id: p.application_id,
+            applicant_id: p.applicant_id,
+            full_name: fullName || 'N/A',
+            contact_number: p.contact_no || 'N/A',
+            email: p.email || 'N/A',
+            home_address: p.home_address || 'N/A',
+            citizenship: p.citizenship || 'N/A',
+            form_of_ownership: p.form_of_ownership || 'N/A',
+            permit_group: permitGroup,
+            permit_group_short: groupShort,
+            use_of_permit: p.use_of_permit || 'N/A',
+            proposed_date: p.proposed_date_of_construction,
+            expected_completion: p.expected_date_of_completion,
+            total_estimated_cost: p.total_estimated_cost || 0,
+            remarks: p.remarks || '',
+            street: p.street || '',
+            barangay: p.barangay || 'N/A',
+            city_municipality: p.city_municipality || 'N/A',
+            province: p.province || 'N/A',
+            lot_no: p.lot_no || 'N/A',
+            blk_no: p.blk_no || 'N/A',
+            tct_no: p.tct_no || 'N/A',
+            tax_dec_no: p.tax_dec_no || 'N/A',
+            number_of_units: p.number_of_units || 0,
+            number_of_storeys: p.number_of_storeys || 0,
+            total_floor_area: p.total_floor_area || 0,
+            lot_area: p.lot_area || 0,
+            building_cost: p.building_cost || 0,
+            electrical_cost: p.electrical_cost || 0,
+            mechanical_cost: p.mechanical_cost || 0,
+            electronics_cost: p.electronics_cost || 0,
+            plumbing_cost: p.plumbing_cost || 0,
+            other_cost: p.other_cost || 0,
+            equipment_cost: p.equipment_cost || 0,
+            status: 'Pending',
+            created_at: p.proposed_date_of_construction || new Date().toISOString(),
+          };
+        });
+        setPermits(transformedData);
+      } else { throw new Error(data.message || "Failed to fetch data"); }
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError(`Failed to load data: ${err.message}`);
+      setPermits([]);
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchPermits(); }, [fetchPermits]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target)) setShowActionsDropdown(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const getStatusColor = (status) => {
     switch (status) {
-      case "approve":
-        return "text-green-600 bg-green-100";
-      case "reject":
-        return "text-red-600 bg-red-100";
-      case "for compliance only":
-        return "text-yellow-600 bg-yellow-100";
-      default:
-        return "text-gray-600 bg-gray-100";
+      case "Approved": return "text-[#4CAF50] bg-[#4CAF50]/10";
+      case "Rejected": return "text-[#E53935] bg-[#E53935]/10";
+      case "Pending": return "text-[#FDA811] bg-[#FDA811]/10";
+      case "Under Review": return "text-[#4A90E2] bg-[#4A90E2]/10";
+      default: return "text-gray-600 bg-gray-100";
     }
   };
 
-  // Status display text mapping
-  const getStatusDisplayText = (status) => {
-    switch (status) {
-      case "approve":
-        return "Approved";
-      case "reject":
-        return "Rejected";
-      case "for compliance only":
-        return "For Compliance";
-      default:
-        return status;
+  const filteredPermits = useMemo(() => {
+    let filtered = [...permits];
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(f =>
+        f.full_name?.toLowerCase().includes(term) ||
+        f.barangay?.toLowerCase().includes(term) ||
+        f.permit_group?.toLowerCase().includes(term) ||
+        f.use_of_permit?.toLowerCase().includes(term) ||
+        f.application_id?.toString().includes(term) ||
+        f.email?.toLowerCase().includes(term) ||
+        f.id?.toLowerCase().includes(term)
+      );
     }
-  };
+    if (activeTab !== "all") {
+      filtered = filtered.filter(f => f.permit_group?.toLowerCase().includes(activeTab.toLowerCase()));
+    }
+    if (sortField) {
+      filtered.sort((a, b) => {
+        let valA = a[sortField] || '';
+        let valB = b[sortField] || '';
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return filtered;
+  }, [permits, searchTerm, activeTab, sortField, sortDirection]);
 
-  const getTypeBadgeColor = (type) => {
-    const lowerType = type?.toLowerCase() || "";
-    if (lowerType.includes("new")) return "bg-[#4CAF50]/20 text-[#4CAF50] border border-[#4CAF50]/30";
-    if (lowerType.includes("renewal")) return "bg-[#4A90E2]/20 text-[#4A90E2] border border-[#4A90E2]/30";
-    if (lowerType.includes("electrical")) return "bg-yellow-100 text-yellow-800 border border-yellow-200";
-    if (lowerType.includes("mechanical")) return "bg-orange-100 text-orange-800 border border-orange-200";
-    if (lowerType.includes("plumbing")) return "bg-blue-100 text-blue-800 border border-blue-200";
-    if (lowerType.includes("fencing")) return "bg-emerald-100 text-emerald-800 border border-emerald-200";
-    if (lowerType.includes("demolition")) return "bg-red-100 text-red-800 border border-red-200";
-    if (lowerType.includes("excavation") || lowerType.includes("grading")) return "bg-amber-100 text-amber-800 border border-amber-200";
-    if (lowerType.includes("occupancy")) return "bg-purple-100 text-purple-800 border border-purple-200";
-    if (lowerType.includes("electronics")) return "bg-indigo-100 text-indigo-800 border border-indigo-200";
-    if (lowerType.includes("signage")) return "bg-pink-100 text-pink-800 border border-pink-200";
-    if (lowerType.includes("professional")) return "bg-cyan-100 text-cyan-800 border border-cyan-200";
-    return "bg-gray-100 text-gray-800 border border-gray-200";
-  };
+  const totalPages = Math.ceil(filteredPermits.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedPermits = filteredPermits.slice(startIndex, endIndex);
 
-  const getTabBadgeColor = (tab) =>
-    tab === activeTab ? "bg-[#4CAF50] text-white" : "bg-gray-100 text-gray-600";
+  const stats = useMemo(() => ({
+    total: permits.length,
+    pending: permits.filter(p => p.status === 'Pending').length,
+    approved: permits.filter(p => p.status === 'Approved').length,
+    rejected: permits.filter(p => p.status === 'Rejected').length,
+  }), [permits]);
 
-  const getTabBorderColor = (tab) => {
-    return tab === activeTab ? "border-[#4CAF50]" : "border-transparent";
-  };
+  const tabCategories = [
+    { key: "all", label: "All Applications" },
+    { key: "group b", label: "Group B" },
+    { key: "group d", label: "Group D" },
+    { key: "group f", label: "Group F" },
+  ];
 
-  const getTabTextColor = (tab) => {
-    return tab === activeTab ? "text-[#4CAF50] dark:text-[#4CAF50]" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300";
-  };
+  const countByType = useMemo(() => {
+    const counts = { all: permits.length };
+    tabCategories.forEach(t => {
+      if (t.key !== 'all') counts[t.key] = permits.filter(f => f.permit_group?.toLowerCase().includes(t.key)).length;
+    });
+    return counts;
+  }, [permits]);
 
-  const getTabDisplayName = (tab) => {
-    const names = {
-      all: "All Permits",
-      new: "New",
-      renewal: "Renewal",
-      electrical: "Electrical",
-      mechanical: "Mechanical",
-      plumbing: "Plumbing",
-      fencing: "Fencing",
-      demolition: "Demolition",
-      excavation: "Excavation/Grading",
-      occupancy: "Occupancy",
-      electronics: "Electronics",
-      signage: "Signage",
-      professional: "Professional"
-    };
-    return names[tab] || tab;
-  };
-
-  const getTabDescription = (tab) => {
-    const descriptions = {
-      all: "Complete list of all business permits and applications",
-      new: "New business permit applications and submissions",
-      renewal: "Business permit renewal requests and applications",
-      electrical: "Electrical permits and electrical work applications",
-      mechanical: "Mechanical permits and mechanical system applications",
-      plumbing: "Plumbing permits and plumbing work applications",
-      fencing: "Fencing permits and fence construction applications",
-      demolition: "Demolition permits and structure removal applications",
-      excavation: "Excavation and grading permits for construction sites",
-      occupancy: "Occupancy permits and certificate of occupancy applications",
-      electronics: "Electronics permits and electronic system installations",
-      signage: "Signage permits and business sign applications",
-      professional: "Professional permits and professional service applications"
-    };
-    return descriptions[tab] || "Business permit applications";
-  };
-
-  const openModal = (permit) => {
+  const handleView = (permit) => {
     setSelectedPermit(permit);
-    setAssignedOfficerInput(permit.assigned_officer || "");
-    setActionComment("");
-    setPreviewUrl(null);
     setShowModal(true);
+    setActionComment('');
+    setShowSubmittedDocs(false);
   };
 
   const closeModal = () => {
-    setSelectedPermit(null);
-    setAssignedOfficerInput("");
-    setActionComment("");
-    setPreviewUrl(null);
     setShowModal(false);
+    setSelectedPermit(null);
+    setActionComment('');
+    setShowSubmittedDocs(false);
+    setShowFilePreview(false);
+    setSelectedFile(null);
+    setShowActionsDropdown(false);
   };
 
-  const updatePermitStatus = (id, status, comment = "") => {
-    const now = new Date().toISOString();
-    setBusiness((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? { ...p, status, review_status: status, review_comments: comment, last_updated: now }
-          : p
-      )
-    );
+  const toggleSubmittedDocs = () => setShowSubmittedDocs(!showSubmittedDocs);
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
   };
 
   const handleApprove = () => {
-    if (!selectedPermit) return;
-    updatePermitStatus(selectedPermit.id, "approve", actionComment);
-    try {
-      logTx({ service: "business", permitId: selectedPermit.id, action: "approve", comment: actionComment });
-    } catch {}
-    closeModal();
+    Swal.fire({
+      title: 'Approve this application?',
+      text: 'This will mark the building permit as approved.',
+      icon: 'question',
+      input: 'textarea',
+      inputLabel: 'Notes (optional)',
+      inputPlaceholder: 'Add approval notes...',
+      showCancelButton: true,
+      confirmButtonText: 'Approve',
+      confirmButtonColor: '#4CAF50',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setPermits(prev => prev.map(p => p.id === selectedPermit.id ? { ...p, status: 'Approved', remarks: result.value || p.remarks } : p));
+        setSelectedPermit(prev => ({ ...prev, status: 'Approved' }));
+        Swal.fire('Approved!', 'The permit has been approved.', 'success');
+      }
+    });
   };
 
   const handleReject = () => {
-    if (!selectedPermit) return;
-    updatePermitStatus(selectedPermit.id, "reject", actionComment);
-    try {
-      logTx({ service: "business", permitId: selectedPermit.id, action: "reject", comment: actionComment });
-    } catch {}
-    closeModal();
+    Swal.fire({
+      title: 'Reject this application?',
+      text: 'This will mark the building permit as rejected.',
+      icon: 'warning',
+      input: 'textarea',
+      inputLabel: 'Reason for rejection',
+      inputPlaceholder: 'Enter rejection reason...',
+      inputValidator: (value) => { if (!value) return 'Please provide a reason for rejection.'; },
+      showCancelButton: true,
+      confirmButtonText: 'Reject',
+      confirmButtonColor: '#E53935',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        setPermits(prev => prev.map(p => p.id === selectedPermit.id ? { ...p, status: 'Rejected', remarks: result.value || p.remarks } : p));
+        setSelectedPermit(prev => ({ ...prev, status: 'Rejected' }));
+        Swal.fire('Rejected', 'The permit has been rejected.', 'success');
+      }
+    });
   };
 
-  const handleForCompliance = () => {
-    if (!selectedPermit) return;
-    updatePermitStatus(selectedPermit.id, "for compliance only", actionComment);
-    try {
-      logTx({ service: "business", permitId: selectedPermit.id, action: "for_compliance", comment: actionComment });
-    } catch {}
-    closeModal();
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 25, 300));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 25, 25));
+  const handleResetZoom = () => { setZoomLevel(100); setDragOffset({ x: 0, y: 0 }); };
+
+  const handleMouseDown = (e) => { if (zoomLevel > 100) { setIsDragging(true); setDragStart({ x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y }); } };
+  const handleMouseMove = (e) => { if (isDragging) setDragOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }); };
+  const handleMouseUp = () => setIsDragging(false);
+
+  const viewFile = (file) => {
+    setSelectedFile(file);
+    setShowFilePreview(true);
+    setZoomLevel(100);
+    setDragOffset({ x: 0, y: 0 });
   };
 
-  const handleSaveAssignment = () => {
-    if (!selectedPermit) return;
-    const now = new Date().toISOString();
-    setBusiness((prev) =>
-      prev.map((p) =>
-        p.id === selectedPermit.id
-          ? { ...p, assigned_officer: assignedOfficerInput, last_updated: now }
-          : p
-      )
+  const exportToCSV = () => {
+    setExporting(true); setExportType("csv");
+    const headers = ["Application ID","Applicant","Permit Group","Use of Permit","Barangay","City","Est. Cost","Storeys","Floor Area","Contact","Email","Proposed Date"];
+    const csvContent = [headers.join(","), ...filteredPermits.map(f => [f.id, f.full_name, f.permit_group, f.use_of_permit, f.barangay, f.city_municipality, f.total_estimated_cost, f.number_of_storeys, f.total_floor_area, f.contact_number, f.email, formatDate(f.proposed_date)].map(field => `"${field || ''}"`).join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `building-applications-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); window.URL.revokeObjectURL(url);
+    setExporting(false); setExportType("");
+  };
+
+  const exportToPDF = async () => {
+    setExporting(true); setExportType("pdf");
+    try {
+      Swal.fire({ title: 'Generating PDF...', text: 'Please wait...', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+      await new Promise(r => setTimeout(r, 300));
+      const pdfContainer = document.createElement('div');
+      pdfContainer.style.cssText = 'position:absolute;left:-9999px;width:1200px;background:#FBFBFB;padding:30px;font-family:Arial,sans-serif;';
+      pdfContainer.innerHTML = `
+        <div style="margin-bottom:20px;">
+          <h1 style="color:#4D4A4A;font-size:24px;margin:0 0 5px 0;">Building Permit Applications Report</h1>
+          <p style="color:#666;margin:0;">Generated on ${new Date().toLocaleDateString()} • ${filteredPermits.length} applications</p>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;">
+          ${[
+            { title: 'Total', value: stats.total, color: '#4CAF50' },
+            { title: 'Pending', value: stats.pending, color: '#FDA811' },
+            { title: 'Approved', value: stats.approved, color: '#4A90E2' },
+            { title: 'Rejected', value: stats.rejected, color: '#E53935' }
+          ].map(s => `<div style="border:2px solid #E9E7E7;border-radius:8px;padding:15px;background:white;"><p style="color:#666;font-size:11px;margin:0 0 5px 0;">${s.title}</p><p style="color:${s.color};font-size:22px;font-weight:bold;margin:0;">${s.value}</p></div>`).join('')}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead><tr style="background:#f5f5f5;">
+            ${["ID","Applicant","Permit Group","Use","Barangay","Est. Cost","Status"].map(h => `<th style="padding:8px;border:1px solid #ddd;text-align:left;">${h}</th>`).join('')}
+          </tr></thead>
+          <tbody>
+            ${filteredPermits.slice(0, 50).map(f => `<tr>${[f.id, f.full_name, f.permit_group_short, f.use_of_permit, f.barangay, formatCurrency(f.total_estimated_cost), f.status].map(v => `<td style="padding:6px;border:1px solid #ddd;">${v || ''}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+        </table>
+      `;
+      document.body.appendChild(pdfContainer);
+      await new Promise(r => setTimeout(r, 100));
+      const canvas = await html2canvas(pdfContainer, { scale: 2, backgroundColor: "#FBFBFB", logging: false });
+      document.body.removeChild(pdfContainer);
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth - 20;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight; let position = 10;
+      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+      while (heightLeft > 0) { position = heightLeft - imgHeight + 10; pdf.addPage(); pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight); heightLeft -= pdfHeight; }
+      pdf.save(`building-applications-${new Date().toISOString().split("T")[0]}.pdf`);
+      Swal.fire({ icon: 'success', title: 'PDF Downloaded!', timer: 2000, showConfirmButton: false });
+    } catch (error) {
+      console.error("PDF error:", error);
+      Swal.fire({ title: "Export Failed", text: error.message, icon: "error" });
+    } finally { setExporting(false); setExportType(""); }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FBFBFB] p-6 flex items-center justify-center font-poppins">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4CAF50] mx-auto"></div>
+          <p className="mt-4 text-[#4D4A4A]">Loading building permit applications...</p>
+        </div>
+      </div>
     );
-  };
-
-  const tabCategories = [
-    { key: "all", label: "All Permits" },
-    { key: "new", label: "NEW" },
-    { key: "renewal", label: "RENEWAL" },
-    { key: "electrical", label: "Electrical" },
-    { key: "mechanical", label: "Mechanical" },
-    { key: "plumbing", label: "Plumbing" },
-    { key: "fencing", label: "Fencing" },
-    { key: "demolition", label: "Demolition" },
-    { key: "excavation", label: "Excavation/Grading" },
-    { key: "occupancy", label: "Occupancy" },
-    { key: "electronics", label: "Electronics" },
-    { key: "signage", label: "Signage" },
-    { key: "professional", label: "Professional" },
-  ];
-
-  // Mobile card view for business permits
-  const MobilePermitCard = ({ permit }) => (
-    <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4 mb-4 shadow-sm">
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex-1">
-          <h3 className="font-semibold text-gray-900 dark:text-white text-base mb-1">
-            {permit.business_name}
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-            {permit.applicant?.full_name}
-          </p>
-        </div>
-        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(permit.status)}`}>
-          {getStatusDisplayText(permit.status)}
-        </span>
-      </div>
-      
-      <div className="space-y-2 mb-4">
-        <div className="flex justify-between">
-          <span className="text-sm text-gray-500">Permit No:</span>
-          <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
-            {permit.permit_number}
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-sm text-gray-500">Type:</span>
-          <span className={`px-2 py-1 text-xs rounded-full ${getTypeBadgeColor(permit.permit_type)}`}>
-            {permit.permit_type || "Unknown"}
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-sm text-gray-500">Submitted:</span>
-          <span className="text-sm text-gray-700 dark:text-gray-300">
-            {permit.submitted_at}
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-sm text-gray-500">Assigned:</span>
-          <span className={`px-2 py-1 text-xs rounded-full ${
-            permit.assigned_officer 
-              ? "bg-[#4CAF50]/20 text-[#4CAF50] border border-[#4CAF50]/30" 
-              : "bg-gray-100 text-gray-600 border border-gray-200"
-          }`}>
-            {permit.assigned_officer || "Unassigned"}
-          </span>
-        </div>
-      </div>
-      
-      <button
-        onClick={() => openModal(permit)}
-        className="w-full inline-flex justify-center items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-gradient-to-r from-[#4CAF50] to-[#4A90E2] hover:from-[#4CAF50]/90 hover:to-[#4A90E2]/90 transition-all"
-      >
-        View Details
-      </button>
-    </div>
-  );
+  }
 
   return (
-    <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-lg min-h-screen">
+    <div className="min-h-screen bg-[#FBFBFB] p-4 md:p-6 font-poppins">
+      {error && (
+        <div className="mb-6 p-4 bg-[#E53935] bg-opacity-20 border border-[#E53935] border-opacity-30 rounded-lg">
+          <div className="flex items-center">
+            <AlertCircle className="w-5 h-5 text-[#E53935] mr-3" />
+            <div className="flex-1"><p className="text-[#4D4A4A]">{error}</p></div>
+            <button onClick={fetchPermits} className="text-sm text-[#4CAF50] hover:underline">Retry</button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Business Permits Dashboard
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base">
-          Manage and track all business permit types and categories
-        </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#4D4A4A] font-montserrat">Building Permit Applications</h1>
+            <p className="text-[#4D4A4A] text-opacity-70 mt-1">Manage and review building permit applications</p>
+          </div>
+          <div className="flex items-center space-x-3 mt-4 md:mt-0">
+            <button onClick={fetchPermits} className="p-2 rounded-lg bg-white border border-[#E9E7E7] hover:bg-gray-50 transition-colors" title="Refresh"><RefreshCw className="w-5 h-5 text-[#4D4A4A]" /></button>
+            <button onClick={exportToCSV} disabled={exporting} className="px-4 py-2 bg-[#4CAF50] text-white rounded-lg hover:bg-opacity-90 transition-colors flex items-center space-x-2 disabled:opacity-50 font-montserrat">
+              <DownloadCloud className="w-5 h-5" /><span>{exporting && exportType === "csv" ? "Exporting..." : "CSV"}</span>
+            </button>
+            <button onClick={exportToPDF} disabled={exporting} className="px-4 py-2 bg-[#E53935] text-white rounded-lg hover:bg-opacity-90 transition-colors flex items-center space-x-2 disabled:opacity-50 font-montserrat">
+              <File className="w-5 h-5" /><span>{exporting && exportType === "pdf" ? "Generating..." : "PDF"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {[
+            { title: "Total", value: stats.total, icon: FileText, color: "#4CAF50" },
+            { title: "Pending", value: stats.pending, icon: Clock, color: "#FDA811" },
+            { title: "Approved", value: stats.approved, icon: CheckCircle, color: "#4A90E2" },
+            { title: "Rejected", value: stats.rejected, icon: XCircle, color: "#E53935" },
+          ].map((s, idx) => (
+            <div key={idx} className="bg-white rounded-lg p-4 shadow-sm border border-[#E9E7E7]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-[#4D4A4A] text-opacity-70 font-poppins">{s.title}</p>
+                  <p className="text-2xl font-bold text-[#4D4A4A] mt-1 font-montserrat">{s.value}</p>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: s.color }}><s.icon className="w-5 h-5 text-white" /></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-    
-      {/* 🧭 Enhanced Tab Navigation - Responsive */}
-      <div className="mb-6 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm">
-        {/* Mobile Tab Selector */}
-        {isMobile && (
-          <div className="p-4 border-b border-gray-200 dark:border-slate-700">
-            <select 
-              value={activeTab}
-              onChange={(e) => setActiveTab(e.target.value)}
-              className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent"
-            >
-              {tabCategories.map((tab) => (
-                <option key={tab.key} value={tab.key}>
-                  {tab.label} ({countByType[tab.key]})
-                </option>
-              ))}
-            </select>
+      {/* Search & Filters */}
+      <div className="mb-6 bg-white rounded-lg p-4 shadow-sm border border-[#E9E7E7]">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#4D4A4A] text-opacity-50 w-5 h-5" />
+            <input type="text" placeholder="Search by name, barangay, permit group, email..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-[#E9E7E7] bg-white text-[#4D4A4A] focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent font-poppins" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} />
           </div>
-        )}
+        </div>
+      </div>
 
-        {/* Desktop Tab Navigation */}
-        {!isMobile && (
-          <div className="border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
-            <nav className="flex space-x-4 lg:space-x-6 px-4 lg:px-6 min-w-max">
-              {tabCategories.map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`py-3 lg:py-4 px-2 border-b-2 font-medium text-sm flex items-center gap-2 transition-all whitespace-nowrap ${getTabBorderColor(tab.key)} ${getTabTextColor(tab.key)}`}
-                >
-                  <span className="hidden sm:inline">{tab.label}</span>
-                  <span className="sm:hidden">
-                    {tab.key === 'all' ? 'All' : 
-                     tab.key === 'new' ? 'New' :
-                     tab.key === 'renewal' ? 'Renew' :
-                     tab.label.split(' ')[0]}
-                  </span>
-                  <span className={`px-2 py-1 text-xs rounded-full ${getTabBadgeColor(tab.key)}`}>
-                    {countByType[tab.key]}
-                  </span>
-                </button>
-              ))}
-            </nav>
-          </div>
-        )}
-
-        {/* Tab Content Header */}
-        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      {/* Tab Navigation & Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-[#E9E7E7] overflow-hidden">
+        <div className="p-6 border-b border-[#E9E7E7]">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
-                {getTabDisplayName(activeTab)}
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm mt-1">
-                {getTabDescription(activeTab)} • {countByType[activeTab]} {countByType[activeTab] === 1 ? 'record' : 'records'} found
-              </p>
+              <h3 className="text-lg font-semibold text-[#4D4A4A] font-montserrat">Applications</h3>
+              <p className="text-sm text-[#4D4A4A] text-opacity-70">Showing {startIndex + 1}-{Math.min(endIndex, filteredPermits.length)} of {filteredPermits.length}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#4CAF50] animate-pulse"></div>
-              <span className="text-xs sm:text-sm text-gray-500">Live</span>
+          </div>
+          <nav className="flex space-x-4 overflow-x-auto">
+            {tabCategories.map((tab) => (
+              <button key={tab.key} onClick={() => { setActiveTab(tab.key); setCurrentPage(1); }} className={`py-2 px-3 border-b-2 font-medium text-sm flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === tab.key ? "border-[#4CAF50] text-[#4CAF50]" : "border-transparent text-[#4D4A4A] hover:text-[#4CAF50]"}`}>
+                {tab.label}
+                <span className={`px-2 py-1 text-xs rounded-full ${activeTab === tab.key ? "bg-[#4CAF50] text-white" : "bg-[#FBFBFB] text-[#4D4A4A] border border-[#E9E7E7]"}`}>{countByType[tab.key] || 0}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-[#FBFBFB]">
+              <tr>
+                {[
+                  { key: "application_id", label: "ID" },
+                  { key: "full_name", label: "Applicant" },
+                  { key: "permit_group", label: "Permit Group" },
+                  { key: "use_of_permit", label: "Use" },
+                  { key: "barangay", label: "Barangay" },
+                  { key: "total_estimated_cost", label: "Est. Cost" },
+                  { key: "status", label: "Status" },
+                  { key: null, label: "Actions" },
+                ].map((col) => (
+                  <th key={col.label} className="px-6 py-3 text-left text-xs font-medium text-[#4D4A4A] uppercase tracking-wider font-montserrat">
+                    {col.key ? (
+                      <button onClick={() => handleSort(col.key)} className="flex items-center gap-1 hover:text-[#4CAF50] transition-colors">
+                        {col.label}
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    ) : col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E9E7E7]">
+              {paginatedPermits.length > 0 ? paginatedPermits.map((permit) => (
+                <tr key={permit.id} className="hover:bg-[#FBFBFB] transition-colors">
+                  <td className="px-6 py-4"><span className="font-mono text-sm text-[#4D4A4A]">{permit.id}</span></td>
+                  <td className="px-6 py-4">
+                    <div><p className="font-medium text-[#4D4A4A] font-montserrat">{permit.full_name}</p><p className="text-sm text-[#4D4A4A] text-opacity-70">{permit.email}</p></div>
+                  </td>
+                  <td className="px-6 py-4"><span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">{permit.permit_group_short}</span></td>
+                  <td className="px-6 py-4 text-[#4D4A4A] text-sm">{permit.use_of_permit}</td>
+                  <td className="px-6 py-4 text-[#4D4A4A] text-sm">{permit.barangay}</td>
+                  <td className="px-6 py-4 text-[#4D4A4A] text-sm font-medium">{formatCurrency(permit.total_estimated_cost)}</td>
+                  <td className="px-6 py-4"><span className={`px-3 py-1 text-xs font-bold rounded-full ${getStatusColor(permit.status)}`}>{permit.status}</span></td>
+                  <td className="px-6 py-4">
+                    <button onClick={() => handleView(permit)} title="View Details" className="p-2 bg-[#4A90E2] text-white rounded-lg hover:bg-[#FDA811]/80 transition-colors"><Eye className="w-5 h-5" /></button>
+                  </td>
+                </tr>
+              )) : (
+                <tr><td colSpan="8" className="px-6 py-12 text-center">
+                  <Building className="w-12 h-12 text-[#E9E7E7] mx-auto mb-4" />
+                  <p className="text-[#4D4A4A] text-opacity-70">No applications match your search</p>
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {filteredPermits.length > ITEMS_PER_PAGE && (
+          <div className="p-5 border-t border-[#E9E7E7]">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-[#4D4A4A] text-opacity-70">Page {currentPage} of {totalPages}</p>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="px-3 py-2 text-sm border border-[#E9E7E7] rounded-lg hover:bg-[#FBFBFB] transition-colors disabled:opacity-50">Previous</button>
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  const page = currentPage <= 3 ? i + 1 : currentPage + i - 2;
+                  if (page < 1 || page > totalPages) return null;
+                  return (
+                    <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-2 text-sm rounded-lg transition-colors ${currentPage === page ? 'bg-[#4CAF50] text-white' : 'border border-[#E9E7E7] hover:bg-[#FBFBFB]'}`}>{page}</button>
+                  );
+                })}
+                <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-2 text-sm border border-[#E9E7E7] rounded-lg hover:bg-[#FBFBFB] transition-colors disabled:opacity-50">Next</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Detailed Modal */}
+      {showModal && selectedPermit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 overflow-auto animate-fadeIn">
+          <div className="w-full max-w-7xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl transform transition-all">
+            {/* Modal Header */}
+            <div className="relative p-6 bg-gradient-to-r from-gray-50 via-white to-gray-50 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 border-b-4 border-[#4CAF50]">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="bg-gradient-to-br from-[#4CAF50] to-[#45a049] p-3 rounded-2xl shadow-xl"><Building className="w-10 h-10 text-white" /></div>
+                  <div><h2 className="text-2xl font-bold text-gray-800 dark:text-white">Building Permit Application</h2><p className="text-sm text-gray-500">Review and process application</p></div>
+                </div>
+                <button onClick={closeModal} className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all"><X className="w-6 h-6" /></button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500">
+                  <p className="text-xs font-medium text-gray-500 uppercase mb-1">Application ID</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white font-mono">{selectedPermit.id}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-purple-500">
+                  <p className="text-xs font-medium text-gray-500 uppercase mb-1">Proposed Date</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white">{formatDate(selectedPermit.proposed_date)}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500">
+                  <p className="text-xs font-medium text-gray-500 uppercase mb-1">Status</p>
+                  <span className={`inline-block px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedPermit.status)}`}>{selectedPermit.status}</span>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-orange-500">
+                  <p className="text-xs font-medium text-gray-500 uppercase mb-1">Permit Group</p>
+                  <span className="px-3 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-700">{selectedPermit.permit_group_short}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto bg-gradient-to-b from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
+              {/* Personal Information */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-blue-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg"><User className="w-6 h-6 text-white" /></div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Applicant Information</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-700 dark:to-slate-600 p-4 rounded-xl">
+                    <label className="text-xs font-bold text-blue-600 uppercase tracking-wide">Full Name</label>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white mt-2">{selectedPermit.full_name}</p>
+                  </div>
+                  {[
+                    { label: "Contact Number", value: selectedPermit.contact_number },
+                    { label: "Email Address", value: selectedPermit.email },
+                    { label: "Home Address", value: selectedPermit.home_address },
+                    { label: "Citizenship", value: selectedPermit.citizenship },
+                    { label: "Form of Ownership", value: selectedPermit.form_of_ownership },
+                  ].map((item, idx) => (
+                    <div key={idx}><label className="text-sm font-medium text-gray-500">{item.label}</label><p className="text-gray-900 dark:text-white mt-1">{item.value}</p></div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Project Site */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-green-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-3 rounded-xl shadow-lg"><MapPin className="w-6 h-6 text-white" /></div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Project Site</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {[
+                    { label: "Street", value: selectedPermit.street },
+                    { label: "Barangay", value: selectedPermit.barangay },
+                    { label: "City/Municipality", value: selectedPermit.city_municipality },
+                    { label: "Province", value: selectedPermit.province },
+                    { label: "Lot No.", value: selectedPermit.lot_no },
+                    { label: "Block No.", value: selectedPermit.blk_no },
+                    { label: "TCT No.", value: selectedPermit.tct_no },
+                    { label: "Tax Dec. No.", value: selectedPermit.tax_dec_no },
+                  ].map((item, idx) => (
+                    <div key={idx}><label className="text-sm font-medium text-gray-500">{item.label}</label><p className="text-gray-900 dark:text-white mt-1">{item.value}</p></div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Building Details */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-orange-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-xl shadow-lg"><Building className="w-6 h-6 text-white" /></div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Building Details</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {[
+                    { label: "Permit Group", value: selectedPermit.permit_group },
+                    { label: "Use of Permit", value: selectedPermit.use_of_permit },
+                    { label: "Number of Storeys", value: selectedPermit.number_of_storeys },
+                    { label: "Number of Units", value: selectedPermit.number_of_units },
+                    { label: "Total Floor Area", value: `${selectedPermit.total_floor_area} sqm` },
+                    { label: "Lot Area", value: `${selectedPermit.lot_area} sqm` },
+                    { label: "Proposed Start", value: formatDate(selectedPermit.proposed_date) },
+                    { label: "Expected Completion", value: formatDate(selectedPermit.expected_completion) },
+                  ].map((item, idx) => (
+                    <div key={idx}><label className="text-sm font-medium text-gray-500">{item.label}</label><p className="text-gray-900 dark:text-white mt-1">{item.value}</p></div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Cost Breakdown */}
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-700 rounded-2xl shadow-lg p-6 border-2 border-green-200 dark:border-slate-600">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-3 rounded-xl shadow-lg"><FileText className="w-6 h-6 text-white" /></div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Project Cost Breakdown</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { label: "Building Cost", value: selectedPermit.building_cost, color: "green" },
+                    { label: "Electrical Cost", value: selectedPermit.electrical_cost, color: "blue" },
+                    { label: "Mechanical Cost", value: selectedPermit.mechanical_cost, color: "orange" },
+                    { label: "Electronics Cost", value: selectedPermit.electronics_cost, color: "purple" },
+                    { label: "Plumbing Cost", value: selectedPermit.plumbing_cost, color: "cyan" },
+                    { label: "Equipment Cost", value: selectedPermit.equipment_cost, color: "indigo" },
+                  ].map((item, idx) => (
+                    <div key={idx} className={`bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-${item.color}-500`}>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">{item.label}</label>
+                      <p className="text-xl font-black text-gray-800 mt-2">{formatCurrency(item.value)}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-6 p-4 bg-white dark:bg-slate-800 rounded-xl border-2 border-dashed border-green-300">
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold text-gray-700 dark:text-gray-300">Total Estimated Cost:</span>
+                    <span className="text-3xl font-black text-green-600">{formatCurrency(selectedPermit.total_estimated_cost)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Review Comments */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-yellow-100 dark:border-slate-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Review Comments</h3>
+                {selectedPermit.remarks ? (
+                  <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4 border border-gray-200 dark:border-slate-600 mb-4">
+                    <p className="text-gray-900 dark:text-white">{selectedPermit.remarks}</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 mb-4">
+                    <MessageSquare className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-500">No comments yet.</p>
+                  </div>
+                )}
+                <textarea value={actionComment} onChange={(e) => setActionComment(e.target.value)} placeholder="Add a comment..." className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent resize-none" rows="3" />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3 pt-6 border-t-4 border-gray-200 dark:border-slate-600">
+                <button onClick={handleApprove} className="flex-1 min-w-[120px] px-6 py-3 bg-gradient-to-r from-[#4CAF50] to-[#45a049] text-white rounded-xl hover:shadow-lg transition-all font-bold flex items-center justify-center gap-2">
+                  <CheckCircle className="w-5 h-5" /> Approve
+                </button>
+                <button onClick={handleReject} className="flex-1 min-w-[120px] px-6 py-3 bg-gradient-to-r from-[#E53935] to-[#d32f2f] text-white rounded-xl hover:shadow-lg transition-all font-bold flex items-center justify-center gap-2">
+                  <XCircle className="w-5 h-5" /> Reject
+                </button>
+                <button onClick={closeModal} className="flex-1 min-w-[120px] px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl hover:shadow-lg transition-all font-bold flex items-center justify-center gap-2">
+                  <X className="w-5 h-5" /> Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Tab Content */}
-        <div className="p-4 sm:p-6">
-          {loading && (
-            <div className="text-center py-8 sm:py-12">
-              <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-[#4CAF50]/10 rounded-full mb-3 sm:mb-4">
-                <div className="w-5 h-5 sm:w-6 sm:h-6 border-2 border-[#4CAF50] border-t-transparent rounded-full animate-spin"></div>
+      {/* File Preview Modal */}
+      {showFilePreview && selectedFile && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-0">
+          <div className="relative w-full h-full flex flex-col">
+            <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
+              <div className="flex items-center gap-3 text-white">
+                {isImageFile(selectedFile.file_type, selectedFile.name) ? <ImageIcon className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                <span className="text-sm font-medium truncate max-w-xs">{selectedFile.name}</span>
               </div>
-              <p className="text-gray-500 dark:text-gray-400 text-sm sm:text-base">Loading permits...</p>
-            </div>
-          )}
-          {error && (
-            <div className="mb-4 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg text-center">
-              <div className="text-red-600 font-semibold text-sm sm:text-base">{error}</div>
-            </div>
-          )}
-          {!loading && filteredBusiness.length === 0 && (
-            <div className="text-center py-8 sm:py-12">
-              <div className="text-gray-400 text-4xl sm:text-6xl mb-3 sm:mb-4">📋</div>
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No {getTabDisplayName(activeTab).toLowerCase()} found
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 text-sm sm:text-base mb-4 max-w-md mx-auto">
-                There are currently no {getTabDisplayName(activeTab).toLowerCase()} in the system.
-              </p>
-              <button className="px-4 py-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/90 transition-colors text-sm sm:text-base">
-                Refresh Data
-              </button>
-            </div>
-          )}
-
-          {/* Mobile Card View */}
-          {!loading && filteredBusiness.length > 0 && isMobile && (
-            <div className="space-y-3">
-              {filteredBusiness.map((p) => (
-                <MobilePermitCard key={p.id} permit={p} />
-              ))}
-            </div>
-          )}
-
-          {/* Desktop Table View */}
-          {!loading && filteredBusiness.length > 0 && !isMobile && (
-            <div className="overflow-x-auto">
-              <table className="w-full bg-white dark:bg-slate-800 shadow rounded-lg">
-                <thead className="bg-gradient-to-r from-[#4CAF50]/10 to-[#4A90E2]/10">
-                  <tr>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Business Name
-                    </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Owner
-                    </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Location
-                    </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Permit No.
-                    </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Submitted
-                    </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Assigned
-                    </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredBusiness.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-                      <td className="px-4 lg:px-6 py-3 text-sm font-medium text-gray-900 dark:text-white max-w-[150px] truncate">
-                        {p.business_name}
-                      </td>
-                      <td className="px-4 lg:px-6 py-3 text-sm text-gray-600 dark:text-gray-300 max-w-[120px] truncate">
-                        {p.applicant?.full_name}
-                      </td>
-                      <td className="px-4 lg:px-6 py-3 text-sm text-gray-600 dark:text-gray-300 max-w-[150px] truncate">
-                        {`${p.business_address?.street || ""} ${p.business_address?.barangay || ""}`}
-                      </td>
-                      <td className="px-4 lg:px-6 py-3 text-sm font-mono text-gray-600 dark:text-gray-300">
-                        {p.permit_number}
-                      </td>
-                      <td className="px-4 lg:px-6 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getTypeBadgeColor(p.permit_type)}`}>
-                          {p.permit_type || "Unknown"}
-                        </span>
-                      </td>
-                      <td className="px-4 lg:px-6 py-3 text-sm text-gray-600 dark:text-gray-300">
-                        {p.submitted_at}
-                      </td>
-                      <td className="px-4 lg:px-6 py-3 text-sm">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(
-                            p.status
-                          )} border-current border-opacity-30`}
-                        >
-                          {getStatusDisplayText(p.status)}
-                        </span>
-                      </td>
-                      <td className="px-4 lg:px-6 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          p.assigned_officer 
-                            ? "bg-[#4CAF50]/20 text-[#4CAF50] border border-[#4CAF50]/30" 
-                            : "bg-gray-100 text-gray-600 border border-gray-200"
-                        }`}>
-                          {p.assigned_officer || "Unassigned"}
-                        </span>
-                      </td>
-                      <td className="px-4 lg:px-6 py-3 text-sm">
-                        <button
-                          onClick={() => openModal(p)}
-                          className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg text-white bg-gradient-to-r from-[#4CAF50] to-[#4A90E2] hover:from-[#4CAF50]/90 hover:to-[#4A90E2]/90 transition-all shadow-sm hover:shadow-md"
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Responsive Modal */}
-      {showModal && selectedPermit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-2 sm:p-4">
-          <div className="w-full max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
-            <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5 rounded-t-xl">
-              <div className="flex justify-between items-start">
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
-                    Permit Details
-                  </h2>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1 truncate">
-                    {selectedPermit.permit_number} • {selectedPermit.business_name}
-                  </p>
-                </div>
-                <button 
-                  onClick={closeModal}
-                  className="flex-shrink-0 p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors ml-2"
-                >
-                  <span className="text-2xl text-gray-500">×</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                <div className="space-y-3 sm:space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Applicant</label>
-                    <p className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.applicant?.full_name}
-                    </p>
-                    <div className="mt-2 space-y-1">
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        📞 {selectedPermit.applicant?.contact_number || "N/A"}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        ✉️ {selectedPermit.applicant?.email_address || "N/A"}
-                      </p>
-                    </div>
+              <div className="flex items-center gap-2">
+                {isImageFile(selectedFile.file_type, selectedFile.name) && (
+                  <div className="flex items-center gap-1 mr-4 bg-black/40 rounded-lg p-1">
+                    <button onClick={handleZoomOut} className="p-2 text-white hover:bg-white/10 rounded transition-colors" title="Zoom Out"><ZoomOut className="w-4 h-4" /></button>
+                    <button onClick={handleResetZoom} className="px-3 py-2 text-xs text-white hover:bg-white/10 rounded transition-colors">{zoomLevel}%</button>
+                    <button onClick={handleZoomIn} className="p-2 text-white hover:bg-white/10 rounded transition-colors" title="Zoom In"><ZoomIn className="w-4 h-4" /></button>
                   </div>
+                )}
+                <button onClick={() => { setShowFilePreview(false); setSelectedFile(null); setZoomLevel(100); setDragOffset({ x: 0, y: 0 }); }} className="p-2 text-white hover:bg-white/10 rounded-full transition-colors"><X className="w-6 h-6" /></button>
+              </div>
+            </div>
+            <div className="flex-1 flex items-center justify-center overflow-hidden" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+              {isImageFile(selectedFile.file_type, selectedFile.name) ? (
+                <img src={selectedFile.url} alt={selectedFile.name} style={{ transform: `scale(${zoomLevel / 100}) translate(${dragOffset.x}px, ${dragOffset.y}px)`, cursor: zoomLevel > 100 ? (isDragging ? 'grabbing' : 'grab') : 'default', transition: isDragging ? 'none' : 'transform 0.2s ease' }} className="max-w-full max-h-full object-contain" draggable={false} />
+              ) : selectedFile.file_type === 'application/pdf' || selectedFile.name?.toLowerCase().endsWith('.pdf') ? (
+                <iframe src={selectedFile.url} className="w-full h-full" title={selectedFile.name} />
+              ) : (
+                <div className="text-center text-white p-8">
+                  <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p>Cannot preview this file type.</p>
+                  <a href={selectedFile.url} download className="mt-4 inline-block px-4 py-2 bg-[#4CAF50] text-white rounded-lg">Download File</a>
                 </div>
-                <div className="space-y-3 sm:space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Business Location</label>
-                    <p className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mt-1 break-words">
-                      {`${selectedPermit.business_address?.street || ""} ${selectedPermit.business_address?.barangay || ""}, ${selectedPermit.business_address?.city_municipality || ""}`}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Total Amount</label>
-                    <p className="text-xl font-bold text-[#4CAF50] mt-1">
-                      ₱{selectedPermit.total_amount?.toLocaleString() || "0"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Comment Input */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-2">
-                  Action Comments
-                </label>
-                <textarea
-                  value={actionComment}
-                  onChange={(e) => setActionComment(e.target.value)}
-                  placeholder="Enter comments for this action..."
-                  className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent resize-none"
-                  rows="3"
-                />
-              </div>
-
-              {/* Action Buttons - Stack on mobile */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 dark:border-slate-700">
-                <button
-                  onClick={handleApprove}
-                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                >
-                  Approve Permit
-                </button>
-                <button
-                  onClick={handleForCompliance}
-                  className="flex-1 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-medium"
-                >
-                  For Compliance
-                </button>
-                <button
-                  onClick={handleReject}
-                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-                >
-                  Reject Permit
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>

@@ -1190,46 +1190,87 @@ const viewFile = (file) => {
         </div>
       </div>
 
-      {/* Modal with White Background and Blur */}
+      {/* Enhanced Transport-Themed Modal */}
       {showModal && selectedPermit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-sm p-4 overflow-auto">
-          <div className="w-full max-w-6xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-[#4CAF50]/5 to-[#4A90E2]/5 rounded-t-xl">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Barangay Permit Details</h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Permit ID: BP-{String(selectedPermit.permit_id).padStart(4, '0')}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 overflow-auto animate-fadeIn">
+          <div className="w-full max-w-7xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl transform transition-all">
+            {/* Redesigned Transport Permit Header */}
+            <div className="relative p-6 bg-gradient-to-r from-gray-50 via-white to-gray-50 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 border-b-4 border-green-400">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="bg-gradient-to-br from-green-400 to-green-500 p-3 rounded-2xl shadow-xl">
+                    <FileText className="w-10 h-10 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Barangay Permit</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Clearance Application Details</p>
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={closeModal}
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Info Cards Row */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Permit ID Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500">
+                  <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Permit ID</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white font-mono">
+                    BP-{String(selectedPermit.permit_id).padStart(4, '0')}
                   </p>
-                  <span className={`mt-2 px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(selectedPermit.status)}`}>
+                </div>
+
+                {/* Date Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-purple-500">
+                  <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide">Date Applied</p>
+                  <p className="text-lg font-bold text-gray-800 dark:text-white">
+                    {selectedPermit.application_date ? new Date(selectedPermit.application_date).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+
+                {/* Status Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500">
+                  <p className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wide">Status</p>
+                  <span className={`inline-block px-3 py-1 text-sm font-bold rounded-full ${getStatusColor(selectedPermit.status)}`}>
                     {selectedPermit.uiStatus || getUIStatus(selectedPermit.status)}
                   </span>
                 </div>
-                <button 
-                  onClick={closeModal}
-                  className="p-2 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors"
-                >
-                  <span className="text-xl">×</span>
-                </button>
+
+                {/* Purpose Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-orange-500">
+                  <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wide">Purpose</p>
+                  <p className="text-sm font-bold text-gray-800 dark:text-white truncate" title={selectedPermit.purpose || 'N/A'}>
+                    {selectedPermit.purpose || 'N/A'}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto bg-gradient-to-b from-gray-50 to-white dark:from-slate-900 dark:to-slate-800">
               {/* Personal Information Section */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Personal Information</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-blue-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-2xl shadow-lg">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Personal Information</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-700 dark:to-slate-600 p-4 rounded-xl">
+                    <label className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Full Name</label>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white mt-2">
+                      {selectedPermit.first_name} {selectedPermit.middle_name} {selectedPermit.last_name} {selectedPermit.suffix}
+                    </p>
+                  </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Applicant ID</label>
                     <p className="text-lg font-mono font-bold text-[#4CAF50] mt-1">
                       {selectedPermit.applicant_id || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Full Name</label>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
-                      {selectedPermit.first_name} {selectedPermit.middle_name} {selectedPermit.last_name} {selectedPermit.suffix}
                     </p>
                   </div>
                   <div>
@@ -1272,8 +1313,16 @@ const viewFile = (file) => {
               </div>
 
               {/* Address Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Address Information</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-green-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-3 rounded-2xl shadow-lg">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Address Information</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">House No.</label>
@@ -1315,8 +1364,13 @@ const viewFile = (file) => {
               </div>
 
               {/* Permit Details */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Permit Details</h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-orange-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-2xl shadow-lg">
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Permit Details</h3>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Purpose</label>
@@ -1352,50 +1406,66 @@ const viewFile = (file) => {
               </div>
 
               {/* Payment Information */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Payment Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Clearance Fee</label>
-                    <p className="text-xl font-bold text-[#4CAF50] mt-1">
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-700 rounded-2xl shadow-lg p-6 border-2 border-green-200 dark:border-slate-600">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-3 rounded-2xl shadow-lg">
+                    <Receipt className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Payment Information</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-green-500 relative">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Clearance Fee</label>
+                    <p className="text-3xl font-black text-green-600 mt-2">
                       ₱{selectedPermit.clearance_fee || '0.00'}
                     </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">PAID</span>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Receipt Number</label>
-                    <p className="text-gray-900 dark:text-white mt-1">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border-l-4 border-blue-500">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Receipt Number</label>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white mt-2">
                       {selectedPermit.receipt_number || 'N/A'}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Submitted Attachments */}
-              {parseAttachments(selectedPermit.attachments).length > 0 && (
-                <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Submitted Files</h4>
+              {/* Submitted Attachments - UPDATED TO SHOW ALL FILES */}
+              {parseAttachments(selectedPermit.attachments).length > 0 ? (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-indigo-100 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-3 rounded-2xl shadow-lg">
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                    <span className="ml-auto bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold">
+                      {parseAttachments(selectedPermit.attachments).length} files
+                    </span>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {parseAttachments(selectedPermit.attachments).map((file) => (
                       <div key={file.id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-slate-600 rounded-lg">
                         <div className="flex items-center gap-2">
                           {file.type.includes('image') ? (
                             <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                              <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
+                              <ImageIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
                             </div>
                           ) : (
                             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
+                              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                             </div>
                           )}
-                          <span className="text-sm text-gray-700 dark:text-gray-300">{file.name}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                              {file.name}
+                            </p>
+                          </div>
                         </div>
                         <button 
                           onClick={() => viewFile(file)}
-                          className="px-3 py-1 text-xs bg-[#4CAF50] text-white rounded hover:bg-[#FDA811] transition-colors"
+                          className="px-3 py-1 text-xs bg-[#4CAF50] text-white rounded hover:bg-[#FDA811] transition-colors whitespace-nowrap"
                         >
                           View
                         </button>
@@ -1403,18 +1473,38 @@ const viewFile = (file) => {
                     ))}
                   </div>
                 </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-gradient-to-br from-gray-400 to-gray-500 p-3 rounded-2xl shadow-lg">
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Submitted Documents</h4>
+                  </div>
+                  <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-xl">
+                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      No files uploaded for this application.
+                    </p>
+                  </div>
+                </div>
               )}
 
               {/* Review Comments Section */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Review Comments
-                  {selectedPermit.comments && (
-                    <span className="text-sm font-normal text-gray-500 ml-2">
-                      ({formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''})
-                    </span>
-                  )}
-                </h3>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 border-2 border-yellow-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 p-3 rounded-2xl shadow-lg">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Review Comments</h3>
+                    {selectedPermit.comments && (
+                      <span className="text-sm font-normal text-gray-500">
+                        ({formatComments(selectedPermit.comments).length} comment{formatComments(selectedPermit.comments).length !== 1 ? 's' : ''})
+                      </span>
+                    )}
+                  </div>
+                </div>
                 
                 {/* Display all comments in one box */}
                 <div className="space-y-4 mb-6">
@@ -1425,15 +1515,11 @@ const viewFile = (file) => {
                           <div key={index} className={`mb-4 ${index !== 0 ? 'pt-4 border-t border-gray-200 dark:border-slate-600' : ''}`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                </svg>
+                                <User className="w-4 h-4 mr-2" />
                                 Admin Comment
                               </div>
                               <div className="flex items-center text-xs text-gray-400">
-                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+                                <Clock className="w-3 h-3 mr-1" />
                                 {comment.timestamp}
                               </div>
                             </div>
@@ -1452,11 +1538,9 @@ const viewFile = (file) => {
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
-                      <svg className="w-12 h-12 text-gray-300 dark:text-gray-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                      </svg>
-                      <p className="text-gray-500 dark:text-gray-400">
+                    <div className="text-center py-8 bg-gray-50 dark:bg-slate-700 rounded-xl">
+                      <FileText className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">
                         No comments yet. Add your first comment below.
                       </p>
                     </div>
@@ -1483,9 +1567,7 @@ const viewFile = (file) => {
                         onClick={saveCommentOnly}
                         className="px-6 py-2 bg-[#4A90E2] text-white rounded-lg hover:bg-[#4A90E2]/80 transition-colors font-medium flex items-center shadow-sm hover:shadow"
                       >
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <CheckCircle className="w-5 h-5 mr-2" />
                         Save Comment
                       </button>
                     </div>
@@ -1494,46 +1576,80 @@ const viewFile = (file) => {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3 justify-end pt-6 border-t border-gray-200 dark:border-slate-700">
-                {/* Status Update Buttons - Show for pending, hide for approved/rejected */}
-                {(selectedPermit.status === "pending" || !selectedPermit.status) ? (
-                  <>
-                    <button 
-                      onClick={handleForCompliance}
-                      className="px-6 py-3 bg-[#FDA811] text-white rounded-lg hover:bg-[#4A90E2] transition-colors font-medium"
+              <div className="flex gap-4 justify-between pt-8 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl p-6 border-t-4 border-gray-300 dark:border-slate-600">
+                {/* Actions Dropdown - Show for pending/compliance status */}
+                {(selectedPermit.status === "pending" || !selectedPermit.status) && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
                     >
-                      Mark Compliance
+                      Actions
+                      <svg className={`w-4 h-4 transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
                     </button>
-                    
-                    <button 
-                      onClick={handleReject}
-                      className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#E53935] transition-colors font-medium"
-                    >
-                      Reject Application
-                    </button>
-                    
-                    <button 
-                      onClick={handleApprove}
-                      className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#4CAF50]/80 transition-all font-medium shadow-sm"
-                    >
-                      Approve Permit
-                    </button>
-                  </>
-                ) : (
-                  <button 
-                    onClick={closeModal}
-                    className="px-6 py-3 bg-[#4CAF50] text-white rounded-lg hover:bg-[#FDA811] transition-colors font-medium"
-                  >
-                    Close
-                  </button>
+
+                    {/* Dropdown Menu */}
+                    {showActionsDropdown && (
+                      <div className="absolute left-0 bottom-full mb-2 w-72 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden z-50 max-h-96 overflow-y-auto">
+                        {/* Actions Header */}
+                        <div className="px-3 py-2 bg-gray-100 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600">
+                          <p className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">Actions</p>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleForCompliance();
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-yellow-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <AlertCircle className="w-5 h-5 text-yellow-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Mark for Compliance</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleReject();
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3 border-b border-gray-100 dark:border-slate-600"
+                        >
+                          <X className="w-5 h-5 text-red-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">Reject Application</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            handleApprove();
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-green-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-3"
+                        >
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">✓ Approve Permit</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
+
+                {/* Close Button - Always visible */}
+                <button 
+                  onClick={closeModal}
+                  className="px-8 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2 ml-auto"
+                >
+                  <X className="w-5 h-5" />
+                  Close
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* File Preview Modal - UPDATED VERSION */}
+      {/* File Preview Modal */}
       {showFilePreview && selectedFile && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-0">
           <div className="relative w-full h-full flex flex-col">
@@ -1541,9 +1657,11 @@ const viewFile = (file) => {
             <div className="absolute top-0 left-0 right-0 z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
               <div className="flex items-center gap-3 text-white">
                 <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+                  {isImageFile(selectedFile.file_type, selectedFile.name) ? (
+                    <ImageIcon className="w-5 h-5" />
+                  ) : (
+                    <FileText className="w-5 h-5" />
+                  )}
                   <span className="text-sm font-medium truncate max-w-xs">
                     {selectedFile.name}
                   </span>
@@ -1551,41 +1669,6 @@ const viewFile = (file) => {
                     {getFileTypeName(selectedFile.file_type, selectedFile.name)}
                   </span>
                 </div>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                {/* Zoom Controls */}
-                {isImageFile(selectedFile.file_type, selectedFile.name) && (
-                  <div className="flex items-center gap-1 mr-4 bg-black/40 rounded-lg p-1">
-                    <button 
-                      onClick={handleZoomOut}
-                      className="p-2 text-white hover:bg-white/10 rounded transition-colors"
-                      title="Zoom Out"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
-                      </svg>
-                    </button>
-                    
-                    <button 
-                      onClick={handleResetZoom}
-                      className="px-3 py-2 text-xs text-white hover:bg-white/10 rounded transition-colors"
-                      title="Reset Zoom"
-                    >
-                      {zoomLevel}%
-                    </button>
-                    
-                    <button 
-                      onClick={handleZoomIn}
-                      className="p-2 text-white hover:bg-white/10 rounded transition-colors"
-                      title="Zoom In"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                      </svg>
-                    </button>
-                  </div>
-                )}
                 
                 <a 
                   href={selectedFile.url}
@@ -1594,9 +1677,7 @@ const viewFile = (file) => {
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors"
                   download
                 >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
+                  <Download className="w-4 h-4 mr-2" />
                   Download
                 </a>
                 <button 
@@ -1604,9 +1685,7 @@ const viewFile = (file) => {
                   className="ml-2 p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
                   title="Close preview"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="w-6 h-6" />
                 </button>
               </div>
             </div>
@@ -1619,20 +1698,20 @@ const viewFile = (file) => {
                 onMouseDown={handleMouseDown}
               >
                 <div className="relative w-full h-full flex items-center justify-center">
-<img 
-  ref={imageRef}
-  id="preview-image"
-  src={selectedFile.url} 
-  alt={selectedFile.name}
-  className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl transition-transform duration-200 ease-out"
-  style={{ transform: 'scale(1)', position: 'relative', left: '0px', top: '0px', cursor: 'default' }}
-  onError={(e) => {
-    console.error('Failed to load image:', selectedFile.url);
-    e.target.onerror = null;
-    e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image not found</text><text x="200" y="170" text-anchor="middle" font-family="Arial" font-size="12" fill="%23999999">URL: ' + selectedFile.url + '</text></svg>';
-    e.target.className = 'max-w-md mx-auto bg-gray-800 rounded-lg p-8';
-  }}
-/>
+                  <img 
+                    ref={imageRef}
+                    id="preview-image"
+                    src={selectedFile.url} 
+                    alt={selectedFile.name}
+                    className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl transition-transform duration-200 ease-out"
+                    style={{ transform: 'scale(1)', position: 'relative', left: '0px', top: '0px', cursor: 'default' }}
+                    onError={(e) => {
+                      console.error('Failed to load image:', selectedFile.url);
+                      e.target.onerror = null;
+                      e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23222222"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="%23ffffff">Image not found</text><text x="200" y="170" text-anchor="middle" font-family="Arial" font-size="12" fill="%23999999">URL: ' + selectedFile.url + '</text></svg>';
+                      e.target.className = 'max-w-md mx-auto bg-gray-800 rounded-lg p-8';
+                    }}
+                  />
                 </div>
               </div>
             ) : (
@@ -1644,9 +1723,7 @@ const viewFile = (file) => {
                     ) : selectedFile.file_type?.includes('image/') ? (
                       <ImageIcon className="w-24 h-24 mx-auto" />
                     ) : (
-                      <svg className="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
+                      <FileText className="w-24 h-24 mx-auto" />
                     )}
                   </div>
                   <h3 className="text-xl font-medium text-white mb-3">
@@ -1663,9 +1740,7 @@ const viewFile = (file) => {
                       className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                       download
                     >
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
+                      <Download className="w-5 h-5 mr-2" />
                       Download
                     </a>
                     <button 

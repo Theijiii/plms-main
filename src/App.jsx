@@ -19,15 +19,7 @@ import BuildingNew from "./pages/user/BuildingPermit/BuildingNew"
 import BuildingPermitType from "./pages/user/BuildingPermit/BuildingPermitType"
 import RenewalBuilding from "./pages/user/BuildingPermit/RenewalBuilding"
 import AncillaryPermits from "./pages/user/BuildingPermit/Ancillary/Ancillary"
-import ElectricalPermit from "./pages/user/BuildingPermit/ElectricalPermit"
-import MechanicalPermit from "./pages/user/BuildingPermit/MechanicalPermit"
-import PlumbingPermit from "./pages/user/BuildingPermit/PlumbingPermit"
-import FencingPermit from "./pages/user/BuildingPermit/FencingPermit"
-import DemolitionPermit from "./pages/user/BuildingPermit/DemolitionPermit"
-import ExcavationPermit from "./pages/user/BuildingPermit/ExcavationPermit"
 import OccupancyPermit from "./pages/user/BuildingPermit/OccupancyPermit"
-import ElectronicsPermit from "./pages/user/BuildingPermit/ElectronicsPermit"
-import SignagePermit from "./pages/user/BuildingPermit/SignagePermit"
 import ProfessionalRegistration from "./pages/user/BuildingPermit/ProfessionalRegistration"
 import FranchisePermitType from "./pages/user/FranchisePermit/FranchisePermitType"
 import FranchiseNew from "./pages/user/FranchisePermit/FranchiseNew"
@@ -102,15 +94,7 @@ function App() {
           <Route path="building/type" element={<BuildingPermitType />} />
           <Route path="building/renewal" element={<RenewalBuilding />} />
           <Route path="building/ancillary" element={<AncillaryPermits />} />
-          <Route path="building/electrical" element={<ElectricalPermit />} />
-          <Route path="building/mechanical" element={<MechanicalPermit />} />
-          <Route path="building/plumbing" element={<PlumbingPermit />} />
-          <Route path="building/fencing" element={<FencingPermit />} />
-          <Route path="building/demolition" element={<DemolitionPermit />} />
-          <Route path="building/excavation" element={<ExcavationPermit />} />
           <Route path="building/occupancy" element={<OccupancyPermit />} />
-          <Route path="building/electronics" element={<ElectronicsPermit />} />
-          <Route path="building/signage" element={<SignagePermit />} />
           <Route path="building/professional" element={<ProfessionalRegistration />} />
 
           {/* Franchise routes */}
